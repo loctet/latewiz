@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import Link from "next/link";
-import { useAccounts, useAccountsHealth, usePosts, useQueuePreview } from "@/hooks";
+import { useAccounts, useAccountsHealth, usePosts, useQueuePreview, useOpenAiStatus } from "@/hooks";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +19,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
+  Sparkles,
 } from "lucide-react";
 
 export default function DashboardPage() {
@@ -26,6 +27,7 @@ export default function DashboardPage() {
   const { data: healthData } = useAccountsHealth();
   const { data: postsData, isLoading: postsLoading } = usePosts({ limit: 10 });
   const { data: queueData } = useQueuePreview(5);
+  const { data: openAiStatus } = useOpenAiStatus();
 
   const accounts = accountsData?.accounts || [];
   const posts = useMemo(() => postsData?.posts || [], [postsData?.posts]);
@@ -49,6 +51,22 @@ export default function DashboardPage() {
           Welcome back! Here&apos;s your overview.
         </p>
       </div>
+
+      {/* OpenAI setup hint */}
+      {openAiStatus && !openAiStatus.openai_configured && (
+        <Link
+          href="/dashboard/settings"
+          className="flex items-center gap-3 rounded-lg border border-violet-200 bg-violet-50 p-3 text-violet-900 transition-colors hover:bg-violet-100 dark:border-violet-900 dark:bg-violet-950/50 dark:text-violet-200 dark:hover:bg-violet-950"
+        >
+          <Sparkles className="h-5 w-5 shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium">Enable AI caption & image generation</p>
+            <p className="text-xs opacity-80">
+              Add your OpenAI API key in Settings
+            </p>
+          </div>
+        </Link>
+      )}
 
       {/* Account health warning */}
       {accountsNeedingAttention > 0 && (

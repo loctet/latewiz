@@ -80,3 +80,14 @@ export {
   type QueueSlot,
   type QueueSchedule,
 } from "./use-queue";
+
+// AI (OpenAI)
+export {
+  useOpenAiStatus,
+  useGenerateDraft,
+  useGenerateImage,
+  useCampaignPlan,
+  urlToFile,
+  type CampaignSlot,
+  type NicheProfile,
+} from "./use-ai";

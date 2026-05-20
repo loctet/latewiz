@@ -1,10 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { useCreatePost, useAccounts, useCurrentProfileId, type UploadedMedia } from "@/hooks";
+import {
+  useCreatePost,
+  useAccounts,
+  useCurrentProfileId,
+  useUploadMedia,
+  urlToFile,
+  type UploadedMedia,
+} from "@/hooks";
 import { useAppStore } from "@/stores";
+import { AiAssistPanel } from "@/components/ai";
+import { readPostPrefill, clearPostPrefill } from "@/lib/post-prefill";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,9 +29,11 @@ export default function ComposePage() {
   const profileId = useCurrentProfileId();
   const { data: accountsData } = useAccounts();
   const createPostMutation = useCreatePost();
+  const uploadMutation = useUploadMedia();
 
   // Form state
   const [content, setContent] = useState("");
+  const [aiHint, setAiHint] = useState<string | undefined>();
   const [media, setMedia] = useState<UploadedMedia[]>([]);
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
   const [scheduleType, setScheduleType] = useState<ScheduleType>("now");
@@ -38,9 +49,35 @@ export default function ComposePage() {
     selectedAccountIds.includes(a._id)
   );
 
-  // Character count (Twitter limit as reference)
   const charCount = content.length;
-  const charLimit = 280;
+  const charLimit = 5000;
+
+  useEffect(() => {
+    const prefill = readPostPrefill();
+    if (!prefill) return;
+    clearPostPrefill();
+    if (prefill.body) setContent(prefill.body);
+    if (prefill.aiHint) setAiHint(prefill.aiHint);
+    if (prefill.imageUrls?.length) {
+      (async () => {
+        const uploaded: UploadedMedia[] = [];
+        for (const url of prefill.imageUrls!) {
+          try {
+            const file = await urlToFile(url);
+            const item = await uploadMutation.mutateAsync(file);
+            uploaded.push(item);
+          } catch {
+            toast.error("Could not attach prefilled image");
+          }
+        }
+        if (uploaded.length) {
+          setMedia((m) => [...m, ...uploaded]);
+        }
+      })();
+    }
+    // Run once when opening composer with session prefill
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const canSubmit =
     selectedAccountIds.length > 0 &&
@@ -118,6 +155,13 @@ export default function ComposePage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          <AiAssistPanel
+            content={content}
+            onContentChange={setContent}
+            media={media}
+            onMediaChange={setMedia}
+            hint={aiHint}
+          />
           <div className="space-y-2">
             <Textarea
               placeholder="What's on your mind?"

@@ -1,0 +1,488 @@
+import type { CampaignPostDraft, DraftResult, NicheProfile } from "./types";
+import { defaultNicheProfile } from "./types";
+
+function nicheToRecord(niche: NicheProfile): Record<string, string> {
+  return {
+    topic: niche.topic,
+    audience: niche.audience,
+    geography: niche.geography,
+    tone_notes: niche.toneNotes,
+    forbidden_topics: niche.forbiddenTopics,
+    compliance_notes: niche.complianceNotes,
+    extra_instructions: niche.extraInstructions,
+  };
+}
+
+function summarizeOpenAiError(status: number, bodyRaw: string, label: string): string {
+  try {
+    const data = JSON.parse(bodyRaw) as { error?: { message?: string; code?: string | number } };
+    const message = data?.error?.message?.trim();
+    if (message) {
+      const code = data.error?.code != null ? ` (code ${data.error.code})` : "";
+      return `${label} HTTP ${status}: ${message}${code}`;
+    }
+  } catch {
+    /* ignore */
+  }
+  const snippet = bodyRaw.trim().slice(0, 240);
+  return snippet
+    ? `${label} HTTP ${status}: ${snippet}`
+    : `${label} returned HTTP ${status}.`;
+}
+
+export function isOpenAiConfigured(apiKey: string | null): boolean {
+  return apiKey !== null && apiKey !== "";
+}
+
+export async function generateDraft(
+  apiKey: string | null,
+  niche: NicheProfile,
+  hint?: string
+): Promise<DraftResult> {
+  if (!apiKey) {
+    const topic = niche.topic || "your niche";
+    const title = hint || `Ideas for ${topic}`;
+    return {
+      title,
+      body: `Here's a draft caption for ${topic}. Edit tone and details before scheduling.\n\n#growth #content #draft`,
+      hashtags: "#latewiz #draft",
+      source: "stub",
+      detail: "Add an OpenAI API key in Settings or set OPENAI_API_KEY on the server.",
+    };
+  }
+
+  const nicheRecord = nicheToRecord(niche);
+  const userPayload = JSON.stringify({ niche: nicheRecord, hint: hint ?? null });
+
+  try {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content:
+              "You write concise social media posts. Return JSON with keys title, body, hashtags.",
+          },
+          { role: "user", content: `Generate one post. ${userPayload}` },
+        ],
+        response_format: { type: "json_object" },
+      }),
+    });
+
+    const bodyRaw = await res.text();
+    if (!res.ok) {
+      return {
+        title: "Draft (fallback)",
+        body: "AI temporarily unavailable. Edit and schedule manually.",
+        hashtags: "",
+        source: "fallback",
+        detail: summarizeOpenAiError(res.status, bodyRaw, "OpenAI"),
+      };
+    }
+
+    const data = JSON.parse(bodyRaw) as {
+      choices?: { message?: { content?: string } }[];
+    };
+    const text = data.choices?.[0]?.message?.content ?? "{}";
+    const parsed = JSON.parse(text) as {
+      title?: string;
+      body?: string;
+      hashtags?: string;
+    };
+
+    return {
+      title: String(parsed.title ?? "Post"),
+      body: String(parsed.body ?? ""),
+      hashtags: String(parsed.hashtags ?? ""),
+      source: "openai",
+      detail: null,
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Unknown error";
+    return {
+      title: "Draft (fallback)",
+      body: "AI temporarily unavailable. Edit and schedule manually.",
+      hashtags: "",
+      source: "fallback",
+      detail: msg.slice(0, 400),
+    };
+  }
+}
+
+export async function generateCampaignBatch(
+  apiKey: string | null,
+  niche: NicheProfile,
+  totalPosts: number,
+  campaignHint?: string,
+  trendSnippets: string[] = []
+): Promise<{
+  posts: CampaignPostDraft[];
+  source: string;
+  detail: string | null;
+}> {
+  if (totalPosts <= 0) {
+    return { posts: [], source: "stub", detail: null };
+  }
+  if (!apiKey) {
+    return stubCampaignBatch(niche, totalPosts, campaignHint);
+  }
+
+  const topic = niche.topic.trim() || "the workspace niche";
+  const nicheJson = JSON.stringify(nicheToRecord(niche));
+  const hint = campaignHint?.trim() ?? "";
+  const trendLines = trendSnippets
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 12)
+    .map((s) => s.slice(0, 240));
+
+  const all: CampaignPostDraft[] = [];
+  const chunkSize = 14;
+  let offset = 0;
+  let detail: string | null = null;
+
+  while (offset < totalPosts) {
+    const n = Math.min(chunkSize, totalPosts - offset);
+    const chunk = await openAiCampaignChunk(
+      apiKey,
+      nicheJson,
+      topic,
+      trendLines,
+      hint,
+      n,
+      offset
+    );
+
+    if (chunk.posts.length === 0) {
+      const rest = stubCampaignBatch(niche, totalPosts - all.length, campaignHint);
+      return {
+        posts: [...all, ...rest.posts].slice(0, totalPosts),
+        source: "fallback",
+        detail: chunk.detail ?? "AI campaign chunk failed; filled with placeholders.",
+      };
+    }
+
+    let got = chunk.posts;
+    if (got.length < n) {
+      detail = chunk.detail;
+      const pad = stubCampaignBatch(niche, n - got.length, campaignHint);
+      got = [...got, ...pad.posts];
+    }
+    all.push(...got.slice(0, n));
+    offset += n;
+  }
+
+  return {
+    posts: all.slice(0, totalPosts),
+    source: detail ? "mixed" : "openai",
+    detail,
+  };
+}
+
+function stubCampaignBatch(
+  niche: NicheProfile,
+  totalPosts: number,
+  campaignHint?: string
+): { posts: CampaignPostDraft[]; source: string; detail: string | null } {
+  const topic = niche.topic.trim() || "your niche";
+  const hint =
+    campaignHint?.trim() !== "" ? campaignHint!.trim() : "Series";
+  const posts: CampaignPostDraft[] = [];
+  for (let i = 0; i < totalPosts; i++) {
+    const k = i + 1;
+    posts.push({
+      title: `${hint} — idea ${k}`,
+      body: `Draft ${k} for ${topic}. Refine the hook and CTA before you commit the calendar.\n\nTip: lead with a specific problem your audience recognizes, then offer one clear takeaway.`,
+      hashtags: "#content #growth",
+    });
+  }
+  return {
+    posts,
+    source: "stub",
+    detail:
+      "Add an OpenAI key in Settings (or OPENAI_API_KEY on the server) for full campaign copy.",
+  };
+}
+
+async function openAiCampaignChunk(
+  apiKey: string,
+  nicheJson: string,
+  topicLabel: string,
+  trendLines: string[],
+  campaignHint: string,
+  count: number,
+  offset: number
+): Promise<{ posts: CampaignPostDraft[]; detail: string | null }> {
+  const system =
+    "You are an expert social media strategist and SEO copywriter. " +
+    "Return compact JSON only, matching the requested schema. " +
+    "Each post must be unique: different angle, hook, and structure. " +
+    "Use platform-agnostic language (no \"link in bio\"). " +
+    "Bodies: under 2200 characters, punchy, scannable lines, optional emoji sparingly. " +
+    "Hashtags: one string with 3–8 relevant tags, space-separated with #.";
+
+  const trendBlock =
+    trendLines.length > 0
+      ? `Recent/trend-style hooks to mirror in tone (not copy verbatim):\n- ${trendLines.join("\n- ")}`
+      : "No trend samples provided; infer timely angles from the niche.";
+
+  const start = offset + 1;
+  const end = offset + count;
+  const user = `Build exactly ${count} social posts for slots ${start} through ${end} of a longer editorial calendar.
+
+Primary audience topic: ${topicLabel}
+
+Niche profile JSON:
+${nicheJson}
+
+${trendBlock}
+
+Campaign theme / CTA focus (optional): ${campaignHint}
+
+Posts must feel like a cohesive month of content: mix educational, story-driven, question, listicle, and soft-promo beats.
+Vary opening lines; no two posts may start with the same first three words.
+
+Return JSON: {"posts":[{"title":"...","body":"...","hashtags":"#a #b"}]}
+The posts array length must be exactly ${count}.`;
+
+  try {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+        response_format: { type: "json_object" },
+        max_tokens: 8192,
+      }),
+    });
+
+    const bodyRaw = await res.text();
+    if (!res.ok) {
+      return {
+        posts: [],
+        detail: summarizeOpenAiError(res.status, bodyRaw, "OpenAI"),
+      };
+    }
+
+    const data = JSON.parse(bodyRaw) as {
+      choices?: { message?: { content?: string } }[];
+    };
+    const text = data.choices?.[0]?.message?.content ?? "{}";
+    const parsed = JSON.parse(text) as {
+      posts?: { title?: string; body?: string; hashtags?: string }[];
+    };
+
+    if (!Array.isArray(parsed.posts)) {
+      return { posts: [], detail: "OpenAI JSON missing posts[]" };
+    }
+
+    const out: CampaignPostDraft[] = [];
+    for (const row of parsed.posts) {
+      if (!row || typeof row !== "object") continue;
+      out.push({
+        title: String(row.title ?? "Post").trim(),
+        body: String(row.body ?? "").trim(),
+        hashtags: String(row.hashtags ?? "").trim(),
+      });
+    }
+    return { posts: out, detail: null };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Unknown error";
+    return { posts: [], detail: msg.slice(0, 400) };
+  }
+}
+
+function buildEducationalBoardImagePrompt(postText: string): string {
+  const trimmed = postText.trim();
+  return `Create a hand drawn educational infographic on notebook paper using blue ballpoint pen sketch style.
+
+The infographic should compare and explain this topic in depth:
+
+${trimmed}
+
+Style requirements:
+
+• realistic notebook page background
+• hand drawn doodles and sketches
+• blue ink only
+• clean handwritten typography
+• simple but intelligent visual explanations
+• tables, arrows, icons, charts, and mini diagrams
+• visually balanced composition
+• viral educational social media aesthetic
+• looks like carefully drawn by a smart student or teacher
+• slightly imperfect pen strokes for authenticity
+• highly engaging and easy to understand
+• include comparison boxes and visual storytelling
+• minimalist but information dense
+• infographic poster layout
+• portrait A4 composition
+• neat margins and aligned sections
+
+Structure:
+
+Large handwritten title at top
+Main comparison illustrations in center
+Comparison table with pros/cons or differences
+Small visual graphs or trend diagrams at bottom
+Final powerful quote or conclusion sentence
+
+Make it look organic, intelligent, educational, and highly shareable on social media.
+
+Rendering: ultra sharp focus, even lighting, full notebook page visible in frame (no cropping), no full-bleed content outside the page. Keep the entire composition portrait-oriented.
+
+Final detail: add a tiny neat handwritten credit in the bottom margin: KWEZIX.com`;
+}
+
+function resolvePostTextForBoard(
+  captionContext: string | undefined,
+  explicitPrompt: string | undefined,
+  niche: NicheProfile
+): string {
+  let core = captionContext?.trim() ?? "";
+  if (!core) {
+    const topic = niche.topic.trim();
+    core = topic
+      ? `Educational overview for audiences interested in: ${topic}. (Write your full post in the composer and generate again for a board tailored to that exact text.)`
+      : "Professional growth and clarity — general themes. Add your post caption and regenerate for a tailored whiteboard.";
+  }
+  if (explicitPrompt?.trim()) {
+    core += `\n\nAdditional creative direction from author: ${explicitPrompt.trim()}`;
+  }
+  return core;
+}
+
+export async function generatePostImage(
+  apiKey: string | null,
+  niche: NicheProfile = defaultNicheProfile(),
+  explicitPrompt?: string,
+  captionContext?: string
+): Promise<{
+  url: string | null;
+  b64_json: string | null;
+  source: string;
+  detail: string | null;
+}> {
+  if (!apiKey) {
+    return {
+      url: null,
+      b64_json: null,
+      source: "unconfigured",
+      detail:
+        "Add an OpenAI API key in Settings or set OPENAI_API_KEY on the server.",
+    };
+  }
+
+  const model =
+    process.env.OPENAI_IMAGE_MODEL?.trim() || "gpt-image-2";
+  const lower = model.toLowerCase();
+  const isDalle3 = lower.includes("dall-e-3");
+  const isDalle2 = lower.includes("dall-e-2");
+  const isGptImage =
+    lower.includes("gpt-image") ||
+    lower.includes("gpt_image") ||
+    lower.includes("chatgpt-image");
+
+  let defaultSize = "1024x1792";
+  if (isGptImage) defaultSize = "1024x1536";
+  else if (isDalle2) defaultSize = "1024x1024";
+
+  let size = process.env.OPENAI_IMAGE_SIZE?.trim() || defaultSize;
+  if (isDalle3) {
+    const allowed = ["1024x1024", "1792x1024", "1024x1792"];
+    if (!allowed.includes(size)) size = "1024x1792";
+  } else if (isDalle2) {
+    const allowed = ["256x256", "512x512", "1024x1024"];
+    if (!allowed.includes(size)) size = "1024x1024";
+  } else if (isGptImage && !/^[1-9]\d*x[1-9]\d*$/.test(size)) {
+    size = "1024x1536";
+  }
+
+  const postText = resolvePostTextForBoard(captionContext, explicitPrompt, niche);
+  const brief = buildEducationalBoardImagePrompt(postText).slice(0, 4000);
+
+  const json: Record<string, unknown> = {
+    model,
+    prompt: brief,
+    n: 1,
+  };
+
+  if (isGptImage) {
+    json.size = size;
+    const gptQuality =
+      process.env.OPENAI_GPT_IMAGE_QUALITY?.trim() || "medium";
+    if (["low", "medium", "high", "auto"].includes(gptQuality)) {
+      json.quality = gptQuality;
+    }
+    const gptMod = process.env.OPENAI_GPT_IMAGE_MODERATION?.trim();
+    if (gptMod === "low") json.moderation = "low";
+  } else if (isDalle3) {
+    json.size = size;
+    json.quality = "standard";
+  } else if (isDalle2) {
+    json.size = size;
+  }
+
+  try {
+    const res = await fetch("https://api.openai.com/v1/images/generations", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(json),
+    });
+
+    const bodyRaw = await res.text();
+    if (!res.ok) {
+      return {
+        url: null,
+        b64_json: null,
+        source: "fallback",
+        detail: summarizeOpenAiError(res.status, bodyRaw, "OpenAI Images"),
+      };
+    }
+
+    const data = JSON.parse(bodyRaw) as {
+      data?: { url?: string; b64_json?: string }[];
+    };
+    const first = data.data?.[0];
+    const urlVal = first?.url?.trim();
+    const b64 = first?.b64_json?.replace(/\s+/g, "");
+
+    if (urlVal) {
+      return { url: urlVal, b64_json: null, source: "openai", detail: null };
+    }
+    if (b64) {
+      return { url: null, b64_json: b64, source: "openai", detail: null };
+    }
+
+    return {
+      url: null,
+      b64_json: null,
+      source: "fallback",
+      detail: "OpenAI Images response contained no image URL or b64_json.",
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Unknown error";
+    return {
+      url: null,
+      b64_json: null,
+      source: "fallback",
+      detail: msg.slice(0, 400),
+    };
+  }
+}

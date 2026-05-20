@@ -3,7 +3,12 @@
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
-import { useAuthStore, useAppStore } from "@/stores";
+import { useAuthStore, useAppStore, useAiStore } from "@/stores";
+import { isPlausibleOpenAiApiKey } from "@/lib/openai/resolve-key";
+import { useOpenAiStatus } from "@/hooks";
+import { Textarea } from "@/components/ui/textarea";
+import { Sparkles } from "lucide-react";
+import { toast } from "sonner";
 import { getTimezoneOptions } from "@/lib/timezones";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -34,8 +39,17 @@ export default function SettingsPage() {
   const { theme, setTheme } = useTheme();
   const { apiKey, usageStats, logout } = useAuthStore();
   const { timezone, setTimezone } = useAppStore();
+  const {
+    openaiApiKey,
+    setOpenaiApiKey,
+    niche,
+    setNiche,
+  } = useAiStore();
+  const { data: openAiStatus } = useOpenAiStatus();
 
   const [showApiKey, setShowApiKey] = useState(false);
+  const [openAiKeyInput, setOpenAiKeyInput] = useState("");
+  const [showOpenAiKey, setShowOpenAiKey] = useState(false);
 
   // Compute timezone options - always includes user's browser timezone and current selection
   const timezoneOptions = useMemo(
@@ -142,6 +156,144 @@ export default function SettingsPage() {
               <ExternalLink className="ml-2 h-4 w-4" />
             </a>
           </Button>
+        </CardContent>
+      </Card>
+
+      {/* OpenAI */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Sparkles className="h-4 w-4" />
+            OpenAI (AI writing & images)
+          </CardTitle>
+          <CardDescription>
+            Powers caption drafts, campaign planning, and notebook-style
+            infographics. Stored locally on this device. Server{" "}
+            <code className="text-xs">OPENAI_API_KEY</code> is used as fallback.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="rounded-lg bg-muted p-3 text-sm">
+            Status:{" "}
+            {openAiStatus?.openai_configured ? (
+              <span className="text-green-600 dark:text-green-400 font-medium">
+                Configured
+              </span>
+            ) : (
+              <span className="text-amber-600 dark:text-amber-400 font-medium">
+                Not configured
+              </span>
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label>OpenAI API key</Label>
+            <div className="flex gap-2">
+              <Input
+                type={showOpenAiKey ? "text" : "password"}
+                placeholder="sk-..."
+                value={openAiKeyInput}
+                onChange={(e) => setOpenAiKeyInput(e.target.value)}
+                className="font-mono"
+              />
+              <Button
+                variant="outline"
+                type="button"
+                onClick={() => setShowOpenAiKey(!showOpenAiKey)}
+              >
+                {showOpenAiKey ? "Hide" : "Show"}
+              </Button>
+            </div>
+            {openaiApiKey && (
+              <p className="text-xs text-muted-foreground">
+                Saved key: {openaiApiKey.slice(0, 7)}••••{openaiApiKey.slice(-4)}
+              </p>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              onClick={() => {
+                const k = openAiKeyInput.trim();
+                if (k && !isPlausibleOpenAiApiKey(k)) {
+                  toast.error("Invalid OpenAI key format (must start with sk-)");
+                  return;
+                }
+                setOpenaiApiKey(k || null);
+                setOpenAiKeyInput("");
+                toast.success(k ? "OpenAI key saved" : "OpenAI key cleared");
+              }}
+            >
+              Save key
+            </Button>
+            {openaiApiKey && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setOpenaiApiKey(null);
+                  setOpenAiKeyInput("");
+                  toast.success("OpenAI key removed");
+                }}
+              >
+                Clear
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Niche profile (feeds AI) */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Content niche</CardTitle>
+          <CardDescription>
+            Used by AI Studio and Campaign Planner to tailor captions and images.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label>Topic / niche</Label>
+            <Input
+              value={niche.topic}
+              onChange={(e) => setNiche({ topic: e.target.value })}
+              placeholder="e.g. SaaS marketing, fitness coaching"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Target audience</Label>
+            <Input
+              value={niche.audience}
+              onChange={(e) => setNiche({ audience: e.target.value })}
+              placeholder="Who are you speaking to?"
+            />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Geography</Label>
+              <Input
+                value={niche.geography}
+                onChange={(e) => setNiche({ geography: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Tone notes</Label>
+              <Input
+                value={niche.toneNotes}
+                onChange={(e) => setNiche({ toneNotes: e.target.value })}
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Extra instructions</Label>
+            <Textarea
+              value={niche.extraInstructions}
+              onChange={(e) =>
+                setNiche({ extraInstructions: e.target.value })
+              }
+              rows={3}
+              placeholder="Compliance, CTA style, words to avoid..."
+            />
+          </div>
         </CardContent>
       </Card>
 

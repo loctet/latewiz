@@ -25,6 +25,9 @@ import {
   Calendar,
   Users,
   ListOrdered,
+  Sparkles,
+  CalendarClock,
+  ImageIcon,
   Settings,
   Moon,
   Sun,
@@ -59,6 +62,21 @@ const navItems = [
     label: "Queue",
     href: "/dashboard/queue",
     icon: ListOrdered,
+  },
+  {
+    label: "AI Studio",
+    href: "/dashboard/ai-studio",
+    icon: Sparkles,
+  },
+  {
+    label: "Campaign",
+    href: "/dashboard/campaign",
+    icon: CalendarClock,
+  },
+  {
+    label: "Media",
+    href: "/dashboard/media",
+    icon: ImageIcon,
   },
 ];
 
