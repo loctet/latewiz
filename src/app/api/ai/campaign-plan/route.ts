@@ -1,31 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   buildCampaignSlotTimes,
-  defaultNicheProfile,
   generateCampaignBatch,
+  parseNicheFromBody,
   resolveOpenAiApiKey,
-  type NicheProfile,
 } from "@/lib/openai";
-
-function parseNiche(body: Record<string, unknown>): NicheProfile {
-  const n = (body.niche as Record<string, string>) ?? {};
-  const defaults = defaultNicheProfile();
-  return {
-    topic: String(n.topic ?? defaults.topic),
-    audience: String(n.audience ?? defaults.audience),
-    geography: String(n.geography ?? defaults.geography),
-    toneNotes: String(n.tone_notes ?? n.toneNotes ?? defaults.toneNotes),
-    forbiddenTopics: String(
-      n.forbidden_topics ?? n.forbiddenTopics ?? defaults.forbiddenTopics
-    ),
-    complianceNotes: String(
-      n.compliance_notes ?? n.complianceNotes ?? defaults.complianceNotes
-    ),
-    extraInstructions: String(
-      n.extra_instructions ?? n.extraInstructions ?? defaults.extraInstructions
-    ),
-  };
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -61,7 +40,7 @@ export async function POST(request: NextRequest) {
           ? body.windowEnd
           : "18:00";
 
-    const niche = parseNiche(body);
+    const niche = parseNicheFromBody(body);
     const campaignHint =
       typeof body.campaign_hint === "string"
         ? body.campaign_hint

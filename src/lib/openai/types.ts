@@ -1,4 +1,6 @@
 export interface NicheProfile {
+  /** ISO 639-1 code — controls language of AI-generated copy and infographic text */
+  language: string;
   topic: string;
   audience: string;
   geography: string;
@@ -9,6 +11,7 @@ export interface NicheProfile {
 }
 
 export const defaultNicheProfile = (): NicheProfile => ({
+  language: "en",
   topic: "",
   audience: "",
   geography: "",

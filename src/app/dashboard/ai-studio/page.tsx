@@ -154,6 +154,10 @@ export default function AiStudioPage() {
           OpenAI is not configured.{" "}
           <Link href="/dashboard/settings" className="underline font-medium">
             Add your API key in Settings
+          </Link>
+          {" · "}
+          <Link href="/dashboard/niche" className="underline font-medium">
+            Configure content niche
           </Link>{" "}
           to enable real AI generation.
         </div>

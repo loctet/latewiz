@@ -103,8 +103,12 @@ export function AiAssistPanel({
           OpenAI not configured.{" "}
           <Link href="/dashboard/settings" className="underline text-primary">
             Add your API key
-          </Link>{" "}
-          or set OPENAI_API_KEY on the server.
+          </Link>
+          ,{" "}
+          <Link href="/dashboard/niche" className="underline text-primary">
+            set your niche
+          </Link>
+          , or use server OPENAI_API_KEY.
         </p>
       )}
 

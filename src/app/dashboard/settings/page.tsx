@@ -6,7 +6,6 @@ import { useTheme } from "next-themes";
 import { useAuthStore, useAppStore, useAiStore } from "@/stores";
 import { isPlausibleOpenAiApiKey } from "@/lib/openai/resolve-key";
 import { useOpenAiStatus } from "@/hooks";
-import { Textarea } from "@/components/ui/textarea";
 import { Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { getTimezoneOptions } from "@/lib/timezones";
@@ -32,19 +31,15 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Key, Moon, Sun, Globe, LogOut, ExternalLink } from "lucide-react";
+import { Key, Moon, Sun, Globe, LogOut, ExternalLink, Target } from "lucide-react";
+import Link from "next/link";
 
 export default function SettingsPage() {
   const router = useRouter();
   const { theme, setTheme } = useTheme();
   const { apiKey, usageStats, logout } = useAuthStore();
   const { timezone, setTimezone } = useAppStore();
-  const {
-    openaiApiKey,
-    setOpenaiApiKey,
-    niche,
-    setNiche,
-  } = useAiStore();
+  const { openaiApiKey, setOpenaiApiKey } = useAiStore();
   const { data: openAiStatus } = useOpenAiStatus();
 
   const [showApiKey, setShowApiKey] = useState(false);
@@ -159,6 +154,27 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
+      {/* Content niche (separate page) */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Target className="h-4 w-4" />
+            Content niche
+          </CardTitle>
+          <CardDescription>
+            Language, audience, tone, and compliance rules for AI generation.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button variant="outline" asChild>
+            <Link href="/dashboard/niche">
+              Edit content niche
+              <ExternalLink className="ml-2 h-4 w-4" />
+            </Link>
+          </Button>
+        </CardContent>
+      </Card>
+
       {/* OpenAI */}
       <Card>
         <CardHeader>
@@ -238,61 +254,6 @@ export default function SettingsPage() {
                 Clear
               </Button>
             )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Niche profile (feeds AI) */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Content niche</CardTitle>
-          <CardDescription>
-            Used by AI Studio and Campaign Planner to tailor captions and images.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>Topic / niche</Label>
-            <Input
-              value={niche.topic}
-              onChange={(e) => setNiche({ topic: e.target.value })}
-              placeholder="e.g. SaaS marketing, fitness coaching"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Target audience</Label>
-            <Input
-              value={niche.audience}
-              onChange={(e) => setNiche({ audience: e.target.value })}
-              placeholder="Who are you speaking to?"
-            />
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label>Geography</Label>
-              <Input
-                value={niche.geography}
-                onChange={(e) => setNiche({ geography: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Tone notes</Label>
-              <Input
-                value={niche.toneNotes}
-                onChange={(e) => setNiche({ toneNotes: e.target.value })}
-              />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label>Extra instructions</Label>
-            <Textarea
-              value={niche.extraInstructions}
-              onChange={(e) =>
-                setNiche({ extraInstructions: e.target.value })
-              }
-              rows={3}
-              placeholder="Compliance, CTA style, words to avoid..."
-            />
           </div>
         </CardContent>
       </Card>

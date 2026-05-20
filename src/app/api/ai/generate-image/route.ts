@@ -1,30 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  defaultNicheProfile,
   generatePostImage,
+  parseNicheFromBody,
   resolveOpenAiApiKey,
-  type NicheProfile,
 } from "@/lib/openai";
-
-function parseNiche(body: Record<string, unknown>): NicheProfile {
-  const n = (body.niche as Record<string, string>) ?? {};
-  const defaults = defaultNicheProfile();
-  return {
-    topic: String(n.topic ?? defaults.topic),
-    audience: String(n.audience ?? defaults.audience),
-    geography: String(n.geography ?? defaults.geography),
-    toneNotes: String(n.tone_notes ?? n.toneNotes ?? defaults.toneNotes),
-    forbiddenTopics: String(
-      n.forbidden_topics ?? n.forbiddenTopics ?? defaults.forbiddenTopics
-    ),
-    complianceNotes: String(
-      n.compliance_notes ?? n.complianceNotes ?? defaults.complianceNotes
-    ),
-    extraInstructions: String(
-      n.extra_instructions ?? n.extraInstructions ?? defaults.extraInstructions
-    ),
-  };
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -34,7 +13,7 @@ export async function POST(request: NextRequest) {
       headerKey,
       typeof body.openaiApiKey === "string" ? body.openaiApiKey : null
     );
-    const niche = parseNiche(body);
+    const niche = parseNicheFromBody(body);
     const prompt =
       typeof body.prompt === "string" ? body.prompt : undefined;
     const captionContext =

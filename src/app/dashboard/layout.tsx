@@ -28,6 +28,7 @@ import {
   Sparkles,
   CalendarClock,
   ImageIcon,
+  Target,
   Settings,
   Moon,
   Sun,
@@ -62,6 +63,11 @@ const navItems = [
     label: "Queue",
     href: "/dashboard/queue",
     icon: ListOrdered,
+  },
+  {
+    label: "Niche",
+    href: "/dashboard/niche",
+    icon: Target,
   },
   {
     label: "AI Studio",

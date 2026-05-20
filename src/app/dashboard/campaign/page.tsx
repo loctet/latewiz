@@ -201,8 +201,8 @@ export default function CampaignPlannerPage() {
             Zernio API
           </a>
           . Configure your niche in{" "}
-          <Link href="/dashboard/settings" className="underline">
-            Settings
+          <Link href="/dashboard/niche" className="underline">
+            Content Niche
           </Link>
           .
         </p>

@@ -1,17 +1,11 @@
 import type { CampaignPostDraft, DraftResult, NicheProfile } from "./types";
 import { defaultNicheProfile } from "./types";
-
-function nicheToRecord(niche: NicheProfile): Record<string, string> {
-  return {
-    topic: niche.topic,
-    audience: niche.audience,
-    geography: niche.geography,
-    tone_notes: niche.toneNotes,
-    forbidden_topics: niche.forbiddenTopics,
-    compliance_notes: niche.complianceNotes,
-    extra_instructions: niche.extraInstructions,
-  };
-}
+import {
+  buildNicheImageLanguageNote,
+  buildNicheSystemInstructions,
+  buildNicheUserContext,
+  nicheToRecord,
+} from "./niche-prompt";
 
 function summarizeOpenAiError(status: number, bodyRaw: string, label: string): string {
   try {
@@ -51,8 +45,8 @@ export async function generateDraft(
     };
   }
 
-  const nicheRecord = nicheToRecord(niche);
-  const userPayload = JSON.stringify({ niche: nicheRecord, hint: hint ?? null });
+  const nicheContext = buildNicheUserContext(niche);
+  const userPayload = JSON.stringify({ hint: hint ?? null });
 
   try {
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -66,10 +60,15 @@ export async function generateDraft(
         messages: [
           {
             role: "system",
-            content:
+            content: [
               "You write concise social media posts. Return JSON with keys title, body, hashtags.",
+              buildNicheSystemInstructions(niche),
+            ].join("\n\n"),
           },
-          { role: "user", content: `Generate one post. ${userPayload}` },
+          {
+            role: "user",
+            content: `Generate one post aligned with this niche.\n\n${nicheContext}\n\nOptional hint: ${userPayload}`,
+          },
         ],
         response_format: { type: "json_object" },
       }),
@@ -151,6 +150,7 @@ export async function generateCampaignBatch(
     const n = Math.min(chunkSize, totalPosts - offset);
     const chunk = await openAiCampaignChunk(
       apiKey,
+      niche,
       nicheJson,
       topic,
       trendLines,
@@ -212,6 +212,7 @@ function stubCampaignBatch(
 
 async function openAiCampaignChunk(
   apiKey: string,
+  niche: NicheProfile,
   nicheJson: string,
   topicLabel: string,
   trendLines: string[],
@@ -219,13 +220,15 @@ async function openAiCampaignChunk(
   count: number,
   offset: number
 ): Promise<{ posts: CampaignPostDraft[]; detail: string | null }> {
-  const system =
-    "You are an expert social media strategist and SEO copywriter. " +
-    "Return compact JSON only, matching the requested schema. " +
-    "Each post must be unique: different angle, hook, and structure. " +
-    "Use platform-agnostic language (no \"link in bio\"). " +
-    "Bodies: under 2200 characters, punchy, scannable lines, optional emoji sparingly. " +
-    "Hashtags: one string with 3–8 relevant tags, space-separated with #.";
+  const system = [
+    "You are an expert social media strategist and SEO copywriter.",
+    "Return compact JSON only, matching the requested schema.",
+    "Each post must be unique: different angle, hook, and structure.",
+    'Use platform-agnostic phrasing (no "link in bio").',
+    "Bodies: under 2200 characters, punchy, scannable lines, optional emoji sparingly.",
+    "Hashtags: one string with 3–8 relevant tags, space-separated with #.",
+    buildNicheSystemInstructions(niche),
+  ].join(" ");
 
   const trendBlock =
     trendLines.length > 0
@@ -305,9 +308,15 @@ The posts array length must be exactly ${count}.`;
   }
 }
 
-function buildEducationalBoardImagePrompt(postText: string): string {
+function buildEducationalBoardImagePrompt(
+  postText: string,
+  niche: NicheProfile
+): string {
   const trimmed = postText.trim();
+  const langNote = buildNicheImageLanguageNote(niche);
   return `Create a hand drawn educational infographic on notebook paper using blue ballpoint pen sketch style.
+
+${langNote}
 
 The infographic should compare and explain this topic in depth:
 
@@ -412,7 +421,15 @@ export async function generatePostImage(
   }
 
   const postText = resolvePostTextForBoard(captionContext, explicitPrompt, niche);
-  const brief = buildEducationalBoardImagePrompt(postText).slice(0, 4000);
+  const nicheLines: string[] = [];
+  if (niche.topic.trim()) nicheLines.push(`Niche topic: ${niche.topic.trim()}`);
+  if (niche.audience.trim()) nicheLines.push(`Audience: ${niche.audience.trim()}`);
+  if (niche.geography.trim()) nicheLines.push(`Market: ${niche.geography.trim()}`);
+  const boardText =
+    nicheLines.length > 0
+      ? `${postText}\n\n${nicheLines.join("\n")}`
+      : postText;
+  const brief = buildEducationalBoardImagePrompt(boardText, niche).slice(0, 4000);
 
   const json: Record<string, unknown> = {
     model,

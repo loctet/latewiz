@@ -60,6 +60,14 @@ export const useAiStore = create<AiState>()(
     }),
     {
       name: "latewiz-ai",
+      merge: (persisted, current) => {
+        const p = persisted as Partial<AiState> | undefined;
+        return {
+          ...current,
+          ...p,
+          niche: { ...defaultNicheProfile(), ...p?.niche },
+        };
+      },
       partialize: (state) => ({
         openaiApiKey: state.openaiApiKey,
         niche: state.niche,
