@@ -5,6 +5,7 @@ import { useUploadMedia, type UploadedMedia, isValidMediaType } from "@/hooks";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Upload, X, Image as ImageIcon, Video, Loader2 } from "lucide-react";
+import { MediaLibraryPicker } from "./media-library-picker";
 
 interface MediaUploaderProps {
   media: UploadedMedia[];
@@ -119,6 +120,18 @@ export function MediaUploader({
           </p>
         </div>
       </div>
+
+      <div className="flex items-center gap-3">
+        <div className="h-px flex-1 bg-border" />
+        <span className="text-xs text-muted-foreground">or</span>
+        <div className="h-px flex-1 bg-border" />
+      </div>
+
+      <MediaLibraryPicker
+        media={media}
+        onMediaChange={onMediaChange}
+        maxFiles={maxFiles}
+      />
 
       {/* Media preview */}
       {media.length > 0 && (
