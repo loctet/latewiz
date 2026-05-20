@@ -7,7 +7,9 @@ export function buildCampaignSlotTimes(
   postsPerDay: number,
   windowStart: string,
   windowEnd: string,
-  timezone: string
+  timezone: string,
+  /** Only include slots strictly after this timestamp (default: now). */
+  minTimeMs: number = Date.now()
 ): string[] {
   const out: string[] = [];
   const start = new Date(`${startDate}T12:00:00`);
@@ -29,7 +31,9 @@ export function buildCampaignSlotTimes(
     for (let i = 0; i < postsPerDay; i++) {
       const frac = postsPerDay === 1 ? 0.5 : (i + 1) / (postsPerDay + 1);
       const ts = Math.round(startMs + span * frac);
-      out.push(new Date(ts).toISOString());
+      if (ts > minTimeMs) {
+        out.push(new Date(ts).toISOString());
+      }
     }
   }
 

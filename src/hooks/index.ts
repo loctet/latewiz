@@ -87,7 +87,15 @@ export {
   useGenerateDraft,
   useGenerateImage,
   useCampaignPlan,
+  useGenerateCampaignSlot,
   urlToFile,
   type CampaignSlot,
   type NicheProfile,
 } from "./use-ai";
+
+export {
+  useGeneratedMediaList,
+  useSaveGeneratedMedia,
+  useDeleteGeneratedMedia,
+  generatedMediaKeys,
+} from "./use-generated-media";

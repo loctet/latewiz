@@ -6,7 +6,7 @@ import { Target } from "lucide-react";
 
 export default function NichePage() {
   return (
-    <div className="mx-auto max-w-2xl space-y-4 sm:space-y-6">
+    <div className="w-full space-y-4 sm:space-y-6">
       <div>
         <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
           <Target className="h-6 w-6 text-primary" />

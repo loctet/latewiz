@@ -106,7 +106,7 @@ export default function CalendarPage() {
   );
 
   return (
-    <div className="mx-auto max-w-4xl space-y-4 sm:space-y-6">
+    <div className="w-full space-y-4 sm:space-y-6">
       {/* Page header */}
       <div>
         <h1 className="text-xl sm:text-2xl font-bold">Calendar</h1>

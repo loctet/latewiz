@@ -1,7 +1,7 @@
 import type { CampaignPostDraft, DraftResult, NicheProfile } from "./types";
 import { defaultNicheProfile } from "./types";
+import { buildImagePromptFromStyle } from "@/lib/image-prompt-catalog";
 import {
-  buildNicheImageLanguageNote,
   buildNicheSystemInstructions,
   buildNicheUserContext,
   nicheToRecord,
@@ -185,6 +185,152 @@ export async function generateCampaignBatch(
   };
 }
 
+export type PreviousCampaignPost = {
+  title: string;
+  body: string;
+  hashtags: string;
+};
+
+/**
+ * Generate one campaign post at a time, using prior posts + goal so content builds incrementally.
+ */
+export async function generateCampaignSlot(
+  apiKey: string | null,
+  niche: NicheProfile,
+  params: {
+    campaignGoal: string;
+    slotIndex: number;
+    totalPosts: number;
+    scheduledAt: string;
+    previousPosts: PreviousCampaignPost[];
+    campaignHint?: string;
+    trendSnippets?: string[];
+  }
+): Promise<{
+  post: CampaignPostDraft;
+  source: string;
+  detail: string | null;
+}> {
+  const slotNum = params.slotIndex + 1;
+  const goal = params.campaignGoal.trim() || "Grow audience engagement";
+  const topic = niche.topic.trim() || "your niche";
+
+  if (!apiKey) {
+    return {
+      post: {
+        title: `${goal.slice(0, 40)} — step ${slotNum}`,
+        body: `Post ${slotNum} of ${params.totalPosts} toward: ${goal}. Edit before scheduling.`,
+        hashtags: "#content #growth",
+      },
+      source: "stub",
+      detail: "Add an OpenAI key for goal-driven incremental generation.",
+    };
+  }
+
+  const priorBlock =
+    params.previousPosts.length > 0
+      ? params.previousPosts
+          .map(
+            (p, i) =>
+              `Post ${i + 1}: title="${p.title}" | body excerpt="${p.body.slice(0, 200)}..."`
+          )
+          .join("\n")
+      : "No previous posts yet — this is the opening post for the campaign.";
+
+  const trendLines = (params.trendSnippets ?? [])
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 8);
+
+  const system = [
+    "You are an expert social media strategist.",
+    "Return JSON only: {\"title\":\"...\",\"body\":\"...\",\"hashtags\":\"#a #b\"}.",
+    "Write ONE post that advances a multi-part campaign toward a defined goal.",
+    "Each new post must add distinct value — never repeat hooks or angles from earlier posts.",
+    buildNicheSystemInstructions(niche),
+  ].join(" ");
+
+  const user = `Campaign goal (every post must move toward this):
+${goal}
+
+This is post ${slotNum} of ${params.totalPosts} in the series.
+Scheduled for: ${params.scheduledAt}
+
+Audience topic: ${topic}
+
+Posts already planned (build on these — do not duplicate):
+${priorBlock}
+
+${params.campaignHint?.trim() ? `Extra theme notes: ${params.campaignHint.trim()}` : ""}
+
+${trendLines.length ? `Tone references:\n- ${trendLines.join("\n- ")}` : ""}
+
+Choose the beat that best fits slot ${slotNum} of ${params.totalPosts} (e.g. hook, educate, story, question, proof, soft CTA) so the full series achieves the campaign goal.`;
+
+  try {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+        response_format: { type: "json_object" },
+        max_tokens: 2048,
+      }),
+    });
+
+    const bodyRaw = await res.text();
+    if (!res.ok) {
+      return {
+        post: {
+          title: `Post ${slotNum}`,
+          body: "AI unavailable — edit manually.",
+          hashtags: "",
+        },
+        source: "fallback",
+        detail: summarizeOpenAiError(res.status, bodyRaw, "OpenAI"),
+      };
+    }
+
+    const data = JSON.parse(bodyRaw) as {
+      choices?: { message?: { content?: string } }[];
+    };
+    const text = data.choices?.[0]?.message?.content ?? "{}";
+    const parsed = JSON.parse(text) as {
+      title?: string;
+      body?: string;
+      hashtags?: string;
+    };
+
+    return {
+      post: {
+        title: String(parsed.title ?? `Post ${slotNum}`).trim(),
+        body: String(parsed.body ?? "").trim(),
+        hashtags: String(parsed.hashtags ?? "").trim(),
+      },
+      source: "openai",
+      detail: null,
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Unknown error";
+    return {
+      post: {
+        title: `Post ${slotNum}`,
+        body: "",
+        hashtags: "",
+      },
+      source: "fallback",
+      detail: msg.slice(0, 400),
+    };
+  }
+}
+
 function stubCampaignBatch(
   niche: NicheProfile,
   totalPosts: number,
@@ -308,54 +454,6 @@ The posts array length must be exactly ${count}.`;
   }
 }
 
-function buildEducationalBoardImagePrompt(
-  postText: string,
-  niche: NicheProfile
-): string {
-  const trimmed = postText.trim();
-  const langNote = buildNicheImageLanguageNote(niche);
-  return `Create a hand drawn educational infographic on notebook paper using blue ballpoint pen sketch style.
-
-${langNote}
-
-The infographic should compare and explain this topic in depth:
-
-${trimmed}
-
-Style requirements:
-
-• realistic notebook page background
-• hand drawn doodles and sketches
-• blue ink only
-• clean handwritten typography
-• simple but intelligent visual explanations
-• tables, arrows, icons, charts, and mini diagrams
-• visually balanced composition
-• viral educational social media aesthetic
-• looks like carefully drawn by a smart student or teacher
-• slightly imperfect pen strokes for authenticity
-• highly engaging and easy to understand
-• include comparison boxes and visual storytelling
-• minimalist but information dense
-• infographic poster layout
-• portrait A4 composition
-• neat margins and aligned sections
-
-Structure:
-
-Large handwritten title at top
-Main comparison illustrations in center
-Comparison table with pros/cons or differences
-Small visual graphs or trend diagrams at bottom
-Final powerful quote or conclusion sentence
-
-Make it look organic, intelligent, educational, and highly shareable on social media.
-
-Rendering: ultra sharp focus, even lighting, full notebook page visible in frame (no cropping), no full-bleed content outside the page. Keep the entire composition portrait-oriented.
-
-Final detail: add a tiny neat handwritten credit in the bottom margin: KWEZIX.com`;
-}
-
 function resolvePostTextForBoard(
   captionContext: string | undefined,
   explicitPrompt: string | undefined,
@@ -378,7 +476,9 @@ export async function generatePostImage(
   apiKey: string | null,
   niche: NicheProfile = defaultNicheProfile(),
   explicitPrompt?: string,
-  captionContext?: string
+  captionContext?: string,
+  promptStyleId?: string,
+  templateOverrides?: Record<string, string>
 ): Promise<{
   url: string | null;
   b64_json: string | null;
@@ -429,7 +529,12 @@ export async function generatePostImage(
     nicheLines.length > 0
       ? `${postText}\n\n${nicheLines.join("\n")}`
       : postText;
-  const brief = buildEducationalBoardImagePrompt(boardText, niche).slice(0, 4000);
+  const brief = buildImagePromptFromStyle(
+    promptStyleId,
+    boardText,
+    niche,
+    templateOverrides
+  );
 
   const json: Record<string, unknown> = {
     model,

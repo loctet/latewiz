@@ -1,19 +1,28 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, createJSONStorage } from "zustand/middleware";
 import {
   defaultNicheProfile,
   type GeneratedMediaItem,
   type NicheProfile,
 } from "@/lib/openai/types";
 import { isPlausibleOpenAiApiKey } from "@/lib/openai/resolve-key";
+import { DEFAULT_IMAGE_PROMPT_STYLE_ID } from "@/lib/image-prompt-catalog";
+import { safeLocalStorage } from "@/lib/safe-storage";
 
 interface AiState {
   openaiApiKey: string | null;
   niche: NicheProfile;
+  imagePromptStyleId: string;
+  /** Custom template overrides per style id (use {{subject}} and {{langNote}}) */
+  imagePromptTemplates: Record<string, string>;
   generatedMedia: GeneratedMediaItem[];
 
   setOpenaiApiKey: (key: string | null) => void;
   setNiche: (niche: Partial<NicheProfile>) => void;
+  setImagePromptStyleId: (id: string) => void;
+  setImagePromptTemplate: (styleId: string, template: string) => void;
+  resetImagePromptTemplate: (styleId: string) => void;
+  resetAllImagePromptTemplates: () => void;
   addGeneratedMedia: (item: Omit<GeneratedMediaItem, "id" | "createdAt">) => void;
   removeGeneratedMedia: (id: string) => void;
   clearGeneratedMedia: () => void;
@@ -24,6 +33,8 @@ export const useAiStore = create<AiState>()(
     (set, get) => ({
       openaiApiKey: null,
       niche: defaultNicheProfile(),
+      imagePromptStyleId: DEFAULT_IMAGE_PROMPT_STYLE_ID,
+      imagePromptTemplates: {},
       generatedMedia: [],
 
       setOpenaiApiKey: (key) => {
@@ -39,6 +50,24 @@ export const useAiStore = create<AiState>()(
 
       setNiche: (partial) =>
         set({ niche: { ...get().niche, ...partial } }),
+
+      setImagePromptStyleId: (id) => set({ imagePromptStyleId: id }),
+
+      setImagePromptTemplate: (styleId, template) =>
+        set({
+          imagePromptTemplates: {
+            ...get().imagePromptTemplates,
+            [styleId]: template,
+          },
+        }),
+
+      resetImagePromptTemplate: (styleId) => {
+        const next = { ...get().imagePromptTemplates };
+        delete next[styleId];
+        set({ imagePromptTemplates: next });
+      },
+
+      resetAllImagePromptTemplates: () => set({ imagePromptTemplates: {} }),
 
       addGeneratedMedia: (item) => {
         const entry: GeneratedMediaItem = {
@@ -66,13 +95,20 @@ export const useAiStore = create<AiState>()(
           ...current,
           ...p,
           niche: { ...defaultNicheProfile(), ...p?.niche },
+          imagePromptStyleId:
+            p?.imagePromptStyleId ?? DEFAULT_IMAGE_PROMPT_STYLE_ID,
+          imagePromptTemplates: p?.imagePromptTemplates ?? {},
+          generatedMedia: [],
         };
       },
       partialize: (state) => ({
         openaiApiKey: state.openaiApiKey,
         niche: state.niche,
-        generatedMedia: state.generatedMedia.slice(0, 30),
+        imagePromptStyleId: state.imagePromptStyleId,
+        imagePromptTemplates: state.imagePromptTemplates,
+        // Never persist generatedMedia (base64 images blow localStorage quota)
       }),
+      storage: createJSONStorage(() => safeLocalStorage),
     }
   )
 );

@@ -33,6 +33,7 @@ import {
   PenLine,
 } from "lucide-react";
 import Link from "next/link";
+import { ImagePromptStyleSelect } from "@/components/ai";
 
 export default function AiStudioPage() {
   const router = useRouter();
@@ -128,7 +129,7 @@ export default function AiStudioPage() {
   };
 
   return (
-    <div className="mx-auto max-w-2xl space-y-4 sm:space-y-6">
+    <div className="w-full space-y-4 sm:space-y-6">
       <div>
         <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
           <Sparkles className="h-6 w-6 text-primary" />
@@ -229,6 +230,35 @@ export default function AiStudioPage() {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <ImageIcon className="h-4 w-4" />
+            Image generation
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <ImagePromptStyleSelect />
+          <Button
+            onClick={handleGenerateImage}
+            disabled={imageMutation.isPending || !configured}
+            variant="secondary"
+            className="w-full sm:w-auto"
+          >
+            {imageMutation.isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <ImageIcon className="mr-2 h-4 w-4" />
+            )}
+            Generate image
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            Uses your topic, generated caption (if any), and content niche
+            settings. Notebook infographic is the default style.
+          </p>
+        </CardContent>
+      </Card>
+
       {(generatedBody || generatedTitle) && (
         <Card>
           <CardHeader>
@@ -258,19 +288,6 @@ export default function AiStudioPage() {
               >
                 <RefreshCw className="mr-2 h-3 w-3" />
                 Regenerate
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={handleGenerateImage}
-                disabled={imageMutation.isPending || !configured}
-              >
-                {imageMutation.isPending ? (
-                  <Loader2 className="mr-2 h-3 w-3 animate-spin" />
-                ) : (
-                  <ImageIcon className="mr-2 h-3 w-3" />
-                )}
-                Generate infographic
               </Button>
               <Button size="sm" onClick={openInComposer}>
                 <PenLine className="mr-2 h-3 w-3" />

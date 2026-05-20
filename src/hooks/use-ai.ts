@@ -1,6 +1,7 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAiStore } from "@/stores/ai-store";
 import type { DraftResult, NicheProfile } from "@/lib/openai/types";
+import { generatedMediaKeys } from "./use-generated-media";
 
 function aiHeaders(openaiApiKey: string | null): HeadersInit {
   const headers: Record<string, string> = {
@@ -57,12 +58,15 @@ export function useGenerateDraft() {
 export function useGenerateImage() {
   const openaiApiKey = useAiStore((s) => s.openaiApiKey);
   const niche = useAiStore((s) => s.niche);
-  const addGeneratedMedia = useAiStore((s) => s.addGeneratedMedia);
+  const imagePromptStyleId = useAiStore((s) => s.imagePromptStyleId);
+  const imagePromptTemplates = useAiStore((s) => s.imagePromptTemplates);
+  const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (params: {
       prompt?: string;
       captionContext?: string;
+      promptStyleId?: string;
     }) => {
       const res = await fetch("/api/ai/generate-image", {
         method: "POST",
@@ -70,6 +74,9 @@ export function useGenerateImage() {
         body: JSON.stringify({
           prompt: params.prompt,
           caption_context: params.captionContext,
+          prompt_style_id:
+            params.promptStyleId ?? imagePromptStyleId,
+          prompt_templates: imagePromptTemplates,
           niche,
         }),
       });
@@ -87,10 +94,25 @@ export function useGenerateImage() {
       if (data.image_url) {
         const digest = (params.captionContext ?? params.prompt ?? "")
           .slice(0, 120);
-        addGeneratedMedia({
-          url: data.image_url,
-          captionDigest: digest,
-        });
+        try {
+          const saveRes = await fetch("/api/media/generated", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              image_url: data.image_url,
+              caption_digest: digest,
+            }),
+          });
+          if (saveRes.ok) {
+            const saved = (await saveRes.json()) as {
+              item: { url: string };
+            };
+            data.image_url = saved.item.url;
+          }
+          queryClient.invalidateQueries({ queryKey: generatedMediaKeys.all });
+        } catch {
+          /* generation succeeded; gallery save is best-effort */
+        }
       }
       return data;
     },
@@ -104,6 +126,53 @@ export interface CampaignSlot {
   hashtags: string;
   content: string;
   image_url?: string | null;
+  /** Appended to AI prompt when regenerating this slot */
+  aiInstruction?: string;
+  /** Image style for this slot's image generation */
+  imagePromptStyleId?: string;
+}
+
+export function useGenerateCampaignSlot() {
+  const openaiApiKey = useAiStore((s) => s.openaiApiKey);
+  const niche = useAiStore((s) => s.niche);
+
+  return useMutation({
+    mutationFn: async (params: {
+      campaignGoal: string;
+      slotIndex: number;
+      totalPosts: number;
+      scheduledAt: string;
+      previousPosts: { title: string; body: string; hashtags: string }[];
+      campaignHint?: string;
+      trendSnippets?: string[];
+    }) => {
+      const res = await fetch("/api/ai/campaign-slot", {
+        method: "POST",
+        headers: aiHeaders(openaiApiKey),
+        body: JSON.stringify({
+          campaign_goal: params.campaignGoal,
+          slot_index: params.slotIndex,
+          total_posts: params.totalPosts,
+          scheduled_at: params.scheduledAt,
+          previous_posts: params.previousPosts,
+          campaign_hint: params.campaignHint,
+          trend_snippets: params.trendSnippets,
+          niche,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(
+          (err as { error?: string }).error ?? "Slot generation failed"
+        );
+      }
+      return res.json() as Promise<{
+        post: CampaignSlot;
+        source: string;
+        detail?: string | null;
+      }>;
+    },
+  });
 }
 
 export function useCampaignPlan() {

@@ -31,8 +31,9 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Key, Moon, Sun, Globe, LogOut, ExternalLink, Target } from "lucide-react";
+import { Key, Moon, Sun, Globe, LogOut, ExternalLink, Target, ImageIcon } from "lucide-react";
 import Link from "next/link";
+import { ImagePromptTemplatesEditor } from "@/components/settings";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -62,7 +63,7 @@ export default function SettingsPage() {
     : "";
 
   return (
-    <div className="mx-auto max-w-2xl space-y-4 sm:space-y-6">
+    <div className="w-full space-y-4 sm:space-y-6">
       {/* Page header */}
       <div>
         <h1 className="text-xl sm:text-2xl font-bold">Settings</h1>
@@ -255,6 +256,25 @@ export default function SettingsPage() {
               </Button>
             )}
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Image prompt templates */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <ImageIcon className="h-4 w-4" />
+            Image prompt templates
+          </CardTitle>
+          <CardDescription>
+            Edit the AI instructions for each image style. Use{" "}
+            <code className="text-xs">{"{{subject}}"}</code> and{" "}
+            <code className="text-xs">{"{{langNote}}"}</code> placeholders.
+            Saved on this device and used when you generate images.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ImagePromptTemplatesEditor />
         </CardContent>
       </Card>
 

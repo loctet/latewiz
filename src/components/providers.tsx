@@ -22,7 +22,36 @@ function HydrationGate({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function pruneOversizedAiStorage() {
+  if (typeof window === "undefined") return;
+  try {
+    const raw = localStorage.getItem("latewiz-ai");
+    if (!raw || raw.length < 400_000) return;
+    const parsed = JSON.parse(raw) as {
+      state?: Record<string, unknown>;
+    };
+    const state = (parsed.state ?? parsed) as Record<string, unknown>;
+    if (state && typeof state === "object") {
+      delete state.generatedMedia;
+      localStorage.setItem(
+        "latewiz-ai",
+        JSON.stringify({ ...parsed, state })
+      );
+    }
+  } catch {
+    try {
+      localStorage.removeItem("latewiz-ai");
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
 export function Providers({ children }: { children: React.ReactNode }) {
+  useEffect(() => {
+    pruneOversizedAiStorage();
+  }, []);
+
   const [queryClient] = useState(
     () =>
       new QueryClient({

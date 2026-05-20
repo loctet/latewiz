@@ -40,4 +40,5 @@ export interface GeneratedMediaItem {
   url: string;
   captionDigest: string;
   createdAt: string;
+  filename?: string;
 }

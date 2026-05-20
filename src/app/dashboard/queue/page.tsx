@@ -302,7 +302,7 @@ export default function QueuePage() {
   };
 
   return (
-    <div className="mx-auto max-w-2xl space-y-4 sm:space-y-6">
+    <div className="w-full space-y-4 sm:space-y-6">
       {/* Page header */}
       <div>
         <h1 className="text-xl sm:text-2xl font-bold">Queue</h1>

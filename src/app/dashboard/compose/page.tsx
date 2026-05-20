@@ -13,6 +13,7 @@ import {
 } from "@/hooks";
 import { useAppStore } from "@/stores";
 import { AiAssistPanel } from "@/components/ai";
+import { PageContainer } from "@/components/dashboard";
 import { readPostPrefill, clearPostPrefill } from "@/lib/post-prefill";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -134,7 +135,7 @@ export default function ComposePage() {
   };
 
   return (
-    <div className="mx-auto max-w-2xl space-y-4 sm:space-y-6">
+    <PageContainer>
       {/* Page header */}
       <div>
         <h1 className="text-xl sm:text-2xl font-bold">Create Post</h1>
@@ -275,6 +276,6 @@ export default function ComposePage() {
           )}
         </CardContent>
       </Card>
-    </div>
+    </PageContainer>
   );
 }

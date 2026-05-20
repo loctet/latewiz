@@ -22,12 +22,35 @@ export async function POST(request: NextRequest) {
         : typeof body.captionContext === "string"
           ? body.captionContext
           : undefined;
+    const promptStyleId =
+      typeof body.prompt_style === "string"
+        ? body.prompt_style
+        : typeof body.promptStyle === "string"
+          ? body.promptStyle
+          : typeof body.prompt_style_id === "string"
+            ? body.prompt_style_id
+            : typeof body.promptStyleId === "string"
+              ? body.promptStyleId
+              : undefined;
+
+    const templateOverrides =
+      body.prompt_templates &&
+      typeof body.prompt_templates === "object" &&
+      !Array.isArray(body.prompt_templates)
+        ? (body.prompt_templates as Record<string, string>)
+        : body.promptTemplates &&
+            typeof body.promptTemplates === "object" &&
+            !Array.isArray(body.promptTemplates)
+          ? (body.promptTemplates as Record<string, string>)
+          : undefined;
 
     const result = await generatePostImage(
       apiKey,
       niche,
       prompt,
-      captionContext
+      captionContext,
+      promptStyleId,
+      templateOverrides
     );
 
     let imageUrl = result.url;

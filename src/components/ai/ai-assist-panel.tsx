@@ -15,6 +15,7 @@ import {
 import { toast } from "sonner";
 import { Loader2, Sparkles, Wand2, ImageIcon } from "lucide-react";
 import Link from "next/link";
+import { ImagePromptStyleSelect } from "./image-prompt-style-select";
 
 interface AiAssistPanelProps {
   content: string;
@@ -113,7 +114,9 @@ export function AiAssistPanel({
       )}
 
       {assistEnabled && (
-        <div className="flex flex-wrap gap-2">
+        <>
+          <ImagePromptStyleSelect />
+          <div className="flex flex-wrap gap-2">
           <Button
             type="button"
             variant="secondary"
@@ -150,6 +153,7 @@ export function AiAssistPanel({
             <Link href="/dashboard/ai-studio">Open AI Studio</Link>
           </Button>
         </div>
+        </>
       )}
     </div>
   );

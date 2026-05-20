@@ -324,8 +324,10 @@ export default function DashboardLayout({
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto p-4 pb-20 lg:p-6 lg:pb-6">
-          <ErrorBoundary>{children}</ErrorBoundary>
+        <main className="flex-1 w-full min-w-0 overflow-y-auto px-4 py-4 pb-20 lg:px-6 lg:py-6 lg:pb-6">
+          <ErrorBoundary>
+            <div className="w-full min-w-0">{children}</div>
+          </ErrorBoundary>
         </main>
       </div>
 
