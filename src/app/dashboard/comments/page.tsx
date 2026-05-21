@@ -71,12 +71,18 @@ export default function CommentsPage() {
   const deleteMutation = useDeleteInboxComment();
   const scanMutation = useRunAutoReplyScan();
 
-  useAutoReplyScanner();
+  const posts = postsData?.posts ?? [];
+
+  const platformByPostId = useMemo(
+    () =>
+      Object.fromEntries(posts.map((p) => [p.id, String(p.platform)])),
+    [posts]
+  );
+
+  useAutoReplyScanner(90_000, platformByPostId);
   useEffect(() => {
     hydrateFromStorage();
   }, [hydrateFromStorage]);
-
-  const posts = postsData?.posts ?? [];
   const rules = useAutoReplyStore((s) => s.rules);
   const rule = useAutoReplyRuleForPost(selectedPost?.id ?? null);
   const rulesByPostId = useMemo(
@@ -148,9 +154,14 @@ export default function CommentsPage() {
 
   const handleManualScan = async () => {
     try {
-      const result = await scanMutation.mutateAsync();
+      const result = await scanMutation.mutateAsync(platformByPostId);
       if (result.replied > 0) {
-        toast.success(`Auto-replied to ${result.replied} comment(s)`);
+        const parts: string[] = [];
+        if (result.dmSent > 0) parts.push(`${result.dmSent} DM(s)`);
+        if (result.commentReplied > 0) {
+          parts.push(`${result.commentReplied} public reply(s)`);
+        }
+        toast.success(`Sent ${parts.join(" and ")}`);
         void refetch();
       } else if (result.errors.length) {
         toast.error(result.errors[0]);
@@ -286,7 +297,9 @@ export default function CommentsPage() {
                               {postRule?.enabled && (
                                 <Badge className="text-[10px] gap-0.5">
                                   <Sparkles className="h-2.5 w-2.5" />
-                                  Auto
+                                  {postRule.replyChannel === "comment"
+                                    ? "Auto"
+                                    : "Auto DM"}
                                 </Badge>
                               )}
                             </div>
@@ -334,7 +347,9 @@ export default function CommentsPage() {
                     onClick={() => setAutoReplyOpen(true)}
                   >
                     <Sparkles className="h-3.5 w-3.5" />
-                    Auto-reply
+                    {rule?.enabled && rule.replyChannel !== "comment"
+                      ? "Auto DM"
+                      : "Auto-reply"}
                   </Button>
                 </div>
               </CardHeader>

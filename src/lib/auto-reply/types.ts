@@ -1,18 +1,26 @@
+/** How to respond when auto-reply triggers */
+export type AutoReplyChannel =
+  | "comment"
+  | "dm"
+  | "dm_with_fallback";
+
 export interface PostAutoReplyRule {
   /** Inbox post id from Zernio (GET /inbox/comments row id) */
   inboxPostId: string;
   accountId: string;
+  platform?: string;
   platformPostId?: string;
   enabled: boolean;
-  /** Reply text sent to each matching top-level comment */
+  /** Public comment reply text */
   replyMessage: string;
-  /** Only reply to top-level comments (no thread replies) */
+  /** DM text; defaults to replyMessage when empty */
+  dmMessage?: string;
+  /** Public comment when DM is not allowed (dm_with_fallback only) */
+  fallbackCommentMessage?: string;
+  replyChannel: AutoReplyChannel;
   topLevelOnly: boolean;
-  /** Optional comma-separated keywords; empty = all comments */
   keywords: string[];
-  /** Minutes before replying to the same commenter again on this post */
   cooldownMinutes: number;
-  /** Zernio comment-automation id when synced for Instagram/Facebook */
   zernioAutomationId?: string;
   updatedAt: string;
 }
@@ -21,12 +29,15 @@ export interface AutoReplySentRecord {
   commentId: string;
   inboxPostId: string;
   commenterId?: string;
+  channel: "comment" | "dm";
   sentAt: string;
 }
 
 export interface AutoReplyScanResult {
   scanned: number;
   replied: number;
+  dmSent: number;
+  commentReplied: number;
   skipped: number;
   errors: string[];
 }

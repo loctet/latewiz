@@ -72,6 +72,32 @@ export interface ReplyToCommentInput {
   commentId?: string;
 }
 
+export interface PrivateReplyToCommentInput {
+  accountId: string;
+  message: string;
+}
+
+export interface CreateInboxConversationInput {
+  accountId: string;
+  message: string;
+  participantUsername?: string;
+  participantId?: string;
+  skipDmCheck?: boolean;
+}
+
+export interface CreateInboxConversationResponse {
+  data?: {
+    conversationId?: string;
+    messageId?: string;
+  };
+  conversationId?: string;
+}
+
+export interface SendInboxMessageInput {
+  accountId: string;
+  message: string;
+}
+
 export interface CommentAutomation {
   _id: string;
   name: string;

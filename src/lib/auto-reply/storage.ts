@@ -1,4 +1,5 @@
 import type { AutoReplySentRecord, PostAutoReplyRule } from "./types";
+import { normalizeAutoReplyRule } from "./migrate";
 
 const STORE_KEY = "latewiz-auto-reply";
 const SENT_KEY = "latewiz-auto-reply-sent";
@@ -22,7 +23,11 @@ function readStore(): AutoReplyStoreData {
     if (!raw) return { rules: [], global: { scannerEnabled: false } };
     const parsed = JSON.parse(raw) as Partial<AutoReplyStoreData>;
     return {
-      rules: Array.isArray(parsed.rules) ? parsed.rules : [],
+      rules: Array.isArray(parsed.rules)
+        ? parsed.rules.map((r) =>
+            normalizeAutoReplyRule(r as PostAutoReplyRule)
+          )
+        : [],
       global: parsed.global ?? { scannerEnabled: false },
     };
   } catch {
@@ -45,7 +50,10 @@ export function getAutoReplyRule(inboxPostId: string): PostAutoReplyRule | undef
 export function upsertAutoReplyRule(rule: PostAutoReplyRule): PostAutoReplyRule {
   const store = readStore();
   const idx = store.rules.findIndex((r) => r.inboxPostId === rule.inboxPostId);
-  const next = { ...rule, updatedAt: new Date().toISOString() };
+  const next = normalizeAutoReplyRule({
+    ...rule,
+    updatedAt: new Date().toISOString(),
+  });
   if (idx >= 0) {
     store.rules[idx] = next;
   } else {

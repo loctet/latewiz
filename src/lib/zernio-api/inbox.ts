@@ -2,9 +2,13 @@ import { zernioRequest } from "./client";
 import type {
   CommentAutomation,
   CreateCommentAutomationInput,
+  CreateInboxConversationInput,
+  CreateInboxConversationResponse,
   GetPostCommentsResponse,
   ListCommentedPostsResponse,
+  PrivateReplyToCommentInput,
   ReplyToCommentInput,
+  SendInboxMessageInput,
 } from "./types";
 
 export async function listCommentedPosts(
@@ -60,6 +64,42 @@ export async function hideComment(
     apiKey,
     `/inbox/comments/${encodeURIComponent(postId)}/${encodeURIComponent(commentId)}/hide`,
     { method: "POST", body: { accountId } }
+  );
+}
+
+export async function sendPrivateReplyToComment(
+  apiKey: string,
+  postId: string,
+  commentId: string,
+  body: PrivateReplyToCommentInput
+) {
+  return zernioRequest<{ success?: boolean; data?: unknown }>(
+    apiKey,
+    `/inbox/comments/${encodeURIComponent(postId)}/${encodeURIComponent(commentId)}/private-reply`,
+    { method: "POST", body }
+  );
+}
+
+export async function createInboxConversation(
+  apiKey: string,
+  body: CreateInboxConversationInput
+) {
+  return zernioRequest<CreateInboxConversationResponse>(
+    apiKey,
+    "/inbox/conversations",
+    { method: "POST", body }
+  );
+}
+
+export async function sendInboxMessage(
+  apiKey: string,
+  conversationId: string,
+  body: SendInboxMessageInput
+) {
+  return zernioRequest<{ success?: boolean; data?: unknown }>(
+    apiKey,
+    `/inbox/conversations/${encodeURIComponent(conversationId)}/messages`,
+    { method: "POST", body }
   );
 }
 

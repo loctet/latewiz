@@ -1,13 +1,13 @@
-import { getPostComments, replyToComment } from "@/lib/zernio-api";
+import { getPostComments } from "@/lib/zernio-api";
 import type { InboxComment } from "@/lib/zernio-api";
 import {
   flattenComments,
-  formatReplyMessage,
-  getCommentText,
   getCommenterId,
+  getCommentText,
   isTopLevelComment,
   matchesKeywords,
 } from "./comments";
+import { sendAutoReplyWithChannel } from "./dm";
 import {
   getEnabledAutoReplyRules,
   hasRecentlyReplied,
@@ -28,7 +28,7 @@ function shouldReplyToComment(
     return { ok: false, reason: "not-top-level" };
   }
 
-  if (comment.hasReply) {
+  if (comment.hasReply && rule.replyChannel === "comment") {
     return { ok: false, reason: "already-replied" };
   }
 
@@ -51,16 +51,23 @@ function shouldReplyToComment(
   return { ok: true };
 }
 
-async function processRule(
-  apiKey: string,
-  rule: PostAutoReplyRule
-): Promise<AutoReplyScanResult> {
-  const result: AutoReplyScanResult = {
+function emptyResult(): AutoReplyScanResult {
+  return {
     scanned: 0,
     replied: 0,
+    dmSent: 0,
+    commentReplied: 0,
     skipped: 0,
     errors: [],
   };
+}
+
+async function processRule(
+  apiKey: string,
+  rule: PostAutoReplyRule,
+  platform?: string
+): Promise<AutoReplyScanResult> {
+  const result = emptyResult();
 
   try {
     const res = await getPostComments(apiKey, rule.inboxPostId, {
@@ -68,6 +75,8 @@ async function processRule(
       limit: 100,
     });
     const comments = flattenComments(res.comments ?? []);
+    const resolvedPlatform =
+      platform ?? rule.platform ?? res.meta?.platform ?? "";
     result.scanned = comments.length;
 
     for (const comment of comments) {
@@ -77,20 +86,24 @@ async function processRule(
         continue;
       }
 
-      const message = formatReplyMessage(rule.replyMessage, comment);
       try {
-        await replyToComment(apiKey, rule.inboxPostId, {
-          accountId: rule.accountId,
-          message,
-          commentId: comment.id,
-        });
+        const channel = await sendAutoReplyWithChannel(
+          apiKey,
+          rule,
+          rule.inboxPostId,
+          comment,
+          resolvedPlatform
+        );
         recordAutoReplySent({
           commentId: comment.id,
           inboxPostId: rule.inboxPostId,
           commenterId: getCommenterId(comment),
+          channel,
           sentAt: new Date().toISOString(),
         });
         result.replied++;
+        if (channel === "dm") result.dmSent++;
+        else result.commentReplied++;
       } catch (err) {
         result.errors.push(
           `${comment.id}: ${err instanceof Error ? err.message : "reply failed"}`
@@ -107,20 +120,19 @@ async function processRule(
 }
 
 export async function runAutoReplyScan(
-  apiKey: string
+  apiKey: string,
+  platformByPostId?: Record<string, string>
 ): Promise<AutoReplyScanResult> {
   const rules = getEnabledAutoReplyRules();
-  const aggregate: AutoReplyScanResult = {
-    scanned: 0,
-    replied: 0,
-    skipped: 0,
-    errors: [],
-  };
+  const aggregate = emptyResult();
 
   for (const rule of rules) {
-    const partial = await processRule(apiKey, rule);
+    const platform = platformByPostId?.[rule.inboxPostId] ?? rule.platform;
+    const partial = await processRule(apiKey, rule, platform);
     aggregate.scanned += partial.scanned;
     aggregate.replied += partial.replied;
+    aggregate.dmSent += partial.dmSent;
+    aggregate.commentReplied += partial.commentReplied;
     aggregate.skipped += partial.skipped;
     aggregate.errors.push(...partial.errors);
   }

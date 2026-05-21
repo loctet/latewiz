@@ -13,6 +13,45 @@ import { useCurrentProfileId } from "./use-profiles";
 
 const IG_FB_PLATFORMS = new Set(["instagram", "facebook"]);
 
+function buildAutomationPayload(
+  rule: PostAutoReplyRule,
+  profileId: string
+) {
+  const dmText = (rule.dmMessage?.trim() || rule.replyMessage).trim();
+  const base = {
+    profileId,
+    accountId: rule.accountId,
+    name: `LateWiz: ${rule.inboxPostId.slice(-8)}`,
+    platformPostId: rule.platformPostId,
+    keywords: rule.keywords.length ? rule.keywords : undefined,
+    isActive: true,
+  };
+
+  if (rule.replyChannel === "comment") {
+    return {
+      ...base,
+      commentReply: rule.replyMessage,
+      dmMessage: dmText,
+    };
+  }
+
+  if (rule.replyChannel === "dm") {
+    return {
+      ...base,
+      dmMessage: dmText,
+    };
+  }
+
+  return {
+    ...base,
+    dmMessage: dmText,
+    commentReply: (
+      rule.fallbackCommentMessage?.trim() ||
+      "Thanks for commenting! Please DM us and we'll send the details."
+    ).trim(),
+  };
+}
+
 export function useSaveAutoReplyRule() {
   const apiKey = useAuthStore((s) => s.apiKey);
   const profileId = useCurrentProfileId();
@@ -27,6 +66,8 @@ export function useSaveAutoReplyRule() {
       const { rule, platform, syncZernioAutomation = true } = input;
       let zernioAutomationId = rule.zernioAutomationId;
 
+      const wantsDm = rule.replyChannel !== "comment";
+
       if (
         syncZernioAutomation &&
         apiKey &&
@@ -34,18 +75,10 @@ export function useSaveAutoReplyRule() {
         IG_FB_PLATFORMS.has(platform) &&
         rule.platformPostId &&
         rule.enabled &&
-        rule.replyMessage.trim()
+        (rule.replyMessage.trim() || rule.dmMessage?.trim()) &&
+        wantsDm
       ) {
-        const body = {
-          profileId,
-          accountId: rule.accountId,
-          name: `LateWiz: ${rule.inboxPostId.slice(-8)}`,
-          platformPostId: rule.platformPostId,
-          commentReply: rule.replyMessage,
-          dmMessage: rule.replyMessage,
-          keywords: rule.keywords.length ? rule.keywords : undefined,
-          isActive: true,
-        };
+        const body = buildAutomationPayload(rule, profileId);
 
         if (zernioAutomationId) {
           await updateCommentAutomation(apiKey, zernioAutomationId, body);
@@ -53,13 +86,21 @@ export function useSaveAutoReplyRule() {
           const created = await createCommentAutomation(apiKey, body);
           zernioAutomationId = created.automation?._id;
         }
-      } else if (zernioAutomationId && apiKey && !rule.enabled) {
-        await updateCommentAutomation(apiKey, zernioAutomationId, {
-          isActive: false,
-        });
+      } else if (zernioAutomationId && apiKey) {
+        if (!rule.enabled || rule.replyChannel === "comment") {
+          await updateCommentAutomation(apiKey, zernioAutomationId, {
+            isActive: false,
+          });
+        } else if (rule.enabled && wantsDm && profileId) {
+          await updateCommentAutomation(
+            apiKey,
+            zernioAutomationId,
+            buildAutomationPayload(rule, profileId)
+          );
+        }
       }
 
-      const saved = setRule({ ...rule, zernioAutomationId });
+      const saved = setRule({ ...rule, platform, zernioAutomationId });
       return saved;
     },
   });
@@ -83,15 +124,17 @@ export function useRunAutoReplyScan() {
   const apiKey = useAuthStore((s) => s.apiKey);
 
   return useMutation({
-    mutationFn: async () => {
+    mutationFn: async (platformByPostId?: Record<string, string>) => {
       if (!apiKey) throw new Error("Not authenticated");
-      return runAutoReplyScan(apiKey);
+      return runAutoReplyScan(apiKey, platformByPostId);
     },
   });
 }
 
-/** Polls for auto-replies when scanner is enabled (e.g. on Comments page). */
-export function useAutoReplyScanner(intervalMs = 90_000) {
+export function useAutoReplyScanner(
+  intervalMs = 90_000,
+  platformByPostId?: Record<string, string>
+) {
   const apiKey = useAuthStore((s) => s.apiKey);
   const scannerEnabled = useAutoReplyStore((s) => s.global.scannerEnabled);
   const scanMutation = useRunAutoReplyScan();
@@ -101,13 +144,13 @@ export function useAutoReplyScanner(intervalMs = 90_000) {
     if (!apiKey || !scannerEnabled || running.current) return;
     running.current = true;
     try {
-      await scanMutation.mutateAsync();
+      await scanMutation.mutateAsync(platformByPostId);
     } catch {
-      // Errors surfaced via mutation state when user runs manual scan
+      // surfaced on manual scan
     } finally {
       running.current = false;
     }
-  }, [apiKey, scannerEnabled, scanMutation]);
+  }, [apiKey, scannerEnabled, scanMutation, platformByPostId]);
 
   useEffect(() => {
     if (!scannerEnabled) return;
