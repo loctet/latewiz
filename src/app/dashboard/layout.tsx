@@ -25,6 +25,7 @@ import {
   Calendar,
   Users,
   ListOrdered,
+  MessageSquare,
   Sparkles,
   CalendarClock,
   ImageIcon,
@@ -63,6 +64,11 @@ const navItems = [
     label: "Queue",
     href: "/dashboard/queue",
     icon: ListOrdered,
+  },
+  {
+    label: "Comments",
+    href: "/dashboard/comments",
+    icon: MessageSquare,
   },
   {
     label: "Niche",
