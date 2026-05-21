@@ -10,7 +10,10 @@ import {
 import { sendAutoReplyWithChannel } from "./dm";
 import {
   getEnabledAutoReplyRules,
-  hasRecentlyReplied,
+  hasAnyAutoReplyForComment,
+  hasAutoReplyCommentSent,
+  hasAutoReplyDmSent,
+  hasRecentAutoReplyToCommenter,
   recordAutoReplySent,
   setGlobalAutoReplySettings,
   getGlobalAutoReplySettings,
@@ -28,19 +31,35 @@ function shouldReplyToComment(
     return { ok: false, reason: "not-top-level" };
   }
 
-  if (comment.hasReply && rule.replyChannel === "comment") {
-    return { ok: false, reason: "already-replied" };
-  }
-
   if (!matchesKeywords(text, rule.keywords)) {
     return { ok: false, reason: "keyword-mismatch" };
   }
 
   const commenterId = getCommenterId(comment);
+  const postId = rule.inboxPostId;
+  const commentId = comment.id;
+
+  if (rule.replyChannel === "comment") {
+    if (hasAutoReplyCommentSent(postId, commentId)) {
+      return { ok: false, reason: "already-auto-replied" };
+    }
+    if (comment.hasReply) {
+      return { ok: false, reason: "already-replied" };
+    }
+  } else if (rule.replyChannel === "dm") {
+    if (hasAutoReplyDmSent(postId, commentId)) {
+      return { ok: false, reason: "already-auto-dm" };
+    }
+  } else {
+    if (hasAnyAutoReplyForComment(postId, commentId)) {
+      return { ok: false, reason: "already-auto-handled" };
+    }
+  }
+
   if (
-    hasRecentlyReplied(
-      rule.inboxPostId,
-      comment.id,
+    hasRecentAutoReplyToCommenter(
+      postId,
+      commentId,
       commenterId,
       rule.cooldownMinutes
     )

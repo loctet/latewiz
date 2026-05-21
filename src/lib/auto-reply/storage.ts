@@ -70,9 +70,12 @@ export function deleteAutoReplyRule(inboxPostId: string) {
 }
 
 export function getEnabledAutoReplyRules(): PostAutoReplyRule[] {
-  return readStore().rules.filter(
-    (r) => r.enabled && r.replyMessage.trim().length > 0
-  );
+  return readStore().rules.filter((r) => {
+    if (!r.enabled) return false;
+    const hasComment = r.replyMessage.trim().length > 0;
+    const hasDm = (r.dmMessage?.trim() || r.replyMessage.trim()).length > 0;
+    return r.replyChannel === "comment" ? hasComment : hasDm;
+  });
 }
 
 function readSent(): AutoReplySentRecord[] {
@@ -92,23 +95,68 @@ function writeSent(records: AutoReplySentRecord[]) {
 }
 
 export function recordAutoReplySent(record: AutoReplySentRecord) {
-  writeSent([...readSent(), record]);
+  const existing = readSent();
+  const dup = existing.some(
+    (r) =>
+      r.inboxPostId === record.inboxPostId &&
+      r.commentId === record.commentId &&
+      (r.channel === record.channel ||
+        (!r.channel && !record.channel))
+  );
+  if (dup) return;
+  writeSent([...existing, record]);
 }
 
-export function hasRecentlyReplied(
+/** Permanent: this comment was already auto-replied on the thread (public). */
+export function hasAutoReplyCommentSent(
+  inboxPostId: string,
+  commentId: string
+): boolean {
+  return readSent().some(
+    (r) =>
+      r.inboxPostId === inboxPostId &&
+      r.commentId === commentId &&
+      (r.channel === "comment" || r.channel === undefined)
+  );
+}
+
+/** Permanent: this comment already received an auto-reply DM. */
+export function hasAutoReplyDmSent(
+  inboxPostId: string,
+  commentId: string
+): boolean {
+  return readSent().some(
+    (r) =>
+      r.inboxPostId === inboxPostId &&
+      r.commentId === commentId &&
+      (r.channel === "dm" || r.channel === undefined)
+  );
+}
+
+/** Permanent: any auto-reply was sent for this comment (DM and/or public). */
+export function hasAnyAutoReplyForComment(
+  inboxPostId: string,
+  commentId: string
+): boolean {
+  return readSent().some(
+    (r) => r.inboxPostId === inboxPostId && r.commentId === commentId
+  );
+}
+
+/** Cooldown applies to other comments from the same person on the same post. */
+export function hasRecentAutoReplyToCommenter(
   inboxPostId: string,
   commentId: string,
   commenterId: string | undefined,
   cooldownMinutes: number
 ): boolean {
+  if (!commenterId || cooldownMinutes <= 0) return false;
   const cutoff = Date.now() - cooldownMinutes * 60_000;
   return readSent().some((r) => {
     if (r.inboxPostId !== inboxPostId) return false;
-    const sentAt = new Date(r.sentAt).getTime();
-    if (sentAt < cutoff) return false;
-    if (r.commentId === commentId) return true;
-    if (commenterId && r.commenterId === commenterId) return true;
-    return false;
+    if (r.commentId === commentId) return false;
+    if (r.commenterId !== commenterId) return false;
+    return new Date(r.sentAt).getTime() >= cutoff;
   });
 }
 
