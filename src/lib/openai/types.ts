@@ -25,7 +25,7 @@ export interface DraftResult {
   title: string;
   body: string;
   hashtags: string;
-  source: "openai" | "stub" | "fallback";
+  source: "openai" | "openai+web" | "openai+fallback-search" | "stub" | "fallback";
   detail: string | null;
 }
 

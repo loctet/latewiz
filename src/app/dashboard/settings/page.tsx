@@ -187,20 +187,47 @@ export default function SettingsPage() {
             Powers caption drafts, campaign planning, and notebook-style
             infographics. Stored locally on this device. Server{" "}
             <code className="text-xs">OPENAI_API_KEY</code> is used as fallback.
+            Caption and campaign AI use OpenAI&apos;s built-in web search (Responses
+            API) when your key supports it. Optional{" "}
+            <code className="text-xs">TAVILY_API_KEY</code> /{" "}
+            <code className="text-xs">SERPER_API_KEY</code> on the server is only a
+            fallback if native search is unavailable.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="rounded-lg bg-muted p-3 text-sm">
-            Status:{" "}
-            {openAiStatus?.openai_configured ? (
-              <span className="text-green-600 dark:text-green-400 font-medium">
-                Configured
-              </span>
-            ) : (
-              <span className="text-amber-600 dark:text-amber-400 font-medium">
-                Not configured
-              </span>
-            )}
+          <div className="rounded-lg bg-muted p-3 text-sm space-y-1">
+            <p>
+              OpenAI:{" "}
+              {openAiStatus?.openai_configured ? (
+                <span className="text-green-600 dark:text-green-400 font-medium">
+                  Configured
+                </span>
+              ) : (
+                <span className="text-amber-600 dark:text-amber-400 font-medium">
+                  Not configured
+                </span>
+              )}
+            </p>
+            <p>
+              Live web research:{" "}
+              {openAiStatus?.web_search_mode === "openai_native" ? (
+                <span className="text-green-600 dark:text-green-400 font-medium">
+                  OpenAI web search (Responses API)
+                </span>
+              ) : openAiStatus?.web_search_mode === "tavily_serper" ? (
+                <span className="text-green-600 dark:text-green-400 font-medium">
+                  Fallback search (Tavily / Serper)
+                </span>
+              ) : openAiStatus?.openai_configured ? (
+                <span className="text-muted-foreground">
+                  OpenAI only — no web search keys on server
+                </span>
+              ) : (
+                <span className="text-muted-foreground">
+                  Configure OpenAI key first
+                </span>
+              )}
+            </p>
           </div>
           <div className="space-y-2">
             <Label>OpenAI API key</Label>

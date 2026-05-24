@@ -638,6 +638,10 @@ export default function CampaignPlannerPage() {
                     onChange={(e) => setWindowEnd(e.target.value)}
                   />
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  Times vary by day (different minutes and offsets) so the
+                  schedule looks natural, not like a fixed bot interval.
+                </p>
               </div>
             </div>
             <div className="space-y-2">

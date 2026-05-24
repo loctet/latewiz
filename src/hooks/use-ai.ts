@@ -23,7 +23,12 @@ export function useOpenAiStatus() {
         headers: aiHeaders(openaiApiKey),
       });
       if (!res.ok) throw new Error("Failed to check OpenAI status");
-      return res.json() as Promise<{ openai_configured: boolean }>;
+      return res.json() as Promise<{
+        openai_configured: boolean;
+        web_search_mode?: "openai_native" | "tavily_serper" | "disabled";
+        web_search_configured?: boolean;
+        web_search_enabled?: boolean;
+      }>;
     },
     staleTime: 30_000,
   });

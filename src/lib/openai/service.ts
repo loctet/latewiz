@@ -1,11 +1,13 @@
 import type { CampaignPostDraft, DraftResult, NicheProfile } from "./types";
 import { defaultNicheProfile } from "./types";
 import { buildImagePromptFromStyle } from "@/lib/image-prompt-catalog";
+import { buildNicheUserContext, nicheToRecord } from "./niche-prompt";
+import { generateStructuredContent } from "./text-generation";
 import {
-  buildNicheSystemInstructions,
-  buildNicheUserContext,
-  nicheToRecord,
-} from "./niche-prompt";
+  CAMPAIGN_BATCH_JSON_SCHEMA,
+  CAMPAIGN_POST_JSON_SCHEMA,
+  DRAFT_JSON_SCHEMA,
+} from "./schemas";
 
 function summarizeOpenAiError(status: number, bodyRaw: string, label: string): string {
   try {
@@ -47,60 +49,39 @@ export async function generateDraft(
 
   const nicheContext = buildNicheUserContext(niche);
   const userPayload = JSON.stringify({ hint: hint ?? null });
+  const userInput = `Generate one post aligned with this niche.\n\n${nicheContext}\n\nOptional hint: ${userPayload}`;
 
   try {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content: [
-              "You write concise social media posts. Return JSON with keys title, body, hashtags.",
-              buildNicheSystemInstructions(niche),
-            ].join("\n\n"),
-          },
-          {
-            role: "user",
-            content: `Generate one post aligned with this niche.\n\n${nicheContext}\n\nOptional hint: ${userPayload}`,
-          },
-        ],
-        response_format: { type: "json_object" },
-      }),
+    const result = await generateStructuredContent<{
+      title?: string;
+      body?: string;
+      hashtags?: string;
+    }>({
+      apiKey,
+      taskInstructions:
+        "You write concise social media posts. Return JSON with keys title, body, hashtags.",
+      userInput,
+      jsonSchema: { name: "social_post_draft", schema: DRAFT_JSON_SCHEMA },
+      researchParams: { niche, hint },
     });
 
-    const bodyRaw = await res.text();
-    if (!res.ok) {
+    if (!result.data) {
       return {
         title: "Draft (fallback)",
         body: "AI temporarily unavailable. Edit and schedule manually.",
         hashtags: "",
         source: "fallback",
-        detail: summarizeOpenAiError(res.status, bodyRaw, "OpenAI"),
+        detail: result.detail ?? "Generation failed",
       };
     }
 
-    const data = JSON.parse(bodyRaw) as {
-      choices?: { message?: { content?: string } }[];
-    };
-    const text = data.choices?.[0]?.message?.content ?? "{}";
-    const parsed = JSON.parse(text) as {
-      title?: string;
-      body?: string;
-      hashtags?: string;
-    };
-
+    const parsed = result.data;
     return {
       title: String(parsed.title ?? "Post"),
       body: String(parsed.body ?? ""),
       hashtags: String(parsed.hashtags ?? ""),
-      source: "openai",
-      detail: null,
+      source: result.source,
+      detail: result.detail,
     };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown error";
@@ -242,15 +223,7 @@ export async function generateCampaignSlot(
     .filter(Boolean)
     .slice(0, 8);
 
-  const system = [
-    "You are an expert social media strategist.",
-    "Return JSON only: {\"title\":\"...\",\"body\":\"...\",\"hashtags\":\"#a #b\"}.",
-    "Write ONE post that advances a multi-part campaign toward a defined goal.",
-    "Each new post must add distinct value — never repeat hooks or angles from earlier posts.",
-    buildNicheSystemInstructions(niche),
-  ].join(" ");
-
-  const user = `Campaign goal (every post must move toward this):
+  const userInput = `Campaign goal (every post must move toward this):
 ${goal}
 
 This is post ${slotNum} of ${params.totalPosts} in the series.
@@ -268,25 +241,32 @@ ${trendLines.length ? `Tone references:\n- ${trendLines.join("\n- ")}` : ""}
 Choose the beat that best fits slot ${slotNum} of ${params.totalPosts} (e.g. hook, educate, story, question, proof, soft CTA) so the full series achieves the campaign goal.`;
 
   try {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
+    const result = await generateStructuredContent<{
+      title?: string;
+      body?: string;
+      hashtags?: string;
+    }>({
+      apiKey,
+      taskInstructions: [
+        "You are an expert social media strategist.",
+        "Return JSON only: {\"title\":\"...\",\"body\":\"...\",\"hashtags\":\"#a #b\"}.",
+        "Write ONE post that advances a multi-part campaign toward a defined goal.",
+        "Each new post must add distinct value — never repeat hooks or angles from earlier posts.",
+      ].join(" "),
+      userInput,
+      jsonSchema: { name: "campaign_slot_post", schema: CAMPAIGN_POST_JSON_SCHEMA },
+      researchParams: {
+        niche,
+        campaignGoal: goal,
+        campaignHint: params.campaignHint,
+        slotIndex: params.slotIndex,
+        totalPosts: params.totalPosts,
+        trendSnippets: params.trendSnippets,
       },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: user },
-        ],
-        response_format: { type: "json_object" },
-        max_tokens: 2048,
-      }),
+      maxOutputTokens: 2048,
     });
 
-    const bodyRaw = await res.text();
-    if (!res.ok) {
+    if (!result.data) {
       return {
         post: {
           title: `Post ${slotNum}`,
@@ -294,28 +274,19 @@ Choose the beat that best fits slot ${slotNum} of ${params.totalPosts} (e.g. hoo
           hashtags: "",
         },
         source: "fallback",
-        detail: summarizeOpenAiError(res.status, bodyRaw, "OpenAI"),
+        detail: result.detail ?? "Generation failed",
       };
     }
 
-    const data = JSON.parse(bodyRaw) as {
-      choices?: { message?: { content?: string } }[];
-    };
-    const text = data.choices?.[0]?.message?.content ?? "{}";
-    const parsed = JSON.parse(text) as {
-      title?: string;
-      body?: string;
-      hashtags?: string;
-    };
-
+    const parsed = result.data;
     return {
       post: {
         title: String(parsed.title ?? `Post ${slotNum}`).trim(),
         body: String(parsed.body ?? "").trim(),
         hashtags: String(parsed.hashtags ?? "").trim(),
       },
-      source: "openai",
-      detail: null,
+      source: result.source,
+      detail: result.detail,
     };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown error";
@@ -366,24 +337,14 @@ async function openAiCampaignChunk(
   count: number,
   offset: number
 ): Promise<{ posts: CampaignPostDraft[]; detail: string | null }> {
-  const system = [
-    "You are an expert social media strategist and SEO copywriter.",
-    "Return compact JSON only, matching the requested schema.",
-    "Each post must be unique: different angle, hook, and structure.",
-    'Use platform-agnostic phrasing (no "link in bio").',
-    "Bodies: under 2200 characters, punchy, scannable lines, optional emoji sparingly.",
-    "Hashtags: one string with 3–8 relevant tags, space-separated with #.",
-    buildNicheSystemInstructions(niche),
-  ].join(" ");
-
   const trendBlock =
     trendLines.length > 0
       ? `Recent/trend-style hooks to mirror in tone (not copy verbatim):\n- ${trendLines.join("\n- ")}`
-      : "No trend samples provided; infer timely angles from the niche.";
+      : "No manual trend hooks provided; search the web for timely angles for this niche.";
 
   const start = offset + 1;
   const end = offset + count;
-  const user = `Build exactly ${count} social posts for slots ${start} through ${end} of a longer editorial calendar.
+  const userInput = `Build exactly ${count} social posts for slots ${start} through ${end} of a longer editorial calendar.
 
 Primary audience topic: ${topicLabel}
 
@@ -401,45 +362,33 @@ Return JSON: {"posts":[{"title":"...","body":"...","hashtags":"#a #b"}]}
 The posts array length must be exactly ${count}.`;
 
   try {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: user },
-        ],
-        response_format: { type: "json_object" },
-        max_tokens: 8192,
-      }),
+    const result = await generateStructuredContent<{
+      posts?: { title?: string; body?: string; hashtags?: string }[];
+    }>({
+      apiKey,
+      taskInstructions: [
+        "You are an expert social media strategist and SEO copywriter.",
+        "Return compact JSON only, matching the requested schema.",
+        "Each post must be unique: different angle, hook, and structure.",
+        'Use platform-agnostic phrasing (no "link in bio").',
+        "Bodies: under 2200 characters, punchy, scannable lines, optional emoji sparingly.",
+        "Hashtags: one string with 3–8 relevant tags, space-separated with #.",
+      ].join(" "),
+      userInput,
+      jsonSchema: { name: "campaign_batch", schema: CAMPAIGN_BATCH_JSON_SCHEMA },
+      researchParams: { niche, campaignHint, trendSnippets: trendLines },
+      maxOutputTokens: 8192,
     });
 
-    const bodyRaw = await res.text();
-    if (!res.ok) {
+    if (!result.data?.posts || !Array.isArray(result.data.posts)) {
       return {
         posts: [],
-        detail: summarizeOpenAiError(res.status, bodyRaw, "OpenAI"),
+        detail: result.detail ?? "OpenAI JSON missing posts[]",
       };
     }
 
-    const data = JSON.parse(bodyRaw) as {
-      choices?: { message?: { content?: string } }[];
-    };
-    const text = data.choices?.[0]?.message?.content ?? "{}";
-    const parsed = JSON.parse(text) as {
-      posts?: { title?: string; body?: string; hashtags?: string }[];
-    };
-
-    if (!Array.isArray(parsed.posts)) {
-      return { posts: [], detail: "OpenAI JSON missing posts[]" };
-    }
-
     const out: CampaignPostDraft[] = [];
-    for (const row of parsed.posts) {
+    for (const row of result.data.posts) {
       if (!row || typeof row !== "object") continue;
       out.push({
         title: String(row.title ?? "Post").trim(),
@@ -447,7 +396,7 @@ The posts array length must be exactly ${count}.`;
         hashtags: String(row.hashtags ?? "").trim(),
       });
     }
-    return { posts: out, detail: null };
+    return { posts: out, detail: result.detail };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown error";
     return { posts: [], detail: msg.slice(0, 400) };

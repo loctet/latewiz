@@ -63,6 +63,17 @@ docker run -p 3000:3000 -e LATE_API_KEY=sk_... latewiz
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `LATE_API_KEY` | Yes* | Your Zernio API key. Get one at [zernio.com](https://zernio.com/dashboard/api-keys) |
+| `OPENAI_API_KEY` | No | Server fallback for AI captions and images (users can also add a key in Settings) |
+| `OPENAI_TEXT_MODEL` | No | Model for Responses API text + web search (default: `gpt-4o-mini`; `gpt-4.1-mini` or `gpt-5.5` recommended for best search) |
+| `OPENAI_NATIVE_WEB_SEARCH` | No | Set to `false` to skip OpenAI built-in web search and use fallback only |
+| `OPENAI_WEB_SEARCH_REQUIRED` | No | Set to `true` to force the model to run web search on every generation |
+| `OPENAI_WEB_SEARCH_CONTEXT_SIZE` | No | `low`, `medium`, or `high` — how much search context the model sees |
+| `WEB_SEARCH_ALLOWED_DOMAINS` | No | Comma-separated allowlist (e.g. `sec.gov,coindesk.com`) for trusted sources only |
+| `OPENAI_WEB_SEARCH_RECENCY_DAYS` | No | Prompt hint for how recent sources should be (default: `14`) |
+| `TAVILY_API_KEY` | No | Fallback web search if OpenAI Responses web search fails ([tavily.com](https://tavily.com)) |
+| `SERPER_API_KEY` | No | Second fallback search provider ([serper.dev](https://serper.dev)) |
+| `WEB_SEARCH_ENABLED` | No | Set to `false` to disable Tavily/Serper fallback |
+| `WEB_SEARCH_MAX_RESULTS` | No | Max fallback sources injected into prompts (default: `5`, max `10`) |
 | `NEXT_PUBLIC_APP_URL` | No | Your app's public URL (for OAuth callbacks) |
 | `NEXT_PUBLIC_APP_NAME` | No | Custom app name (default: LateWiz) |
 
