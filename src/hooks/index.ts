@@ -87,12 +87,15 @@ export {
   useGenerateDraft,
   useGenerateImage,
   useGenerateVideo,
+  isVideoGenerationConfigured,
   useCampaignPlan,
   useGenerateCampaignSlot,
   urlToFile,
   type CampaignSlot,
   type NicheProfile,
 } from "./use-ai";
+
+export type { VideoProvider } from "@/lib/video-providers";
 
 export {
   useGeneratedMediaList,

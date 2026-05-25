@@ -9,6 +9,7 @@ import {
   useGenerateImage,
   useGenerateVideo,
   useOpenAiStatus,
+  isVideoGenerationConfigured,
   useUploadMedia,
   urlToFile,
   type UploadedMedia,
@@ -21,6 +22,7 @@ import Link from "next/link";
 import { AiMediaModeSelect } from "./ai-media-mode-select";
 import { ImagePromptStyleSelect } from "./image-prompt-style-select";
 import { VideoPromptStyleSelect } from "./video-prompt-style-select";
+import { VideoProviderSelect } from "./video-provider-select";
 
 interface AiAssistPanelProps {
   content: string;
@@ -40,7 +42,9 @@ export function AiAssistPanel({
   const [assistEnabled, setAssistEnabled] = useState(true);
   const aiMediaKind = useAiStore((s) => s.aiMediaKind);
   const setAiMediaKind = useAiStore((s) => s.setAiMediaKind);
+  const videoProvider = useAiStore((s) => s.videoProvider);
   const { data: status } = useOpenAiStatus();
+  const videoConfigured = isVideoGenerationConfigured(videoProvider, status);
   const draftMutation = useGenerateDraft();
   const imageMutation = useGenerateImage();
   const videoMutation = useGenerateVideo();
@@ -66,12 +70,19 @@ export function AiAssistPanel({
   };
 
   const generateMedia = async () => {
-    if (!configured) {
+    if (aiMediaKind === "video") {
+      if (!videoConfigured) {
+        toast.error(
+          videoProvider === "fal-pika"
+            ? "Add your fal.ai API key in Settings first."
+            : "Add your OpenAI API key in Settings first."
+        );
+        return;
+      }
+      toast.message("Video generation can take 1–3 minutes…");
+    } else if (!configured) {
       toast.error("Add your OpenAI API key in Settings first.");
       return;
-    }
-    if (aiMediaKind === "video") {
-      toast.message("Video generation can take 1–3 minutes…");
     }
     try {
       const captionContext = content.trim() || undefined;
@@ -156,7 +167,10 @@ export function AiAssistPanel({
           {aiMediaKind === "image" ? (
             <ImagePromptStyleSelect />
           ) : (
-            <VideoPromptStyleSelect />
+            <>
+              <VideoProviderSelect />
+              <VideoPromptStyleSelect />
+            </>
           )}
           <div className="flex flex-wrap gap-2">
             <Button
@@ -178,7 +192,10 @@ export function AiAssistPanel({
               variant="secondary"
               size="sm"
               onClick={generateMedia}
-              disabled={mediaPending || !configured}
+              disabled={
+                mediaPending ||
+                (aiMediaKind === "video" ? !videoConfigured : !configured)
+              }
             >
               {mediaPending ? (
                 <Loader2 className="mr-2 h-3 w-3 animate-spin" />

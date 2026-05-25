@@ -12,11 +12,12 @@ import {
   useGenerateImage,
   useGenerateVideo,
   useOpenAiStatus,
+  isVideoGenerationConfigured,
   useUploadMedia,
   urlToFile,
 } from "@/hooks";
 import { buildCampaignSlotTimes } from "@/lib/openai";
-import { useAppStore } from "@/stores";
+import { useAppStore, useAiStore } from "@/stores";
 import { PageContainer } from "@/components/dashboard";
 import {
   loadCampaignDraft,
@@ -44,6 +45,7 @@ import {
   CampaignMediaModeSelect,
   ImagePromptStyleSelect,
   VideoPromptStyleSelect,
+  VideoProviderSelect,
 } from "@/components/ai";
 import type { CampaignMediaMode } from "@/lib/campaign-media";
 import { migrateCampaignMediaMode } from "@/lib/campaign-media";
@@ -65,6 +67,8 @@ export default function CampaignPlannerPage() {
   const profileKey = profileId ?? null;
   const { data: accountsData } = useAccounts();
   const { data: status } = useOpenAiStatus();
+  const videoProvider = useAiStore((s) => s.videoProvider);
+  const videoConfigured = isVideoGenerationConfigured(videoProvider, status);
   const slotMutation = useGenerateCampaignSlot();
   const draftMutation = useGenerateDraft();
   const createPostMutation = useCreatePost();
@@ -470,8 +474,12 @@ export default function CampaignPlannerPage() {
 
   const regenerateSlotVideo = async (index: number) => {
     const slot = slots[index];
-    if (!status?.openai_configured) {
-      toast.error("Add OpenAI key in Settings first.");
+    if (!videoConfigured) {
+      toast.error(
+        videoProvider === "fal-pika"
+          ? "Add fal.ai API key in Settings first."
+          : "Add OpenAI key in Settings first."
+      );
       return;
     }
     toast.message("Video generation can take 1–3 minutes…");
@@ -541,7 +549,7 @@ export default function CampaignPlannerPage() {
           const file = await urlToFile(slot.image_url, `campaign-${i}.png`);
           const uploaded = await uploadMutation.mutateAsync(file);
           mediaItems = [{ type: "image", url: uploaded.url }];
-        } else if (mediaMode === "video" && status?.openai_configured) {
+        } else if (mediaMode === "video" && videoConfigured) {
           const r = await videoMutation.mutateAsync({
             captionContext: slot.content || slot.body,
             promptStyleId: slot.videoPromptStyleId,
@@ -793,10 +801,17 @@ export default function CampaignPlannerPage() {
                   <CampaignMediaModeSelect
                     value={mediaMode}
                     onValueChange={setMediaMode}
-                    disabled={!status?.openai_configured}
+                    disabled={
+                      !status?.openai_configured && !status?.fal_configured
+                    }
                   />
                   {mediaMode === "image" && <ImagePromptStyleSelect />}
-                  {mediaMode === "video" && <VideoPromptStyleSelect />}
+                  {mediaMode === "video" && (
+                    <>
+                      <VideoProviderSelect />
+                      <VideoPromptStyleSelect />
+                    </>
+                  )}
                 </div>
                 {mediaMode !== "none" && (
                   <p className="text-xs text-muted-foreground w-full">

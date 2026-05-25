@@ -1,30 +1,41 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAiStore } from "@/stores/ai-store";
 import type { DraftResult, NicheProfile } from "@/lib/openai/types";
+import type { VideoProvider } from "@/lib/video-providers";
 import { generatedMediaKeys } from "./use-generated-media";
 
-function aiHeaders(openaiApiKey: string | null): HeadersInit {
+function aiHeaders(
+  openaiApiKey: string | null,
+  falApiKey: string | null = null
+): HeadersInit {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
   if (openaiApiKey) {
     headers["X-OpenAI-Api-Key"] = openaiApiKey;
   }
+  if (falApiKey) {
+    headers["X-Fal-Api-Key"] = falApiKey;
+  }
   return headers;
 }
 
 export function useOpenAiStatus() {
   const openaiApiKey = useAiStore((s) => s.openaiApiKey);
+  const falApiKey = useAiStore((s) => s.falApiKey);
 
   return useQuery({
-    queryKey: ["openai-status", !!openaiApiKey],
+    queryKey: ["openai-status", !!openaiApiKey, !!falApiKey],
     queryFn: async () => {
       const res = await fetch("/api/ai/status", {
-        headers: aiHeaders(openaiApiKey),
+        headers: aiHeaders(openaiApiKey, falApiKey),
       });
       if (!res.ok) throw new Error("Failed to check OpenAI status");
       return res.json() as Promise<{
         openai_configured: boolean;
+        fal_configured?: boolean;
+        default_video_provider?: VideoProvider;
+        video_providers_configured?: Record<VideoProvider, boolean>;
         web_search_mode?: "openai_native" | "tavily_serper" | "disabled";
         web_search_configured?: boolean;
         web_search_enabled?: boolean;
@@ -32,6 +43,23 @@ export function useOpenAiStatus() {
     },
     staleTime: 30_000,
   });
+}
+
+export function isVideoGenerationConfigured(
+  provider: VideoProvider,
+  status?: {
+    openai_configured?: boolean;
+    fal_configured?: boolean;
+    video_providers_configured?: Record<VideoProvider, boolean>;
+  } | null
+): boolean {
+  if (!status) return false;
+  if (status.video_providers_configured?.[provider] != null) {
+    return status.video_providers_configured[provider];
+  }
+  return provider === "fal-pika"
+    ? Boolean(status.fal_configured)
+    : Boolean(status.openai_configured);
 }
 
 export function useGenerateDraft() {
@@ -126,9 +154,11 @@ export function useGenerateImage() {
 
 export function useGenerateVideo() {
   const openaiApiKey = useAiStore((s) => s.openaiApiKey);
+  const falApiKey = useAiStore((s) => s.falApiKey);
   const niche = useAiStore((s) => s.niche);
   const videoPromptStyleId = useAiStore((s) => s.videoPromptStyleId);
   const videoPromptTemplates = useAiStore((s) => s.videoPromptTemplates);
+  const videoProvider = useAiStore((s) => s.videoProvider);
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -136,16 +166,18 @@ export function useGenerateVideo() {
       prompt?: string;
       captionContext?: string;
       promptStyleId?: string;
+      videoProvider?: VideoProvider;
     }) => {
       const res = await fetch("/api/ai/generate-video", {
         method: "POST",
-        headers: aiHeaders(openaiApiKey),
+        headers: aiHeaders(openaiApiKey, falApiKey),
         body: JSON.stringify({
           prompt: params.prompt,
           caption_context: params.captionContext,
           prompt_style_id:
             params.promptStyleId ?? videoPromptStyleId,
           prompt_templates: videoPromptTemplates,
+          video_provider: params.videoProvider ?? videoProvider,
           niche,
         }),
       });

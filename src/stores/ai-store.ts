@@ -9,13 +9,20 @@ import { isPlausibleOpenAiApiKey } from "@/lib/openai/resolve-key";
 import { DEFAULT_IMAGE_PROMPT_STYLE_ID } from "@/lib/image-prompt-catalog";
 import { DEFAULT_VIDEO_PROMPT_STYLE_ID } from "@/lib/video-prompt-catalog";
 import type { AiMediaKind } from "@/lib/campaign-media";
+import {
+  DEFAULT_VIDEO_PROVIDER,
+  type VideoProvider,
+} from "@/lib/video-providers";
+import { isPlausibleFalApiKey } from "@/lib/fal/resolve-key";
 import { safeLocalStorage } from "@/lib/safe-storage";
 
 interface AiState {
   openaiApiKey: string | null;
+  falApiKey: string | null;
   niche: NicheProfile;
   imagePromptStyleId: string;
   videoPromptStyleId: string;
+  videoProvider: VideoProvider;
   aiMediaKind: AiMediaKind;
   /** Custom template overrides per style id (use {{subject}} and {{langNote}}) */
   imagePromptTemplates: Record<string, string>;
@@ -23,6 +30,8 @@ interface AiState {
   generatedMedia: GeneratedMediaItem[];
 
   setOpenaiApiKey: (key: string | null) => void;
+  setFalApiKey: (key: string | null) => void;
+  setVideoProvider: (provider: VideoProvider) => void;
   setNiche: (niche: Partial<NicheProfile>) => void;
   setImagePromptStyleId: (id: string) => void;
   setVideoPromptStyleId: (id: string) => void;
@@ -42,9 +51,11 @@ export const useAiStore = create<AiState>()(
   persist(
     (set, get) => ({
       openaiApiKey: null,
+      falApiKey: null,
       niche: defaultNicheProfile(),
       imagePromptStyleId: DEFAULT_IMAGE_PROMPT_STYLE_ID,
       videoPromptStyleId: DEFAULT_VIDEO_PROMPT_STYLE_ID,
+      videoProvider: DEFAULT_VIDEO_PROVIDER,
       aiMediaKind: "image",
       imagePromptTemplates: {},
       videoPromptTemplates: {},
@@ -60,6 +71,19 @@ export const useAiStore = create<AiState>()(
           openaiApiKey: isPlausibleOpenAiApiKey(trimmed) ? trimmed : null,
         });
       },
+
+      setFalApiKey: (key) => {
+        if (key === null || key === "") {
+          set({ falApiKey: null });
+          return;
+        }
+        const trimmed = key.trim();
+        set({
+          falApiKey: isPlausibleFalApiKey(trimmed) ? trimmed : null,
+        });
+      },
+
+      setVideoProvider: (provider) => set({ videoProvider: provider }),
 
       setNiche: (partial) =>
         set({ niche: { ...get().niche, ...partial } }),
@@ -133,6 +157,9 @@ export const useAiStore = create<AiState>()(
             p?.imagePromptStyleId ?? DEFAULT_IMAGE_PROMPT_STYLE_ID,
           videoPromptStyleId:
             p?.videoPromptStyleId ?? DEFAULT_VIDEO_PROMPT_STYLE_ID,
+          videoProvider:
+            p?.videoProvider === "fal-pika" ? "fal-pika" : DEFAULT_VIDEO_PROVIDER,
+          falApiKey: p?.falApiKey ?? null,
           aiMediaKind: p?.aiMediaKind === "video" ? "video" : "image",
           imagePromptTemplates: p?.imagePromptTemplates ?? {},
           videoPromptTemplates: p?.videoPromptTemplates ?? {},
@@ -141,9 +168,11 @@ export const useAiStore = create<AiState>()(
       },
       partialize: (state) => ({
         openaiApiKey: state.openaiApiKey,
+        falApiKey: state.falApiKey,
         niche: state.niche,
         imagePromptStyleId: state.imagePromptStyleId,
         videoPromptStyleId: state.videoPromptStyleId,
+        videoProvider: state.videoProvider,
         aiMediaKind: state.aiMediaKind,
         imagePromptTemplates: state.imagePromptTemplates,
         videoPromptTemplates: state.videoPromptTemplates,

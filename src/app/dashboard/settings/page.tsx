@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useAuthStore, useAppStore, useAiStore } from "@/stores";
 import { isPlausibleOpenAiApiKey } from "@/lib/openai/resolve-key";
+import { isPlausibleFalApiKey } from "@/lib/fal/resolve-key";
+import { VIDEO_PROVIDERS } from "@/lib/video-providers";
 import { useOpenAiStatus } from "@/hooks";
 import { Sparkles } from "lucide-react";
 import { toast } from "sonner";
@@ -43,12 +45,15 @@ export default function SettingsPage() {
   const { theme, setTheme } = useTheme();
   const { apiKey, usageStats, logout } = useAuthStore();
   const { timezone, setTimezone } = useAppStore();
-  const { openaiApiKey, setOpenaiApiKey } = useAiStore();
+  const { openaiApiKey, setOpenaiApiKey, falApiKey, setFalApiKey, videoProvider, setVideoProvider } =
+    useAiStore();
   const { data: openAiStatus } = useOpenAiStatus();
 
   const [showApiKey, setShowApiKey] = useState(false);
   const [openAiKeyInput, setOpenAiKeyInput] = useState("");
   const [showOpenAiKey, setShowOpenAiKey] = useState(false);
+  const [falKeyInput, setFalKeyInput] = useState("");
+  const [showFalKey, setShowFalKey] = useState(false);
 
   // Compute timezone options - always includes user's browser timezone and current selection
   const timezoneOptions = useMemo(
@@ -200,6 +205,18 @@ export default function SettingsPage() {
         <CardContent className="space-y-4">
           <div className="rounded-lg bg-muted p-3 text-sm space-y-1">
             <p>
+              fal.ai (Pika):{" "}
+              {openAiStatus?.fal_configured ? (
+                <span className="text-green-600 dark:text-green-400 font-medium">
+                  Configured
+                </span>
+              ) : (
+                <span className="text-amber-600 dark:text-amber-400 font-medium">
+                  Not configured
+                </span>
+              )}
+            </p>
+            <p>
               OpenAI:{" "}
               {openAiStatus?.openai_configured ? (
                 <span className="text-green-600 dark:text-green-400 font-medium">
@@ -270,7 +287,7 @@ export default function SettingsPage() {
                 toast.success(k ? "OpenAI key saved" : "OpenAI key cleared");
               }}
             >
-              Save key
+              Save OpenAI key
             </Button>
             {openaiApiKey && (
               <Button
@@ -282,9 +299,89 @@ export default function SettingsPage() {
                   toast.success("OpenAI key removed");
                 }}
               >
-                Clear
+                Clear OpenAI
               </Button>
             )}
+          </div>
+
+          <div className="space-y-2 pt-2 border-t">
+            <Label>fal.ai API key (Pika video)</Label>
+            <div className="flex gap-2">
+              <Input
+                type={showFalKey ? "text" : "password"}
+                placeholder="FAL key from fal.ai/dashboard/keys"
+                value={falKeyInput}
+                onChange={(e) => setFalKeyInput(e.target.value)}
+                className="font-mono"
+              />
+              <Button
+                variant="outline"
+                type="button"
+                onClick={() => setShowFalKey(!showFalKey)}
+              >
+                {showFalKey ? "Hide" : "Show"}
+              </Button>
+            </div>
+            {falApiKey && (
+              <p className="text-xs text-muted-foreground">
+                Saved fal key: {falApiKey.slice(0, 6)}••••{falApiKey.slice(-4)}
+              </p>
+            )}
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  const k = falKeyInput.trim();
+                  if (k && !isPlausibleFalApiKey(k)) {
+                    toast.error("Invalid fal.ai key format");
+                    return;
+                  }
+                  setFalApiKey(k || null);
+                  setFalKeyInput("");
+                  toast.success(k ? "fal.ai key saved" : "fal.ai key cleared");
+                }}
+              >
+                Save fal key
+              </Button>
+              {falApiKey && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setFalApiKey(null);
+                    setFalKeyInput("");
+                    toast.success("fal.ai key removed");
+                  }}
+                >
+                  Clear fal
+                </Button>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-2 pt-2 border-t">
+            <Label>Default video generator</Label>
+            <Select
+              value={videoProvider}
+              onValueChange={(v) =>
+                setVideoProvider(v as (typeof VIDEO_PROVIDERS)[number]["id"])
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {VIDEO_PROVIDERS.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Used in AI Studio, Compose, and Campaign when generating video.
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -316,7 +413,7 @@ export default function SettingsPage() {
             Video prompt templates
           </CardTitle>
           <CardDescription>
-            Edit AI instructions for short-form video (OpenAI Sora). Use{" "}
+            Edit AI instructions for short-form video (Sora or Pika). Use{" "}
             <code className="text-xs">{"{{subject}}"}</code>,{" "}
             <code className="text-xs">{"{{langNote}}"}</code>,{" "}
             <code className="text-xs">{"{{motion}}"}</code>, and{" "}

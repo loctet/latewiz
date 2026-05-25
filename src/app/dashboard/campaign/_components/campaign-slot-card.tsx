@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   ImagePromptStyleSelect,
   VideoPromptStyleSelect,
+  VideoProviderSelect,
 } from "@/components/ai";
 import type { CampaignMediaMode } from "@/lib/campaign-media";
 import {
@@ -232,6 +233,7 @@ export function CampaignSlotCard({
 
       {showVideoMedia && (
         <div className="rounded-md border border-dashed p-3 space-y-3">
+          <VideoProviderSelect />
           <VideoPromptStyleSelect
             value={slot.videoPromptStyleId}
             onValueChange={(id) => onUpdate({ videoPromptStyleId: id })}

@@ -8,6 +8,7 @@ import {
   useGenerateImage,
   useGenerateVideo,
   useOpenAiStatus,
+  isVideoGenerationConfigured,
 } from "@/hooks";
 import { useAiStore } from "@/stores";
 import type { AiMediaKind } from "@/lib/campaign-media";
@@ -41,6 +42,7 @@ import {
   AiMediaModeSelect,
   ImagePromptStyleSelect,
   VideoPromptStyleSelect,
+  VideoProviderSelect,
 } from "@/components/ai";
 
 export default function AiStudioPage() {
@@ -51,6 +53,7 @@ export default function AiStudioPage() {
   const videoMutation = useGenerateVideo();
   const aiMediaKind = useAiStore((s) => s.aiMediaKind);
   const setAiMediaKind = useAiStore((s) => s.setAiMediaKind);
+  const videoProvider = useAiStore((s) => s.videoProvider);
 
   const [topic, setTopic] = useState("");
   const [tone, setTone] = useState("professional");
@@ -61,6 +64,7 @@ export default function AiStudioPage() {
   const [videoUrl, setVideoUrl] = useState("");
 
   const configured = status?.openai_configured ?? false;
+  const videoConfigured = isVideoGenerationConfigured(videoProvider, status);
 
   const infographicPresetValue = useMemo(() => {
     const m = NOTEBOOK_INFOGRAPHIC_TOPIC_PRESETS.find(
@@ -103,12 +107,19 @@ export default function AiStudioPage() {
   };
 
   const handleGenerateMedia = async () => {
-    if (!configured) {
+    if (aiMediaKind === "video") {
+      if (!videoConfigured) {
+        toast.error(
+          videoProvider === "fal-pika"
+            ? "Add your fal.ai API key in Settings first."
+            : "Add your OpenAI API key in Settings first."
+        );
+        return;
+      }
+      toast.message("Video generation can take 1–3 minutes…");
+    } else if (!configured) {
       toast.error("Add your OpenAI API key in Settings first.");
       return;
-    }
-    if (aiMediaKind === "video") {
-      toast.message("Video generation can take 1–3 minutes…");
     }
     try {
       const ctx = captionContext || undefined;
@@ -291,11 +302,17 @@ export default function AiStudioPage() {
           {aiMediaKind === "image" ? (
             <ImagePromptStyleSelect />
           ) : (
-            <VideoPromptStyleSelect />
+            <>
+              <VideoProviderSelect />
+              <VideoPromptStyleSelect />
+            </>
           )}
           <Button
             onClick={handleGenerateMedia}
-            disabled={mediaPending || !configured}
+            disabled={
+              mediaPending ||
+              (aiMediaKind === "video" ? !videoConfigured : !configured)
+            }
             variant="secondary"
             className="w-full sm:w-auto"
           >
@@ -311,7 +328,7 @@ export default function AiStudioPage() {
           <p className="text-xs text-muted-foreground">
             Uses your topic, generated caption (if any), and content niche.
             {aiMediaKind === "video"
-              ? " Video uses OpenAI Sora and may take several minutes."
+              ? " Video may take several minutes depending on the provider (Sora or Pika on fal.ai)."
               : " Notebook infographic is the default image style."}
           </p>
         </CardContent>

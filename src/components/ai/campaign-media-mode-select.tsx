@@ -49,7 +49,7 @@ export function CampaignMediaModeSelect({
           ? "Posts will be text-only unless you add media per slot."
           : value === "image"
             ? "Generate or attach images when scheduling."
-            : "Generate short videos from captions when scheduling (Sora)."}
+            : "Generate short videos when scheduling (OpenAI Sora or Pika on fal.ai)."}
       </p>
     </div>
   );
