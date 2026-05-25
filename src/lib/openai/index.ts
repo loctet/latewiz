@@ -4,5 +4,6 @@ export * from "./niche-prompt";
 export * from "./responses";
 export * from "./text-generation";
 export * from "./schemas";
+export * from "./sanitize-post-text";
 export * from "./service";
 export * from "./campaign-slots";

@@ -17,7 +17,8 @@ export function buildContentResearchQuery(params: ContentResearchParams): string
   const year = now.getUTCFullYear();
   const month = now.toLocaleString("en-US", { month: "long", timeZone: "UTC" });
 
-  parts.push(`latest news trends ${year} ${month}`);
+  const hint = params.hint?.trim() || params.campaignHint?.trim();
+  if (hint) parts.push(hint.slice(0, 200));
 
   const topic = params.niche.topic.trim();
   if (topic) parts.push(topic);
@@ -31,8 +32,7 @@ export function buildContentResearchQuery(params: ContentResearchParams): string
   const goal = params.campaignGoal?.trim();
   if (goal) parts.push(goal.slice(0, 120));
 
-  const hint = params.hint?.trim() || params.campaignHint?.trim();
-  if (hint) parts.push(hint.slice(0, 160));
+  parts.push(`latest news trends ${year} ${month}`);
 
   if (
     params.slotIndex != null &&

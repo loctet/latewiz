@@ -4,6 +4,10 @@ import { buildImagePromptFromStyle } from "@/lib/image-prompt-catalog";
 import { buildNicheUserContext, nicheToRecord } from "./niche-prompt";
 import { generateStructuredContent } from "./text-generation";
 import {
+  sanitizeDraftFields,
+  SOCIAL_POST_FORMAT_INSTRUCTIONS,
+} from "./sanitize-post-text";
+import {
   CAMPAIGN_BATCH_JSON_SCHEMA,
   CAMPAIGN_POST_JSON_SCHEMA,
   DRAFT_JSON_SCHEMA,
@@ -48,8 +52,10 @@ export async function generateDraft(
   }
 
   const nicheContext = buildNicheUserContext(niche);
-  const userPayload = JSON.stringify({ hint: hint ?? null });
-  const userInput = `Generate one post aligned with this niche.\n\n${nicheContext}\n\nOptional hint: ${userPayload}`;
+  const hintText = hint?.trim() ?? "";
+  const userInput = hintText
+    ? `Topic / brief (use this as the primary subject; search the web for the latest on it):\n${hintText}\n\n${nicheContext}\n\nWrite one timely post grounded in current web research when available.`
+    : `Generate one timely post aligned with this niche.\n\n${nicheContext}\n\nSearch the web for recent trends and facts relevant to this audience.`;
 
   try {
     const result = await generateStructuredContent<{
@@ -58,11 +64,15 @@ export async function generateDraft(
       hashtags?: string;
     }>({
       apiKey,
-      taskInstructions:
-        "You write concise social media posts. Return JSON with keys title, body, hashtags.",
+      taskInstructions: [
+        "You write concise, timely social media posts.",
+        "Return JSON with keys title, body, hashtags.",
+        "Prioritize recent developments from web research over generic or outdated claims.",
+        SOCIAL_POST_FORMAT_INSTRUCTIONS,
+      ].join(" "),
       userInput,
       jsonSchema: { name: "social_post_draft", schema: DRAFT_JSON_SCHEMA },
-      researchParams: { niche, hint },
+      researchParams: { niche, hint: hintText || hint },
     });
 
     if (!result.data) {
@@ -75,11 +85,15 @@ export async function generateDraft(
       };
     }
 
-    const parsed = result.data;
+    const clean = sanitizeDraftFields({
+      title: result.data.title,
+      body: result.data.body,
+      hashtags: result.data.hashtags,
+    });
     return {
-      title: String(parsed.title ?? "Post"),
-      body: String(parsed.body ?? ""),
-      hashtags: String(parsed.hashtags ?? ""),
+      title: clean.title || "Post",
+      body: clean.body,
+      hashtags: clean.hashtags,
       source: result.source,
       detail: result.detail,
     };
@@ -252,6 +266,8 @@ Choose the beat that best fits slot ${slotNum} of ${params.totalPosts} (e.g. hoo
         "Return JSON only: {\"title\":\"...\",\"body\":\"...\",\"hashtags\":\"#a #b\"}.",
         "Write ONE post that advances a multi-part campaign toward a defined goal.",
         "Each new post must add distinct value — never repeat hooks or angles from earlier posts.",
+        "Use current web research for timely angles when relevant.",
+        SOCIAL_POST_FORMAT_INSTRUCTIONS,
       ].join(" "),
       userInput,
       jsonSchema: { name: "campaign_slot_post", schema: CAMPAIGN_POST_JSON_SCHEMA },
@@ -278,12 +294,16 @@ Choose the beat that best fits slot ${slotNum} of ${params.totalPosts} (e.g. hoo
       };
     }
 
-    const parsed = result.data;
+    const clean = sanitizeDraftFields({
+      title: result.data.title ?? `Post ${slotNum}`,
+      body: result.data.body,
+      hashtags: result.data.hashtags,
+    });
     return {
       post: {
-        title: String(parsed.title ?? `Post ${slotNum}`).trim(),
-        body: String(parsed.body ?? "").trim(),
-        hashtags: String(parsed.hashtags ?? "").trim(),
+        title: clean.title || `Post ${slotNum}`,
+        body: clean.body,
+        hashtags: clean.hashtags,
       },
       source: result.source,
       detail: result.detail,
@@ -373,6 +393,8 @@ The posts array length must be exactly ${count}.`;
         'Use platform-agnostic phrasing (no "link in bio").',
         "Bodies: under 2200 characters, punchy, scannable lines, optional emoji sparingly.",
         "Hashtags: one string with 3–8 relevant tags, space-separated with #.",
+        "Ground timely claims in web research; avoid outdated generic filler.",
+        SOCIAL_POST_FORMAT_INSTRUCTIONS,
       ].join(" "),
       userInput,
       jsonSchema: { name: "campaign_batch", schema: CAMPAIGN_BATCH_JSON_SCHEMA },
@@ -390,10 +412,15 @@ The posts array length must be exactly ${count}.`;
     const out: CampaignPostDraft[] = [];
     for (const row of result.data.posts) {
       if (!row || typeof row !== "object") continue;
+      const clean = sanitizeDraftFields({
+        title: row.title,
+        body: row.body,
+        hashtags: row.hashtags,
+      });
       out.push({
-        title: String(row.title ?? "Post").trim(),
-        body: String(row.body ?? "").trim(),
-        hashtags: String(row.hashtags ?? "").trim(),
+        title: clean.title || "Post",
+        body: clean.body,
+        hashtags: clean.hashtags,
       });
     }
     return { posts: out, detail: result.detail };

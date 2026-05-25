@@ -5,6 +5,7 @@ import {
   parseJsonFromModelOutput,
 } from "./responses";
 import { buildNicheSystemInstructions } from "./niche-prompt";
+import { SOCIAL_POST_FORMAT_INSTRUCTIONS } from "./sanitize-post-text";
 import { buildTimelinessSystemInstructions } from "@/lib/web-search/content-research";
 import { appendWebResearchToUserMessage } from "@/lib/web-search/content-research";
 import type { ContentResearchParams } from "@/lib/web-search/build-query";
@@ -76,6 +77,7 @@ export async function generateStructuredContent<T>(params: {
 }): Promise<TextGenerationResult<T>> {
   const instructions = [
     params.taskInstructions,
+    SOCIAL_POST_FORMAT_INSTRUCTIONS,
     buildFactualResearchInstructions(),
     buildTimelinessSystemInstructions(),
     params.researchParams
@@ -85,13 +87,25 @@ export async function generateStructuredContent<T>(params: {
     .filter(Boolean)
     .join("\n\n");
 
+  let userInput = params.userInput;
+  let usedFallbackSearch = false;
+  if (params.researchParams) {
+    const enriched = await appendWebResearchToUserMessage(
+      params.userInput,
+      params.researchParams
+    );
+    userInput = enriched.message;
+    usedFallbackSearch = enriched.usedWebSearch;
+  }
+
   if (isNativeWebSearchPreferred()) {
     const native = await createResponseWithWebSearch({
       apiKey: params.apiKey,
       instructions,
-      input: params.userInput,
+      input: userInput,
       jsonSchema: params.jsonSchema,
       maxOutputTokens: params.maxOutputTokens,
+      requireWebSearch: Boolean(params.researchParams),
     });
 
     if (native.ok) {
@@ -111,21 +125,10 @@ export async function generateStructuredContent<T>(params: {
     }
   }
 
-  let userMessage = params.userInput;
-  let usedFallbackSearch = false;
-  if (params.researchParams) {
-    const enriched = await appendWebResearchToUserMessage(
-      params.userInput,
-      params.researchParams
-    );
-    userMessage = enriched.message;
-    usedFallbackSearch = enriched.usedWebSearch;
-  }
-
   const chat = await chatCompletionsJson<T>({
     apiKey: params.apiKey,
     system: instructions,
-    user: userMessage,
+    user: userInput,
     maxTokens: params.maxOutputTokens,
   });
 
