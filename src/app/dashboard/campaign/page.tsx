@@ -10,6 +10,7 @@ import {
   useGenerateDraft,
   useGenerateCampaignSlot,
   useGenerateImage,
+  useGenerateVideo,
   useOpenAiStatus,
   useUploadMedia,
   urlToFile,
@@ -38,9 +39,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import { PlatformSelector } from "../compose/_components/platform-selector";
-import { ImagePromptStyleSelect } from "@/components/ai";
+import {
+  CampaignMediaModeSelect,
+  ImagePromptStyleSelect,
+  VideoPromptStyleSelect,
+} from "@/components/ai";
+import type { CampaignMediaMode } from "@/lib/campaign-media";
+import { migrateCampaignMediaMode } from "@/lib/campaign-media";
 import { CampaignSlotCard } from "./_components/campaign-slot-card";
 import {
   CalendarClock,
@@ -63,6 +69,7 @@ export default function CampaignPlannerPage() {
   const draftMutation = useGenerateDraft();
   const createPostMutation = useCreatePost();
   const imageMutation = useGenerateImage();
+  const videoMutation = useGenerateVideo();
   const uploadMutation = useUploadMedia();
 
   const [postsPerDay, setPostsPerDay] = useState(3);
@@ -81,12 +88,15 @@ export default function CampaignPlannerPage() {
     total: number;
   } | null>(null);
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
-  const [generateImages, setGenerateImages] = useState(false);
+  const [mediaMode, setMediaMode] = useState<CampaignMediaMode>("none");
   const [committing, setCommitting] = useState(false);
   const [regeneratingCopyIndex, setRegeneratingCopyIndex] = useState<
     number | null
   >(null);
   const [regeneratingImageIndex, setRegeneratingImageIndex] = useState<
+    number | null
+  >(null);
+  const [regeneratingVideoIndex, setRegeneratingVideoIndex] = useState<
     number | null
   >(null);
   const [draftRestored, setDraftRestored] = useState(false);
@@ -114,7 +124,7 @@ export default function CampaignPlannerPage() {
     setCampaignHint(draft.campaignHint);
     setTrendBlock(draft.trendBlock);
     setSelectedAccountIds(draft.selectedAccountIds);
-    setGenerateImages(draft.generateImages);
+    setMediaMode(migrateCampaignMediaMode(draft));
     setSlots(draft.slots);
     setDraftRestored(true);
     if (savedId !== undefined) setActiveSavedId(savedId);
@@ -143,7 +153,7 @@ export default function CampaignPlannerPage() {
       campaignHint,
       trendBlock,
       selectedAccountIds,
-      generateImages,
+      mediaMode,
       slots,
     }),
     [
@@ -156,7 +166,7 @@ export default function CampaignPlannerPage() {
       campaignHint,
       trendBlock,
       selectedAccountIds,
-      generateImages,
+      mediaMode,
       slots,
     ]
   );
@@ -203,7 +213,7 @@ export default function CampaignPlannerPage() {
       campaignHint: saved.campaignHint,
       trendBlock: saved.trendBlock,
       selectedAccountIds: saved.selectedAccountIds,
-      generateImages: saved.generateImages,
+      mediaMode: migrateCampaignMediaMode(saved),
       slots: saved.slots,
     });
     toast.success(`Opened "${saved.name}"`);
@@ -240,11 +250,11 @@ export default function CampaignPlannerPage() {
       campaignHint,
       trendBlock,
       selectedAccountIds,
-      generateImages,
+      mediaMode,
       slots,
     });
     if (!ok) {
-      toast.error("Could not save campaign draft (storage full). Images are not saved in draft.");
+      toast.error("Could not save campaign draft (storage full). Media previews are not saved in draft.");
     }
   }, [
     postsPerDay,
@@ -256,7 +266,7 @@ export default function CampaignPlannerPage() {
     campaignHint,
     trendBlock,
     selectedAccountIds,
-    generateImages,
+    mediaMode,
     slots,
   ]);
 
@@ -446,7 +456,7 @@ export default function CampaignPlannerPage() {
         promptStyleId: slot.imagePromptStyleId,
       });
       if (r.image_url) {
-        updateSlot(index, { image_url: r.image_url });
+        updateSlot(index, { image_url: r.image_url, video_url: null });
         toast.success("Image regenerated");
       } else {
         toast.error(r.detail ?? "No image returned");
@@ -455,6 +465,36 @@ export default function CampaignPlannerPage() {
       toast.error(e instanceof Error ? e.message : "Image generation failed");
     } finally {
       setRegeneratingImageIndex(null);
+    }
+  };
+
+  const regenerateSlotVideo = async (index: number) => {
+    const slot = slots[index];
+    if (!status?.openai_configured) {
+      toast.error("Add OpenAI key in Settings first.");
+      return;
+    }
+    toast.message("Video generation can take 1–3 minutes…");
+    setRegeneratingVideoIndex(index);
+    try {
+      const instruction = slot.aiInstruction?.trim();
+      const r = await videoMutation.mutateAsync({
+        captionContext: [slot.title, slot.body, slot.hashtags, instruction]
+          .filter(Boolean)
+          .join("\n\n"),
+        prompt: instruction || undefined,
+        promptStyleId: slot.videoPromptStyleId,
+      });
+      if (r.video_url) {
+        updateSlot(index, { video_url: r.video_url, image_url: null });
+        toast.success("Video regenerated");
+      } else {
+        toast.error(r.detail ?? "No video returned");
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Video generation failed");
+    } finally {
+      setRegeneratingVideoIndex(null);
     }
   };
 
@@ -490,12 +530,28 @@ export default function CampaignPlannerPage() {
     for (let i = 0; i < slots.length; i++) {
       const slot = slots[i];
       try {
-        let mediaItems: { type: "image"; url: string }[] | undefined;
-        if (slot.image_url) {
+        let mediaItems:
+          | { type: "image" | "video"; url: string }[]
+          | undefined;
+        if (slot.video_url) {
+          const file = await urlToFile(slot.video_url, `campaign-${i}.mp4`);
+          const uploaded = await uploadMutation.mutateAsync(file);
+          mediaItems = [{ type: "video", url: uploaded.url }];
+        } else if (slot.image_url) {
           const file = await urlToFile(slot.image_url, `campaign-${i}.png`);
           const uploaded = await uploadMutation.mutateAsync(file);
           mediaItems = [{ type: "image", url: uploaded.url }];
-        } else if (generateImages && status?.openai_configured) {
+        } else if (mediaMode === "video" && status?.openai_configured) {
+          const r = await videoMutation.mutateAsync({
+            captionContext: slot.content || slot.body,
+            promptStyleId: slot.videoPromptStyleId,
+          });
+          if (r.video_url) {
+            const file = await urlToFile(r.video_url, `campaign-${i}.mp4`);
+            const uploaded = await uploadMutation.mutateAsync(file);
+            mediaItems = [{ type: "video", url: uploaded.url }];
+          }
+        } else if (mediaMode === "image" && status?.openai_configured) {
           const r = await imageMutation.mutateAsync({
             captionContext: slot.content || slot.body,
             promptStyleId: slot.imagePromptStyleId,
@@ -706,9 +762,13 @@ export default function CampaignPlannerPage() {
               <PlatformSelector
                 selectedAccountIds={selectedAccountIds}
                 onSelectionChange={setSelectedAccountIds}
-                hasVideo={false}
+                hasVideo={
+                  mediaMode === "video" ||
+                  slots.some((s) => s.video_url)
+                }
                 hasImages={
-                  generateImages || slots.some((s) => s.image_url)
+                  mediaMode === "image" ||
+                  slots.some((s) => s.image_url)
                 }
               />
             </CardContent>
@@ -729,20 +789,21 @@ export default function CampaignPlannerPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-wrap items-end gap-4 rounded-lg border p-4">
-                <div className="min-w-[200px] flex-1">
-                  <ImagePromptStyleSelect />
-                </div>
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="bulk-images"
-                    checked={generateImages}
-                    onCheckedChange={(c) => setGenerateImages(c === true)}
+                <div className="min-w-[200px] flex-1 space-y-4">
+                  <CampaignMediaModeSelect
+                    value={mediaMode}
+                    onValueChange={setMediaMode}
                     disabled={!status?.openai_configured}
                   />
-                  <Label htmlFor="bulk-images" className="text-sm font-normal">
-                    Generate image on commit if missing
-                  </Label>
+                  {mediaMode === "image" && <ImagePromptStyleSelect />}
+                  {mediaMode === "video" && <VideoPromptStyleSelect />}
                 </div>
+                {mediaMode !== "none" && (
+                  <p className="text-xs text-muted-foreground w-full">
+                    On schedule, {mediaMode === "video" ? "videos" : "images"}{" "}
+                    are generated for slots that do not already have media.
+                  </p>
+                )}
               </div>
 
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -754,9 +815,12 @@ export default function CampaignPlannerPage() {
                     onUpdate={(patch) => updateSlot(i, patch)}
                     onRemove={() => removeSlot(i)}
                     onRegenerateCopy={() => regenerateSlotCopy(i)}
+                    mediaMode={mediaMode}
                     onRegenerateImage={() => regenerateSlotImage(i)}
+                    onRegenerateVideo={() => regenerateSlotVideo(i)}
                     copyLoading={regeneratingCopyIndex === i}
                     imageLoading={regeneratingImageIndex === i}
+                    videoLoading={regeneratingVideoIndex === i}
                   />
                 ))}
               </div>

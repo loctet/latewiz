@@ -31,10 +31,11 @@ export default function GeneratedMediaPage() {
   const deleteMutation = useDeleteGeneratedMedia();
   const [preview, setPreview] = useState<GeneratedMediaItem | null>(null);
 
-  const useInPost = (url: string, digest: string) => {
+  const useInPost = (item: GeneratedMediaItem) => {
     savePostPrefill({
-      body: digest ? `Caption idea: ${digest}` : "",
-      imageUrls: [url],
+      body: item.captionDigest ? `Caption idea: ${item.captionDigest}` : "",
+      imageUrls: item.type === "video" ? undefined : [item.url],
+      videoUrls: item.type === "video" ? [item.url] : undefined,
     });
     router.push("/dashboard/compose");
     toast.success("Opened in composer");
@@ -44,9 +45,9 @@ export default function GeneratedMediaPage() {
     try {
       await deleteMutation.mutateAsync(id);
       if (preview?.id === id) setPreview(null);
-      toast.success("Image removed");
+      toast.success("Media removed");
     } catch {
-      toast.error("Could not delete image");
+      toast.error("Could not delete media");
     }
   };
 
@@ -84,7 +85,7 @@ export default function GeneratedMediaPage() {
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
             <ImageIcon className="mx-auto h-10 w-10 opacity-40 mb-3" />
-            <p>No generated images yet.</p>
+            <p>No generated media yet.</p>
             <Button className="mt-4" asChild>
               <Link href="/dashboard/ai-studio">Go to AI Studio</Link>
             </Button>
@@ -104,14 +105,23 @@ export default function GeneratedMediaPage() {
                   type="button"
                   onClick={() => setPreview(item)}
                   className="group relative block aspect-square w-full overflow-hidden rounded-lg bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-label="View full image"
+                  aria-label="View full media"
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={item.url}
-                    alt=""
-                    className="h-full w-full object-cover transition-transform group-hover:scale-[1.02]"
-                  />
+                  {item.type === "video" ? (
+                    <video
+                      src={item.url}
+                      className="h-full w-full object-cover"
+                      muted
+                      playsInline
+                    />
+                  ) : (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={item.url}
+                      alt=""
+                      className="h-full w-full object-cover transition-transform group-hover:scale-[1.02]"
+                    />
+                  )}
                   <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
                     <ZoomIn className="h-8 w-8 text-white drop-shadow" />
                   </div>
@@ -125,7 +135,7 @@ export default function GeneratedMediaPage() {
                   <Button
                     size="sm"
                     className="flex-1"
-                    onClick={() => useInPost(item.url, item.captionDigest)}
+                    onClick={() => useInPost(item)}
                   >
                     <PenLine className="mr-2 h-3 w-3" />
                     Use in post
@@ -158,12 +168,20 @@ export default function GeneratedMediaPage() {
                   {new Date(preview.createdAt).toLocaleString()}
                 </DialogTitle>
               </DialogHeader>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={preview.url}
-                alt=""
-                className="max-h-[min(70vh,36rem)] w-full rounded-lg object-contain bg-muted"
-              />
+              {preview.type === "video" ? (
+                <video
+                  src={preview.url}
+                  controls
+                  className="max-h-[min(70vh,36rem)] w-full rounded-lg bg-muted"
+                />
+              ) : (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={preview.url}
+                  alt=""
+                  className="max-h-[min(70vh,36rem)] w-full rounded-lg object-contain bg-muted"
+                />
+              )}
               {preview.captionDigest && (
                 <p className="text-sm text-muted-foreground">
                   {preview.captionDigest}
@@ -173,7 +191,7 @@ export default function GeneratedMediaPage() {
                 <Button
                   className="flex-1 sm:flex-none"
                   onClick={() => {
-                    useInPost(preview.url, preview.captionDigest);
+                    useInPost(preview);
                     setPreview(null);
                   }}
                 >

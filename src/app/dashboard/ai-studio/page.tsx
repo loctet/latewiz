@@ -6,8 +6,11 @@ import { toast } from "sonner";
 import {
   useGenerateDraft,
   useGenerateImage,
+  useGenerateVideo,
   useOpenAiStatus,
 } from "@/hooks";
+import { useAiStore } from "@/stores";
+import type { AiMediaKind } from "@/lib/campaign-media";
 import { savePostPrefill } from "@/lib/post-prefill";
 import { NOTEBOOK_INFOGRAPHIC_TOPIC_PRESETS } from "@/lib/notebook-infographic-presets";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,18 +31,26 @@ import {
   Copy,
   RefreshCw,
   Image as ImageIcon,
+  Film,
   Hash,
   Loader2,
   PenLine,
 } from "lucide-react";
 import Link from "next/link";
-import { ImagePromptStyleSelect } from "@/components/ai";
+import {
+  AiMediaModeSelect,
+  ImagePromptStyleSelect,
+  VideoPromptStyleSelect,
+} from "@/components/ai";
 
 export default function AiStudioPage() {
   const router = useRouter();
   const { data: status } = useOpenAiStatus();
   const draftMutation = useGenerateDraft();
   const imageMutation = useGenerateImage();
+  const videoMutation = useGenerateVideo();
+  const aiMediaKind = useAiStore((s) => s.aiMediaKind);
+  const setAiMediaKind = useAiStore((s) => s.setAiMediaKind);
 
   const [topic, setTopic] = useState("");
   const [tone, setTone] = useState("professional");
@@ -47,6 +58,7 @@ export default function AiStudioPage() {
   const [generatedBody, setGeneratedBody] = useState("");
   const [generatedHashtags, setGeneratedHashtags] = useState("");
   const [imageUrl, setImageUrl] = useState("");
+  const [videoUrl, setVideoUrl] = useState("");
 
   const configured = status?.openai_configured ?? false;
 
@@ -60,6 +72,14 @@ export default function AiStudioPage() {
   const hintPayload = [topic.trim(), tone ? `Tone: ${tone}` : ""]
     .filter(Boolean)
     .join("\n");
+
+  const captionContext = useMemo(
+    () =>
+      [generatedTitle.trim(), generatedBody.trim(), generatedHashtags.trim()]
+        .filter(Boolean)
+        .join("\n\n"),
+    [generatedTitle, generatedBody, generatedHashtags]
+  );
 
   const handleGenerate = async () => {
     if (!topic.trim()) {
@@ -82,27 +102,45 @@ export default function AiStudioPage() {
     }
   };
 
-  const handleGenerateImage = async () => {
+  const handleGenerateMedia = async () => {
     if (!configured) {
       toast.error("Add your OpenAI API key in Settings first.");
       return;
     }
+    if (aiMediaKind === "video") {
+      toast.message("Video generation can take 1–3 minutes…");
+    }
     try {
-      const caption_context = [generatedTitle.trim(), generatedBody.trim()]
-        .filter(Boolean)
-        .join("\n\n");
-      const r = await imageMutation.mutateAsync({
-        prompt: topic.trim() || undefined,
-        captionContext: caption_context || undefined,
-      });
-      if (r.image_url) {
-        setImageUrl(r.image_url);
-        toast.success("Image ready — saved to your media library.");
+      const ctx = captionContext || undefined;
+      if (aiMediaKind === "video") {
+        const r = await videoMutation.mutateAsync({
+          prompt: topic.trim() || undefined,
+          captionContext: ctx,
+        });
+        if (r.video_url) {
+          setVideoUrl(r.video_url);
+          setImageUrl("");
+          toast.success("Video ready — saved to your media library.");
+        } else {
+          toast.error(r.detail ?? "No video returned");
+        }
       } else {
-        toast.error(r.detail ?? "No image returned");
+        const r = await imageMutation.mutateAsync({
+          prompt: topic.trim() || undefined,
+          captionContext: ctx,
+        });
+        if (r.image_url) {
+          setImageUrl(r.image_url);
+          setVideoUrl("");
+          toast.success("Image ready — saved to your media library.");
+        } else {
+          toast.error(r.detail ?? "No image returned");
+        }
       }
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Image generation failed");
+      toast.error(
+        e instanceof Error ? e.message : "Media generation failed"
+      );
     }
   };
 
@@ -124,9 +162,13 @@ export default function AiStudioPage() {
       body: [generatedBody, generatedHashtags].filter(Boolean).join("\n\n"),
       aiHint: hintPayload,
       imageUrls: imageUrl.trim() ? [imageUrl.trim()] : undefined,
+      videoUrls: videoUrl.trim() ? [videoUrl.trim()] : undefined,
     });
     router.push("/dashboard/compose");
   };
+
+  const mediaPending =
+    imageMutation.isPending || videoMutation.isPending;
 
   return (
     <div className="w-full space-y-4 sm:space-y-6">
@@ -136,7 +178,7 @@ export default function AiStudioPage() {
           AI Content Studio
         </h1>
         <p className="text-muted-foreground mt-1">
-          Draft captions and notebook-style infographics, then open in the
+          Draft captions and generate images or short videos, then open in the
           composer to schedule via{" "}
           <a
             href="https://docs.zernio.com/"
@@ -233,28 +275,44 @@ export default function AiStudioPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
-            <ImageIcon className="h-4 w-4" />
-            Image generation
+            {aiMediaKind === "video" ? (
+              <Film className="h-4 w-4" />
+            ) : (
+              <ImageIcon className="h-4 w-4" />
+            )}
+            Media generation
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <ImagePromptStyleSelect />
+          <AiMediaModeSelect
+            value={aiMediaKind}
+            onValueChange={(k: AiMediaKind) => setAiMediaKind(k)}
+          />
+          {aiMediaKind === "image" ? (
+            <ImagePromptStyleSelect />
+          ) : (
+            <VideoPromptStyleSelect />
+          )}
           <Button
-            onClick={handleGenerateImage}
-            disabled={imageMutation.isPending || !configured}
+            onClick={handleGenerateMedia}
+            disabled={mediaPending || !configured}
             variant="secondary"
             className="w-full sm:w-auto"
           >
-            {imageMutation.isPending ? (
+            {mediaPending ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : aiMediaKind === "video" ? (
+              <Film className="mr-2 h-4 w-4" />
             ) : (
               <ImageIcon className="mr-2 h-4 w-4" />
             )}
-            Generate image
+            {aiMediaKind === "video" ? "Generate video" : "Generate image"}
           </Button>
           <p className="text-xs text-muted-foreground">
-            Uses your topic, generated caption (if any), and content niche
-            settings. Notebook infographic is the default style.
+            Uses your topic, generated caption (if any), and content niche.
+            {aiMediaKind === "video"
+              ? " Video uses OpenAI Sora and may take several minutes."
+              : " Notebook infographic is the default image style."}
           </p>
         </CardContent>
       </Card>
@@ -298,7 +356,7 @@ export default function AiStudioPage() {
         </Card>
       )}
 
-      {imageUrl && (
+      {imageUrl && aiMediaKind === "image" && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Generated image</CardTitle>
@@ -309,6 +367,21 @@ export default function AiStudioPage() {
               src={imageUrl}
               alt="AI generated"
               className="max-h-96 w-full rounded-lg object-contain bg-muted"
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {videoUrl && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Generated video</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <video
+              src={videoUrl}
+              controls
+              className="max-h-96 w-full rounded-lg bg-muted"
             />
           </CardContent>
         </Card>

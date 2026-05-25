@@ -4,7 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ImagePromptStyleSelect } from "@/components/ai";
+import {
+  ImagePromptStyleSelect,
+  VideoPromptStyleSelect,
+} from "@/components/ai";
+import type { CampaignMediaMode } from "@/lib/campaign-media";
 import {
   isoToLocalDateInput,
   isoToLocalTimeInput,
@@ -16,29 +20,43 @@ import {
   minScheduleTimeInput,
 } from "@/lib/campaign-schedule-validation";
 import type { CampaignSlotDraft } from "@/lib/campaign-draft-storage";
-import { Loader2, Trash2, Wand2, ImageIcon, Calendar, AlertCircle } from "lucide-react";
+import {
+  Loader2,
+  Trash2,
+  Wand2,
+  ImageIcon,
+  Film,
+  Calendar,
+  AlertCircle,
+} from "lucide-react";
 import { toast } from "sonner";
 
 interface CampaignSlotCardProps {
   slot: CampaignSlotDraft;
   index: number;
+  mediaMode: CampaignMediaMode;
   onUpdate: (patch: Partial<CampaignSlotDraft>) => void;
   onRemove: () => void;
   onRegenerateCopy: () => void;
   onRegenerateImage: () => void;
+  onRegenerateVideo: () => void;
   copyLoading: boolean;
   imageLoading: boolean;
+  videoLoading: boolean;
 }
 
 export function CampaignSlotCard({
   slot,
   index,
+  mediaMode,
   onUpdate,
   onRemove,
   onRegenerateCopy,
   onRegenerateImage,
+  onRegenerateVideo,
   copyLoading,
   imageLoading,
+  videoLoading,
 }: CampaignSlotCardProps) {
   const syncContent = (body: string, hashtags: string) =>
     [body, hashtags].filter(Boolean).join("\n\n");
@@ -57,6 +75,9 @@ export function CampaignSlotCard({
     }
     onUpdate({ scheduled_at: iso });
   };
+
+  const showImageMedia = mediaMode === "image" || Boolean(slot.image_url);
+  const showVideoMedia = mediaMode === "video" || Boolean(slot.video_url);
 
   return (
     <div className="rounded-lg border bg-card p-4 space-y-3">
@@ -176,36 +197,71 @@ export function CampaignSlotCard({
         </Button>
       </div>
 
-      <div className="rounded-md border border-dashed p-3 space-y-3">
-        <ImagePromptStyleSelect
-          value={slot.imagePromptStyleId}
-          onValueChange={(id) => onUpdate({ imagePromptStyleId: id })}
-        />
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={onRegenerateImage}
-            disabled={imageLoading}
-          >
-            {imageLoading ? (
-              <Loader2 className="mr-2 h-3 w-3 animate-spin" />
-            ) : (
-              <ImageIcon className="mr-2 h-3 w-3" />
+      {showImageMedia && (
+        <div className="rounded-md border border-dashed p-3 space-y-3">
+          <ImagePromptStyleSelect
+            value={slot.imagePromptStyleId}
+            onValueChange={(id) => onUpdate({ imagePromptStyleId: id })}
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onRegenerateImage}
+              disabled={imageLoading}
+            >
+              {imageLoading ? (
+                <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+              ) : (
+                <ImageIcon className="mr-2 h-3 w-3" />
+              )}
+              {slot.image_url ? "Regenerate image" : "Generate image"}
+            </Button>
+            {slot.image_url && (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={slot.image_url}
+                alt=""
+                className="h-16 w-16 rounded object-cover"
+              />
             )}
-            {slot.image_url ? "Regenerate image" : "Generate image"}
-          </Button>
-          {slot.image_url && (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img
-              src={slot.image_url}
-              alt=""
-              className="h-16 w-16 rounded object-cover"
-            />
-          )}
+          </div>
         </div>
-      </div>
+      )}
+
+      {showVideoMedia && (
+        <div className="rounded-md border border-dashed p-3 space-y-3">
+          <VideoPromptStyleSelect
+            value={slot.videoPromptStyleId}
+            onValueChange={(id) => onUpdate({ videoPromptStyleId: id })}
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onRegenerateVideo}
+              disabled={videoLoading}
+            >
+              {videoLoading ? (
+                <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+              ) : (
+                <Film className="mr-2 h-3 w-3" />
+              )}
+              {slot.video_url ? "Regenerate video" : "Generate video"}
+            </Button>
+            {slot.video_url && (
+              <video
+                src={slot.video_url}
+                className="h-16 w-16 rounded object-cover"
+                muted
+                playsInline
+              />
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -35,10 +35,14 @@ export interface CampaignPostDraft {
   hashtags: string;
 }
 
+export type GeneratedMediaType = "image" | "video";
+
 export interface GeneratedMediaItem {
   id: string;
   url: string;
+  type: GeneratedMediaType;
   captionDigest: string;
   createdAt: string;
   filename?: string;
+  durationSeconds?: string;
 }

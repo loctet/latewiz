@@ -1,4 +1,8 @@
 import type { CampaignSlot } from "@/hooks/use-ai";
+import {
+  type CampaignMediaMode,
+  migrateCampaignMediaMode,
+} from "@/lib/campaign-media";
 
 const STORAGE_KEY = "latewiz-campaign-draft";
 
@@ -14,12 +18,14 @@ export type CampaignDraft = {
   campaignHint: string;
   trendBlock: string;
   selectedAccountIds: string[];
-  generateImages: boolean;
+  mediaMode: CampaignMediaMode;
+  /** @deprecated migrated to mediaMode on load */
+  generateImages?: boolean;
   slots: CampaignSlotDraft[];
   savedAt: string;
 };
 
-function stripHeavyImageUrl(url?: string | null): string | undefined {
+function stripHeavyMediaUrl(url?: string | null): string | undefined {
   if (!url) return undefined;
   if (url.startsWith("data:") || url.length > 2000) return undefined;
   return url;
@@ -28,8 +34,16 @@ function stripHeavyImageUrl(url?: string | null): string | undefined {
 function serializeSlots(slots: CampaignSlotDraft[]): CampaignSlotDraft[] {
   return slots.map((s) => ({
     ...s,
-    image_url: stripHeavyImageUrl(s.image_url),
+    image_url: stripHeavyMediaUrl(s.image_url),
+    video_url: stripHeavyMediaUrl(s.video_url),
   }));
+}
+
+function normalizeDraft(parsed: CampaignDraft): CampaignDraft {
+  return {
+    ...parsed,
+    mediaMode: migrateCampaignMediaMode(parsed),
+  };
 }
 
 export function loadCampaignDraft(): CampaignDraft | null {
@@ -39,7 +53,7 @@ export function loadCampaignDraft(): CampaignDraft | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as CampaignDraft;
     if (!Array.isArray(parsed.slots)) return null;
-    return parsed;
+    return normalizeDraft(parsed);
   } catch {
     return null;
   }

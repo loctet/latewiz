@@ -124,6 +124,83 @@ export function useGenerateImage() {
   });
 }
 
+export function useGenerateVideo() {
+  const openaiApiKey = useAiStore((s) => s.openaiApiKey);
+  const niche = useAiStore((s) => s.niche);
+  const videoPromptStyleId = useAiStore((s) => s.videoPromptStyleId);
+  const videoPromptTemplates = useAiStore((s) => s.videoPromptTemplates);
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (params: {
+      prompt?: string;
+      captionContext?: string;
+      promptStyleId?: string;
+    }) => {
+      const res = await fetch("/api/ai/generate-video", {
+        method: "POST",
+        headers: aiHeaders(openaiApiKey),
+        body: JSON.stringify({
+          prompt: params.prompt,
+          caption_context: params.captionContext,
+          prompt_style_id:
+            params.promptStyleId ?? videoPromptStyleId,
+          prompt_templates: videoPromptTemplates,
+          niche,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(
+          (err as { error?: string }).error ?? "Video generation failed"
+        );
+      }
+      const data = (await res.json()) as {
+        video_url: string | null;
+        source: string;
+        detail?: string | null;
+        duration_seconds?: string;
+      };
+      if (data.video_url) {
+        const digest = (params.captionContext ?? params.prompt ?? "")
+          .slice(0, 120);
+        const needsSave =
+          data.video_url.startsWith("data:") ||
+          data.video_url.startsWith("http");
+        if (needsSave) {
+          try {
+            const saveRes = await fetch("/api/media/generated", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                video_url: data.video_url,
+                caption_digest: digest,
+                duration_seconds: data.duration_seconds,
+              }),
+            });
+            if (saveRes.ok) {
+              const saved = (await saveRes.json()) as {
+                item: { url: string };
+              };
+              data.video_url = saved.item.url;
+            }
+            queryClient.invalidateQueries({
+              queryKey: generatedMediaKeys.all,
+            });
+          } catch {
+            /* generation succeeded; gallery save is best-effort */
+          }
+        } else {
+          queryClient.invalidateQueries({
+            queryKey: generatedMediaKeys.all,
+          });
+        }
+      }
+      return data;
+    },
+  });
+}
+
 export interface CampaignSlot {
   scheduled_at: string;
   title: string;
@@ -131,10 +208,13 @@ export interface CampaignSlot {
   hashtags: string;
   content: string;
   image_url?: string | null;
+  video_url?: string | null;
   /** Appended to AI prompt when regenerating this slot */
   aiInstruction?: string;
   /** Image style for this slot's image generation */
   imagePromptStyleId?: string;
+  /** Video style for this slot's video generation */
+  videoPromptStyleId?: string;
 }
 
 export function useGenerateCampaignSlot() {
@@ -227,11 +307,17 @@ export function useCampaignPlan() {
 }
 
 /** Upload a data URL or remote URL as a File to Zernio media storage */
-export async function urlToFile(url: string, filename = "ai-image.png"): Promise<File> {
+export async function urlToFile(
+  url: string,
+  filename?: string
+): Promise<File> {
   const res = await fetch(url);
   const blob = await res.blob();
-  const type = blob.type || "image/png";
-  return new File([blob], filename, { type });
+  const type = blob.type || "application/octet-stream";
+  const defaultName = type.startsWith("video/")
+    ? "ai-video.mp4"
+    : "ai-image.png";
+  return new File([blob], filename ?? defaultName, { type });
 }
 
 export type { NicheProfile };

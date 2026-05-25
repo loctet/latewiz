@@ -19,7 +19,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { FolderOpen, ImageIcon, Loader2, Check } from "lucide-react";
+import { FolderOpen, ImageIcon, Film, Loader2, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface MediaLibraryPickerProps {
@@ -48,13 +48,15 @@ export function MediaLibraryPicker({
 
     setSelectingId(item.id);
     try {
+      const isVideo = item.type === "video";
       const file = await urlToFile(
         item.url,
-        item.filename ?? `media-${item.id}.png`
+        item.filename ??
+          (isVideo ? `media-${item.id}.mp4` : `media-${item.id}.png`)
       );
       const uploaded = await uploadMutation.mutateAsync(file);
       onMediaChange([...media, uploaded]);
-      toast.success("Image added from library");
+      toast.success(isVideo ? "Video added from library" : "Image added from library");
       setOpen(false);
     } catch {
       toast.error("Could not add image from library");
@@ -80,7 +82,7 @@ export function MediaLibraryPicker({
         <DialogHeader>
           <DialogTitle>Media library</DialogTitle>
           <DialogDescription>
-            Select an image from your generated media.{" "}
+            Select generated images or videos from your library.{" "}
             {remaining > 0 ? (
               <span>
                 You can add {remaining} more file{remaining === 1 ? "" : "s"}.
@@ -98,7 +100,7 @@ export function MediaLibraryPicker({
         ) : items.length === 0 ? (
           <div className="py-10 text-center text-muted-foreground">
             <ImageIcon className="mx-auto mb-3 h-10 w-10 opacity-40" />
-            <p className="text-sm">No images in your library yet.</p>
+            <p className="text-sm">No generated media in your library yet.</p>
             <Button className="mt-4" size="sm" asChild>
               <Link href="/dashboard/ai-studio" onClick={() => setOpen(false)}>
                 Go to AI Studio
@@ -127,12 +129,24 @@ export function MediaLibraryPicker({
                       disabled && "pointer-events-none opacity-60"
                     )}
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={item.url}
-                      alt=""
-                      className="h-full w-full object-cover"
-                    />
+                    {item.type === "video" ? (
+                      <video
+                        src={item.url}
+                        className="h-full w-full object-cover"
+                        muted
+                        playsInline
+                      />
+                    ) : (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img
+                        src={item.url}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    )}
+                    {item.type === "video" && (
+                      <Film className="absolute left-2 top-2 h-4 w-4 text-white drop-shadow" />
+                    )}
                     <div
                       className={cn(
                         "absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity",

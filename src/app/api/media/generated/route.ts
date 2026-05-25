@@ -3,12 +3,18 @@ import {
   deleteGeneratedMediaFile,
   listGeneratedMediaFiles,
   saveGeneratedImageFile,
+  saveGeneratedVideoFile,
 } from "@/lib/server/generated-media-files";
 
 export async function GET() {
   try {
     const items = await listGeneratedMediaFiles();
-    return NextResponse.json({ items });
+    return NextResponse.json({
+      items: items.map((item) => ({
+        ...item,
+        type: item.type ?? "image",
+      })),
+    });
   } catch (err) {
     console.error("List generated media error:", err);
     return NextResponse.json(
@@ -21,31 +27,54 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as Record<string, unknown>;
+    const videoUrl =
+      typeof body.video_url === "string"
+        ? body.video_url
+        : typeof body.videoUrl === "string"
+          ? body.videoUrl
+          : null;
     const imageUrl =
       typeof body.image_url === "string"
         ? body.image_url
         : typeof body.imageUrl === "string"
           ? body.imageUrl
           : null;
-    if (!imageUrl) {
-      return NextResponse.json(
-        { error: "image_url is required" },
-        { status: 400 }
-      );
-    }
+
     const captionDigest =
       typeof body.caption_digest === "string"
         ? body.caption_digest
         : typeof body.captionDigest === "string"
           ? body.captionDigest
           : "";
+    const durationSeconds =
+      typeof body.duration_seconds === "string"
+        ? body.duration_seconds
+        : typeof body.durationSeconds === "string"
+          ? body.durationSeconds
+          : undefined;
+
+    if (videoUrl) {
+      const entry = await saveGeneratedVideoFile(
+        videoUrl,
+        captionDigest,
+        durationSeconds
+      );
+      return NextResponse.json({ item: entry });
+    }
+
+    if (!imageUrl) {
+      return NextResponse.json(
+        { error: "image_url or video_url is required" },
+        { status: 400 }
+      );
+    }
 
     const entry = await saveGeneratedImageFile(imageUrl, captionDigest);
     return NextResponse.json({ item: entry });
   } catch (err) {
     console.error("Save generated media error:", err);
     return NextResponse.json(
-      { error: "Failed to save image" },
+      { error: "Failed to save media" },
       { status: 500 }
     );
   }

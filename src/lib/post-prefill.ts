@@ -5,6 +5,7 @@ export interface PostPrefill {
   body: string;
   aiHint?: string;
   imageUrls?: string[];
+  videoUrls?: string[];
 }
 
 export function savePostPrefill(prefill: PostPrefill): void {

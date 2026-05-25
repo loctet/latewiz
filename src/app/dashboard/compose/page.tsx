@@ -59,16 +59,25 @@ export default function ComposePage() {
     clearPostPrefill();
     if (prefill.body) setContent(prefill.body);
     if (prefill.aiHint) setAiHint(prefill.aiHint);
-    if (prefill.imageUrls?.length) {
+    if (prefill.imageUrls?.length || prefill.videoUrls?.length) {
       (async () => {
         const uploaded: UploadedMedia[] = [];
-        for (const url of prefill.imageUrls!) {
+        for (const url of prefill.imageUrls ?? []) {
           try {
             const file = await urlToFile(url);
             const item = await uploadMutation.mutateAsync(file);
             uploaded.push(item);
           } catch {
             toast.error("Could not attach prefilled image");
+          }
+        }
+        for (const url of prefill.videoUrls ?? []) {
+          try {
+            const file = await urlToFile(url, "ai-video.mp4");
+            const item = await uploadMutation.mutateAsync(file);
+            uploaded.push(item);
+          } catch {
+            toast.error("Could not attach prefilled video");
           }
         }
         if (uploaded.length) {

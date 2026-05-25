@@ -430,7 +430,7 @@ The posts array length must be exactly ${count}.`;
   }
 }
 
-function resolvePostTextForBoard(
+export function resolvePostTextForBoard(
   captionContext: string | undefined,
   explicitPrompt: string | undefined,
   niche: NicheProfile

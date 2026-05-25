@@ -31,9 +31,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Key, Moon, Sun, Globe, LogOut, ExternalLink, Target, ImageIcon } from "lucide-react";
+import { Key, Moon, Sun, Globe, LogOut, ExternalLink, Target, ImageIcon, Film } from "lucide-react";
 import Link from "next/link";
-import { ImagePromptTemplatesEditor } from "@/components/settings";
+import {
+  ImagePromptTemplatesEditor,
+  VideoPromptTemplatesEditor,
+} from "@/components/settings";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -302,6 +305,26 @@ export default function SettingsPage() {
         </CardHeader>
         <CardContent>
           <ImagePromptTemplatesEditor />
+        </CardContent>
+      </Card>
+
+      {/* Video prompt templates */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Film className="h-4 w-4" />
+            Video prompt templates
+          </CardTitle>
+          <CardDescription>
+            Edit AI instructions for short-form video (OpenAI Sora). Use{" "}
+            <code className="text-xs">{"{{subject}}"}</code>,{" "}
+            <code className="text-xs">{"{{langNote}}"}</code>,{" "}
+            <code className="text-xs">{"{{motion}}"}</code>, and{" "}
+            <code className="text-xs">{"{{duration}}"}</code>.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <VideoPromptTemplatesEditor />
         </CardContent>
       </Card>
 

@@ -6,8 +6,10 @@ export type GeneratedMediaEntry = {
   id: string;
   filename: string;
   url: string;
+  type: "image" | "video";
   captionDigest: string;
   createdAt: string;
+  durationSeconds?: string;
 };
 
 const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads", "generated");
@@ -64,8 +66,48 @@ export async function saveGeneratedImageFile(
     id,
     filename,
     url: `/uploads/generated/${filename}`,
+    type: "image",
     captionDigest: captionDigest.slice(0, 200),
     createdAt: new Date().toISOString(),
+  };
+
+  const manifest = await readManifest();
+  await writeManifest([entry, ...manifest]);
+  return entry;
+}
+
+async function downloadOrDecodeVideo(sourceUrl: string): Promise<Buffer> {
+  if (sourceUrl.startsWith("data:")) {
+    const match = sourceUrl.match(/^data:video\/\w+;base64,(.+)$/);
+    if (!match) throw new Error("Invalid video data URL");
+    return Buffer.from(match[1], "base64");
+  }
+  const res = await fetch(sourceUrl);
+  if (!res.ok) throw new Error("Failed to download video");
+  const ab = await res.arrayBuffer();
+  return Buffer.from(ab);
+}
+
+export async function saveGeneratedVideoFile(
+  sourceUrl: string,
+  captionDigest: string,
+  durationSeconds?: string
+): Promise<GeneratedMediaEntry> {
+  await ensureUploadDir();
+  const buffer = await downloadOrDecodeVideo(sourceUrl);
+  const id = randomUUID();
+  const filename = `${id}.mp4`;
+  const filePath = path.join(UPLOAD_DIR, filename);
+  await fs.writeFile(filePath, buffer);
+
+  const entry: GeneratedMediaEntry = {
+    id,
+    filename,
+    url: `/uploads/generated/${filename}`,
+    type: "video",
+    captionDigest: captionDigest.slice(0, 200),
+    createdAt: new Date().toISOString(),
+    durationSeconds,
   };
 
   const manifest = await readManifest();
@@ -80,7 +122,10 @@ export async function listGeneratedMediaFiles(): Promise<GeneratedMediaEntry[]> 
   for (const entry of manifest) {
     try {
       await fs.access(path.join(UPLOAD_DIR, entry.filename));
-      valid.push(entry);
+      valid.push({
+        ...entry,
+        type: entry.type ?? (entry.filename.endsWith(".mp4") ? "video" : "image"),
+      });
     } catch {
       /* file removed */
     }

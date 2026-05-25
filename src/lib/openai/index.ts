@@ -6,4 +6,5 @@ export * from "./text-generation";
 export * from "./schemas";
 export * from "./sanitize-post-text";
 export * from "./service";
+export * from "./video-generation";
 export * from "./campaign-slots";

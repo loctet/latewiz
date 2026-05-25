@@ -7,15 +7,20 @@ import { Label } from "@/components/ui/label";
 import {
   useGenerateDraft,
   useGenerateImage,
+  useGenerateVideo,
   useOpenAiStatus,
   useUploadMedia,
   urlToFile,
   type UploadedMedia,
 } from "@/hooks";
+import { useAiStore } from "@/stores";
+import type { AiMediaKind } from "@/lib/campaign-media";
 import { toast } from "sonner";
-import { Loader2, Sparkles, Wand2, ImageIcon } from "lucide-react";
+import { Loader2, Sparkles, Wand2, ImageIcon, Film } from "lucide-react";
 import Link from "next/link";
+import { AiMediaModeSelect } from "./ai-media-mode-select";
 import { ImagePromptStyleSelect } from "./image-prompt-style-select";
+import { VideoPromptStyleSelect } from "./video-prompt-style-select";
 
 interface AiAssistPanelProps {
   content: string;
@@ -33,9 +38,12 @@ export function AiAssistPanel({
   hint,
 }: AiAssistPanelProps) {
   const [assistEnabled, setAssistEnabled] = useState(true);
+  const aiMediaKind = useAiStore((s) => s.aiMediaKind);
+  const setAiMediaKind = useAiStore((s) => s.setAiMediaKind);
   const { data: status } = useOpenAiStatus();
   const draftMutation = useGenerateDraft();
   const imageMutation = useGenerateImage();
+  const videoMutation = useGenerateVideo();
   const uploadMutation = useUploadMedia();
 
   const configured = status?.openai_configured ?? false;
@@ -57,28 +65,54 @@ export function AiAssistPanel({
     }
   };
 
-  const generateImage = async () => {
+  const generateMedia = async () => {
     if (!configured) {
       toast.error("Add your OpenAI API key in Settings first.");
       return;
     }
+    if (aiMediaKind === "video") {
+      toast.message("Video generation can take 1–3 minutes…");
+    }
     try {
-      const r = await imageMutation.mutateAsync({
-        captionContext: content.trim() || undefined,
-        prompt: hint,
-      });
-      if (!r.image_url) {
-        toast.error(r.detail ?? "No image returned");
-        return;
+      const captionContext = content.trim() || undefined;
+      if (aiMediaKind === "video") {
+        const r = await videoMutation.mutateAsync({
+          captionContext,
+          prompt: hint,
+        });
+        if (!r.video_url) {
+          toast.error(r.detail ?? "No video returned");
+          return;
+        }
+        const file = await urlToFile(r.video_url, "ai-video.mp4");
+        const uploaded = await uploadMutation.mutateAsync(file);
+        onMediaChange([...media.filter((m) => m.type !== "video"), uploaded]);
+        toast.success("AI video added to post");
+      } else {
+        const r = await imageMutation.mutateAsync({
+          captionContext,
+          prompt: hint,
+        });
+        if (!r.image_url) {
+          toast.error(r.detail ?? "No image returned");
+          return;
+        }
+        const file = await urlToFile(r.image_url);
+        const uploaded = await uploadMutation.mutateAsync(file);
+        onMediaChange([...media.filter((m) => m.type !== "image"), uploaded]);
+        toast.success("AI image added to post");
       }
-      const file = await urlToFile(r.image_url);
-      const uploaded = await uploadMutation.mutateAsync(file);
-      onMediaChange([...media, uploaded]);
-      toast.success("AI image added to post");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Image generation failed");
+      toast.error(
+        e instanceof Error ? e.message : "Media generation failed"
+      );
     }
   };
+
+  const mediaPending =
+    imageMutation.isPending ||
+    videoMutation.isPending ||
+    uploadMutation.isPending;
 
   return (
     <div className="rounded-lg border border-dashed border-primary/30 bg-primary/5 p-4 space-y-3">
@@ -115,44 +149,50 @@ export function AiAssistPanel({
 
       {assistEnabled && (
         <>
-          <ImagePromptStyleSelect />
+          <AiMediaModeSelect
+            value={aiMediaKind}
+            onValueChange={(k: AiMediaKind) => setAiMediaKind(k)}
+          />
+          {aiMediaKind === "image" ? (
+            <ImagePromptStyleSelect />
+          ) : (
+            <VideoPromptStyleSelect />
+          )}
           <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={applyDraft}
-            disabled={draftMutation.isPending}
-          >
-            {draftMutation.isPending ? (
-              <Loader2 className="mr-2 h-3 w-3 animate-spin" />
-            ) : (
-              <Wand2 className="mr-2 h-3 w-3" />
-            )}
-            Suggest caption
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={generateImage}
-            disabled={
-              imageMutation.isPending ||
-              uploadMutation.isPending ||
-              !configured
-            }
-          >
-            {imageMutation.isPending || uploadMutation.isPending ? (
-              <Loader2 className="mr-2 h-3 w-3 animate-spin" />
-            ) : (
-              <ImageIcon className="mr-2 h-3 w-3" />
-            )}
-            Generate image
-          </Button>
-          <Button type="button" variant="ghost" size="sm" asChild>
-            <Link href="/dashboard/ai-studio">Open AI Studio</Link>
-          </Button>
-        </div>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={applyDraft}
+              disabled={draftMutation.isPending}
+            >
+              {draftMutation.isPending ? (
+                <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+              ) : (
+                <Wand2 className="mr-2 h-3 w-3" />
+              )}
+              Suggest caption
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={generateMedia}
+              disabled={mediaPending || !configured}
+            >
+              {mediaPending ? (
+                <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+              ) : aiMediaKind === "video" ? (
+                <Film className="mr-2 h-3 w-3" />
+              ) : (
+                <ImageIcon className="mr-2 h-3 w-3" />
+              )}
+              {aiMediaKind === "video" ? "Generate video" : "Generate image"}
+            </Button>
+            <Button type="button" variant="ghost" size="sm" asChild>
+              <Link href="/dashboard/ai-studio">Open AI Studio</Link>
+            </Button>
+          </div>
         </>
       )}
     </div>

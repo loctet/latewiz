@@ -86,6 +86,7 @@ export {
   useOpenAiStatus,
   useGenerateDraft,
   useGenerateImage,
+  useGenerateVideo,
   useCampaignPlan,
   useGenerateCampaignSlot,
   urlToFile,

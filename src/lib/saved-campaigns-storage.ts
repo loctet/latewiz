@@ -3,8 +3,9 @@ import type {
   CampaignSlotDraft,
 } from "@/lib/campaign-draft-storage";
 import { saveCampaignDraft } from "@/lib/campaign-draft-storage";
+import { migrateCampaignMediaMode } from "@/lib/campaign-media";
 
-function stripHeavyImageUrl(url?: string | null): string | undefined {
+function stripHeavyMediaUrl(url?: string | null): string | undefined {
   if (!url) return undefined;
   if (url.startsWith("data:") || url.length > 2000) return undefined;
   return url;
@@ -13,8 +14,16 @@ function stripHeavyImageUrl(url?: string | null): string | undefined {
 function serializeSlots(slots: CampaignSlotDraft[]): CampaignSlotDraft[] {
   return slots.map((s) => ({
     ...s,
-    image_url: stripHeavyImageUrl(s.image_url),
+    image_url: stripHeavyMediaUrl(s.image_url),
+    video_url: stripHeavyMediaUrl(s.video_url),
   }));
+}
+
+function normalizeSaved(c: SavedCampaign): SavedCampaign {
+  return {
+    ...c,
+    mediaMode: migrateCampaignMediaMode(c),
+  };
 }
 
 const STORAGE_KEY = "latewiz-saved-campaigns";
@@ -58,6 +67,7 @@ export function listSavedCampaigns(
   const store = readStore();
   return store.campaigns
     .filter((c) => c.profileId === profileId)
+    .map(normalizeSaved)
     .sort(
       (a, b) =>
         new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime()
