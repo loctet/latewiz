@@ -18,7 +18,7 @@ interface Post {
   _id: string;
   content: string;
   scheduledFor?: string;
-  status: "draft" | "scheduled" | "publishing" | "published" | "failed";
+  status: string;
   platforms: Array<{ platform: string }>;
   mediaItems?: Array<{ type: "image" | "video"; url: string }>;
 }

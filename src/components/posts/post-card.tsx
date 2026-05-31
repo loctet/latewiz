@@ -14,6 +14,10 @@ import { PlatformIcon } from "@/components/shared/platform-icon";
 import { cn } from "@/lib/utils";
 import type { Platform } from "@/lib/late-api";
 import {
+  getPostStatusBadgeConfig,
+  type PostStatus,
+} from "@/lib/post-status";
+import {
   MoreHorizontal,
   Pencil,
   Trash2,
@@ -35,7 +39,7 @@ interface Post {
     platformPostUrl?: string;
   }>;
   scheduledFor?: string;
-  status: "draft" | "scheduled" | "publishing" | "published" | "failed";
+  status: PostStatus | string;
   createdAt: string;
 }
 
@@ -211,19 +215,11 @@ export function PlatformIcons({ platforms, max = 4, size = "sm" }: PlatformIcons
 }
 
 interface PostStatusBadgeProps {
-  status: Post["status"];
+  status: string;
 }
 
 export function PostStatusBadge({ status }: PostStatusBadgeProps) {
-  const config: Record<Post["status"], { variant: "default" | "secondary" | "destructive" | "outline"; label: string; className?: string }> = {
-    draft: { variant: "outline", label: "Draft" },
-    scheduled: { variant: "secondary", label: "Scheduled", className: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300" },
-    publishing: { variant: "secondary", label: "Publishing", className: "bg-yellow-100 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300" },
-    published: { variant: "secondary", label: "Published", className: "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300" },
-    failed: { variant: "destructive", label: "Failed" },
-  };
-
-  const { variant, label, className } = config[status];
+  const { variant, label, className } = getPostStatusBadgeConfig(status);
 
   return (
     <Badge variant={variant} className={cn("text-xs capitalize", className)}>

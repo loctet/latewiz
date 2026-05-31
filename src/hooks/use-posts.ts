@@ -12,7 +12,14 @@ export const postKeys = {
 
 export interface PostFilters {
   profileId?: string;
-  status?: "draft" | "scheduled" | "publishing" | "published" | "failed";
+  status?:
+    | "draft"
+    | "scheduled"
+    | "publishing"
+    | "published"
+    | "failed"
+    | "partial"
+    | "cancelled";
   dateFrom?: string;
   dateTo?: string;
   page?: number;

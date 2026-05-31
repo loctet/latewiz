@@ -11,6 +11,7 @@ import { isSameMonth } from "date-fns/isSameMonth";
 import { parseISO } from "date-fns/parseISO";
 import { isToday } from "date-fns/isToday";
 import { cn } from "@/lib/utils";
+import { getPostStatusCalendarClass } from "@/lib/post-status";
 
 interface Post {
   _id: string;
@@ -20,21 +21,6 @@ interface Post {
   platforms: Array<{ platform: string }>;
   mediaItems?: Array<{ type: "image" | "video"; url: string }>;
 }
-
-const getStatusStyles = (status: string) => {
-  switch (status) {
-    case 'scheduled':
-      return 'bg-blue-50 dark:bg-blue-950/30 border-l-2 border-l-blue-500 hover:bg-blue-100 dark:hover:bg-blue-950/50';
-    case 'published':
-      return 'bg-green-50 dark:bg-green-950/30 border-l-2 border-l-green-500 hover:bg-green-100 dark:hover:bg-green-950/50';
-    case 'failed':
-      return 'bg-red-50 dark:bg-red-950/30 border-l-2 border-l-red-500 hover:bg-red-100 dark:hover:bg-red-950/50';
-    case 'publishing':
-      return 'bg-yellow-50 dark:bg-yellow-950/30 border-l-2 border-l-yellow-500';
-    default:
-      return 'bg-muted hover:bg-muted/80';
-  }
-};
 
 const isWeekend = (date: Date) => [0, 6].includes(date.getDay());
 
@@ -139,7 +125,7 @@ export function CalendarGrid({
                       }}
                       className={cn(
                         "flex w-full items-center gap-1 rounded px-1 py-0.5 text-left text-[10px] transition-colors sm:gap-1.5 sm:px-1.5 sm:py-1 sm:text-xs",
-                        getStatusStyles(post.status)
+                        getPostStatusCalendarClass(post.status)
                       )}
                     >
                       {post.mediaItems?.[0] && (
