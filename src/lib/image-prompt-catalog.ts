@@ -14,6 +14,56 @@ export type ImagePromptStyle = {
   template: string;
 };
 
+/** User-created styles (metadata only; template text lives in imagePromptTemplates). */
+export type CustomImagePromptStyle = Pick<
+  ImagePromptStyle,
+  "id" | "label" | "description"
+>;
+
+export const CUSTOM_IMAGE_PROMPT_TEMPLATE_STARTER = `Create a social media image.
+
+{{langNote}}
+
+Topic:
+{{subject}}
+
+Style: describe your visual style, layout, colors, and mood here.`;
+
+export function isBuiltinImagePromptStyle(styleId: string): boolean {
+  return IMAGE_PROMPT_STYLES.some((s) => s.id === styleId);
+}
+
+export function createCustomImagePromptStyleId(
+  label: string,
+  existingIds: Iterable<string>
+): string {
+  const taken = new Set(existingIds);
+  const slug =
+    label
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 40) || "template";
+  let id = `custom-${slug}`;
+  let n = 2;
+  while (taken.has(id)) {
+    id = `custom-${slug}-${n}`;
+    n += 1;
+  }
+  return id;
+}
+
+export function getAllImagePromptStyles(
+  custom: CustomImagePromptStyle[] = []
+): ImagePromptStyle[] {
+  const customStyles: ImagePromptStyle[] = custom.map((style) => ({
+    ...style,
+    template: CUSTOM_IMAGE_PROMPT_TEMPLATE_STARTER,
+  }));
+  return [...IMAGE_PROMPT_STYLES, ...customStyles];
+}
+
 export const IMAGE_PROMPT_STYLES: ImagePromptStyle[] = [
   {
     id: DEFAULT_IMAGE_PROMPT_STYLE_ID,
@@ -198,22 +248,32 @@ Style: numbered list 1–5 with checkmark icons, clear hierarchy, friendly color
   },
 ];
 
-export function getImagePromptStyle(id?: string | null): ImagePromptStyle {
-  const found = IMAGE_PROMPT_STYLES.find((s) => s.id === id);
+export function getImagePromptStyle(
+  id?: string | null,
+  custom: CustomImagePromptStyle[] = []
+): ImagePromptStyle {
+  const found = getAllImagePromptStyles(custom).find((s) => s.id === id);
   return found ?? IMAGE_PROMPT_STYLES[0];
 }
 
-export function getDefaultTemplate(styleId: string): string {
-  return getImagePromptStyle(styleId).template;
+export function getDefaultTemplate(
+  styleId: string,
+  custom: CustomImagePromptStyle[] = []
+): string {
+  if (isBuiltinImagePromptStyle(styleId)) {
+    return getImagePromptStyle(styleId, custom).template;
+  }
+  return CUSTOM_IMAGE_PROMPT_TEMPLATE_STARTER;
 }
 
 export function getEffectiveTemplate(
   styleId: string,
-  overrides?: Record<string, string>
+  overrides?: Record<string, string>,
+  custom: CustomImagePromptStyle[] = []
 ): string {
-  const custom = overrides?.[styleId]?.trim();
-  if (custom) return custom;
-  return getDefaultTemplate(styleId);
+  const override = overrides?.[styleId]?.trim();
+  if (override) return override;
+  return getDefaultTemplate(styleId, custom);
 }
 
 export function applyImagePromptTemplate(
@@ -231,10 +291,11 @@ export function buildImagePromptFromStyle(
   styleId: string | undefined,
   subject: string,
   niche: NicheProfile,
-  templateOverrides?: Record<string, string>
+  templateOverrides?: Record<string, string>,
+  customStyles: CustomImagePromptStyle[] = []
 ): string {
   const id = styleId || DEFAULT_IMAGE_PROMPT_STYLE_ID;
-  const template = getEffectiveTemplate(id, templateOverrides);
+  const template = getEffectiveTemplate(id, templateOverrides, customStyles);
   const langNote = buildNicheImageLanguageNote(niche);
   return applyImagePromptTemplate(template, subject, langNote);
 }

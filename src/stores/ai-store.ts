@@ -6,7 +6,11 @@ import {
   type NicheProfile,
 } from "@/lib/openai/types";
 import { isPlausibleOpenAiApiKey } from "@/lib/openai/resolve-key";
-import { DEFAULT_IMAGE_PROMPT_STYLE_ID } from "@/lib/image-prompt-catalog";
+import {
+  DEFAULT_IMAGE_PROMPT_STYLE_ID,
+  isBuiltinImagePromptStyle,
+  type CustomImagePromptStyle,
+} from "@/lib/image-prompt-catalog";
 import { DEFAULT_VIDEO_PROMPT_STYLE_ID } from "@/lib/video-prompt-catalog";
 import type { AiMediaKind } from "@/lib/campaign-media";
 import {
@@ -26,6 +30,8 @@ interface AiState {
   aiMediaKind: AiMediaKind;
   /** Custom template overrides per style id (use {{subject}} and {{langNote}}) */
   imagePromptTemplates: Record<string, string>;
+  /** User-created image prompt styles (template text in imagePromptTemplates) */
+  customImagePromptStyles: CustomImagePromptStyle[];
   videoPromptTemplates: Record<string, string>;
   generatedMedia: GeneratedMediaItem[];
 
@@ -39,6 +45,15 @@ interface AiState {
   setImagePromptTemplate: (styleId: string, template: string) => void;
   resetImagePromptTemplate: (styleId: string) => void;
   resetAllImagePromptTemplates: () => void;
+  addCustomImagePromptStyle: (
+    style: CustomImagePromptStyle,
+    template: string
+  ) => void;
+  updateCustomImagePromptStyle: (
+    id: string,
+    patch: Partial<Pick<CustomImagePromptStyle, "label" | "description">>
+  ) => void;
+  removeCustomImagePromptStyle: (id: string) => void;
   setVideoPromptTemplate: (styleId: string, template: string) => void;
   resetVideoPromptTemplate: (styleId: string) => void;
   resetAllVideoPromptTemplates: () => void;
@@ -58,6 +73,7 @@ export const useAiStore = create<AiState>()(
       videoProvider: DEFAULT_VIDEO_PROVIDER,
       aiMediaKind: "image",
       imagePromptTemplates: {},
+      customImagePromptStyles: [],
       videoPromptTemplates: {},
       generatedMedia: [],
 
@@ -108,7 +124,44 @@ export const useAiStore = create<AiState>()(
         set({ imagePromptTemplates: next });
       },
 
-      resetAllImagePromptTemplates: () => set({ imagePromptTemplates: {} }),
+      resetAllImagePromptTemplates: () => {
+        const kept: Record<string, string> = {};
+        for (const [id, template] of Object.entries(get().imagePromptTemplates)) {
+          if (!isBuiltinImagePromptStyle(id)) kept[id] = template;
+        }
+        set({ imagePromptTemplates: kept });
+      },
+
+      addCustomImagePromptStyle: (style, template) =>
+        set({
+          customImagePromptStyles: [...get().customImagePromptStyles, style],
+          imagePromptTemplates: {
+            ...get().imagePromptTemplates,
+            [style.id]: template,
+          },
+        }),
+
+      updateCustomImagePromptStyle: (id, patch) =>
+        set({
+          customImagePromptStyles: get().customImagePromptStyles.map((s) =>
+            s.id === id ? { ...s, ...patch } : s
+          ),
+        }),
+
+      removeCustomImagePromptStyle: (id) => {
+        const templates = { ...get().imagePromptTemplates };
+        delete templates[id];
+        const next: Partial<AiState> = {
+          customImagePromptStyles: get().customImagePromptStyles.filter(
+            (s) => s.id !== id
+          ),
+          imagePromptTemplates: templates,
+        };
+        if (get().imagePromptStyleId === id) {
+          next.imagePromptStyleId = DEFAULT_IMAGE_PROMPT_STYLE_ID;
+        }
+        set(next);
+      },
 
       setVideoPromptTemplate: (styleId, template) =>
         set({
@@ -162,6 +215,7 @@ export const useAiStore = create<AiState>()(
           falApiKey: p?.falApiKey ?? null,
           aiMediaKind: p?.aiMediaKind === "video" ? "video" : "image",
           imagePromptTemplates: p?.imagePromptTemplates ?? {},
+          customImagePromptStyles: p?.customImagePromptStyles ?? [],
           videoPromptTemplates: p?.videoPromptTemplates ?? {},
           generatedMedia: [],
         };
@@ -175,6 +229,7 @@ export const useAiStore = create<AiState>()(
         videoProvider: state.videoProvider,
         aiMediaKind: state.aiMediaKind,
         imagePromptTemplates: state.imagePromptTemplates,
+        customImagePromptStyles: state.customImagePromptStyles,
         videoPromptTemplates: state.videoPromptTemplates,
         // Never persist generatedMedia (base64 images blow localStorage quota)
       }),

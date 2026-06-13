@@ -9,7 +9,9 @@ import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -28,9 +30,10 @@ export function ImagePromptStyleSelect({
 }: ImagePromptStyleSelectProps) {
   const storedId = useAiStore((s) => s.imagePromptStyleId);
   const setStoredId = useAiStore((s) => s.setImagePromptStyleId);
+  const customStyles = useAiStore((s) => s.customImagePromptStyles);
 
   const value = controlledValue ?? storedId;
-  const style = getImagePromptStyle(value);
+  const style = getImagePromptStyle(value, customStyles);
 
   const handleChange = (id: string) => {
     if (onValueChange) {
@@ -49,12 +52,25 @@ export function ImagePromptStyleSelect({
             <SelectValue placeholder="Select image style" />
           </SelectTrigger>
           <SelectContent>
-            {IMAGE_PROMPT_STYLES.map((s) => (
-              <SelectItem key={s.id} value={s.id}>
-                {s.label}
-                {s.id === "notebook-educational" ? " (default)" : ""}
-              </SelectItem>
-            ))}
+            <SelectGroup>
+              <SelectLabel>Built-in styles</SelectLabel>
+              {IMAGE_PROMPT_STYLES.map((s) => (
+                <SelectItem key={s.id} value={s.id}>
+                  {s.label}
+                  {s.id === "notebook-educational" ? " (default)" : ""}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+            {customStyles.length > 0 && (
+              <SelectGroup>
+                <SelectLabel>Your templates</SelectLabel>
+                {customStyles.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.label}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            )}
           </SelectContent>
         </Select>
         <p className="text-xs text-muted-foreground">{style.description}</p>

@@ -394,7 +394,7 @@ export default function SettingsPage() {
             Image prompt templates
           </CardTitle>
           <CardDescription>
-            Edit the AI instructions for each image style. Use{" "}
+            Edit built-in image styles or create your own templates. Use{" "}
             <code className="text-xs">{"{{subject}}"}</code> and{" "}
             <code className="text-xs">{"{{langNote}}"}</code> placeholders.
             Saved on this device and used when you generate images.
