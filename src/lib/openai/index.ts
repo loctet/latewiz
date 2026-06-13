@@ -13,3 +13,5 @@ export {
   type VideoProvider,
 } from "@/lib/video-generation";
 export * from "./campaign-slots";
+export * from "./campaign-arc";
+export * from "./campaign-goal-format";

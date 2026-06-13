@@ -35,6 +35,12 @@ export interface CampaignPostDraft {
   hashtags: string;
 }
 
+export type PreviousCampaignPost = {
+  title: string;
+  body: string;
+  hashtags: string;
+};
+
 export type GeneratedMediaType = "image" | "video";
 
 export interface GeneratedMediaItem {

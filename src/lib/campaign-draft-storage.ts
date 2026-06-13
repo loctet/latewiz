@@ -36,6 +36,7 @@ function serializeSlots(slots: CampaignSlotDraft[]): CampaignSlotDraft[] {
     ...s,
     image_url: stripHeavyMediaUrl(s.image_url),
     video_url: stripHeavyMediaUrl(s.video_url),
+    reference_image_url: stripHeavyMediaUrl(s.reference_image_url),
   }));
 }
 

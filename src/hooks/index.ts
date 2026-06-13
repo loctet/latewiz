@@ -89,6 +89,7 @@ export {
   useGenerateVideo,
   isVideoGenerationConfigured,
   useCampaignPlan,
+  useGenerateCampaignOutline,
   useGenerateCampaignSlot,
   urlToFile,
   type CampaignSlot,

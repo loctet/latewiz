@@ -1,4 +1,5 @@
 export { AiAssistPanel } from "./ai-assist-panel";
+export { AiImageReferencePicker } from "./ai-image-reference-picker";
 export { ImagePromptStyleSelect } from "./image-prompt-style-select";
 export { VideoPromptStyleSelect } from "./video-prompt-style-select";
 export { VideoProviderSelect } from "./video-provider-select";

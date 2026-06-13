@@ -8,6 +8,10 @@ export type ContentResearchParams = {
   slotIndex?: number;
   totalPosts?: number;
   trendSnippets?: string[];
+  /** Slot-specific search terms from the campaign outline */
+  searchHint?: string;
+  /** Subtopics already covered — steers search toward fresh angles */
+  coveredSubtopics?: string[];
 };
 
 /** Build a search query aimed at recent, niche-relevant information. */
@@ -16,6 +20,9 @@ export function buildContentResearchQuery(params: ContentResearchParams): string
   const now = new Date();
   const year = now.getUTCFullYear();
   const month = now.toLocaleString("en-US", { month: "long", timeZone: "UTC" });
+
+  const slotSearch = params.searchHint?.trim();
+  if (slotSearch) parts.push(slotSearch.slice(0, 200));
 
   const hint = params.hint?.trim() || params.campaignHint?.trim();
   if (hint) parts.push(hint.slice(0, 200));
@@ -47,6 +54,14 @@ export function buildContentResearchQuery(params: ContentResearchParams): string
     .filter(Boolean)
     .slice(0, 2);
   if (trends.length) parts.push(trends.join(" "));
+
+  const covered = (params.coveredSubtopics ?? [])
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(-4);
+  if (covered.length) {
+    parts.push(`different angle from ${covered.join(", ")}`);
+  }
 
   return parts.join(" ").replace(/\s+/g, " ").trim().slice(0, 400);
 }

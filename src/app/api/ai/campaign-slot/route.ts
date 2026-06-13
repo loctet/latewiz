@@ -3,6 +3,7 @@ import {
   generateCampaignSlot,
   parseNicheFromBody,
   resolveOpenAiApiKey,
+  type CampaignSlotBrief,
   type PreviousCampaignPost,
 } from "@/lib/openai";
 
@@ -64,6 +65,25 @@ export async function POST(request: NextRequest) {
         })
       : [];
 
+    const briefRaw = body.slot_brief ?? body.slotBrief;
+    const slotBrief =
+      briefRaw && typeof briefRaw === "object"
+        ? (briefRaw as {
+            slotIndex?: number;
+            phase?: string;
+            beat?: string;
+            subtopic?: string;
+            angle?: string;
+            keyPoint?: string;
+            searchHint?: string;
+          })
+        : undefined;
+
+    const coveredRaw = body.covered_subtopics ?? body.coveredSubtopics;
+    const coveredSubtopics = Array.isArray(coveredRaw)
+      ? coveredRaw.map((s) => String(s))
+      : [];
+
     const result = await generateCampaignSlot(apiKey, niche, {
       campaignGoal,
       slotIndex,
@@ -72,6 +92,20 @@ export async function POST(request: NextRequest) {
       previousPosts,
       campaignHint,
       trendSnippets,
+      slotBrief:
+        slotBrief?.subtopic?.trim()
+          ? {
+              slotIndex: slotIndex,
+              phase:
+                (slotBrief.phase as CampaignSlotBrief["phase"]) ?? "build",
+              beat: String(slotBrief.beat ?? ""),
+              subtopic: String(slotBrief.subtopic ?? ""),
+              angle: String(slotBrief.angle ?? ""),
+              keyPoint: String(slotBrief.keyPoint ?? ""),
+              searchHint: String(slotBrief.searchHint ?? ""),
+            }
+          : undefined,
+      coveredSubtopics,
     });
 
     const content = [result.post.body, result.post.hashtags]

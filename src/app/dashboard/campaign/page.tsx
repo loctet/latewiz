@@ -9,6 +9,7 @@ import {
   useCurrentProfileId,
   useGenerateDraft,
   useGenerateCampaignSlot,
+  useGenerateCampaignOutline,
   useGenerateImage,
   useGenerateVideo,
   useOpenAiStatus,
@@ -17,6 +18,7 @@ import {
   urlToFile,
 } from "@/hooks";
 import { buildCampaignSlotTimes } from "@/lib/openai";
+import { slotBriefToAiInstruction } from "@/lib/openai/campaign-arc";
 import { useAppStore, useAiStore } from "@/stores";
 import { PageContainer } from "@/components/dashboard";
 import {
@@ -70,6 +72,7 @@ export default function CampaignPlannerPage() {
   const videoProvider = useAiStore((s) => s.videoProvider);
   const videoConfigured = isVideoGenerationConfigured(videoProvider, status);
   const slotMutation = useGenerateCampaignSlot();
+  const outlineMutation = useGenerateCampaignOutline();
   const draftMutation = useGenerateDraft();
   const createPostMutation = useCreatePost();
   const imageMutation = useGenerateImage();
@@ -90,6 +93,7 @@ export default function CampaignPlannerPage() {
   const [generatingProgress, setGeneratingProgress] = useState<{
     current: number;
     total: number;
+    phase?: "outline" | "posts";
   } | null>(null);
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
   const [mediaMode, setMediaMode] = useState<CampaignMediaMode>("none");
@@ -331,14 +335,35 @@ export default function CampaignPlannerPage() {
     }));
     setSlots(emptySlots);
     setDraftRestored(true);
-    setGeneratingProgress({ current: 0, total });
+    setGeneratingProgress({ current: 0, total, phase: "outline" });
 
     const previous: { title: string; body: string; hashtags: string }[] = [];
     let hadStub = false;
+    let outlineBeats: {
+      slotIndex: number;
+      phase: string;
+      beat: string;
+      subtopic: string;
+      angle: string;
+      keyPoint: string;
+      searchHint: string;
+    }[] = [];
 
     try {
+      const outline = await outlineMutation.mutateAsync({
+        campaignGoal: goal,
+        totalPosts: total,
+        campaignHint: campaignHint.trim() || undefined,
+        trendSnippets,
+      });
+      outlineBeats = outline.beats;
+      if (outline.source === "stub") hadStub = true;
+
+      setGeneratingProgress({ current: 0, total, phase: "posts" });
+
       for (let i = 0; i < total; i++) {
-        setGeneratingProgress({ current: i + 1, total });
+        setGeneratingProgress({ current: i + 1, total, phase: "posts" });
+        const brief = outlineBeats[i];
         const r = await slotMutation.mutateAsync({
           campaignGoal: goal,
           slotIndex: i,
@@ -347,6 +372,8 @@ export default function CampaignPlannerPage() {
           previousPosts: previous,
           campaignHint: campaignHint.trim() || undefined,
           trendSnippets,
+          slotBrief: brief,
+          coveredSubtopics: outlineBeats.slice(0, i).map((b) => b.subtopic),
         });
 
         if (r.source === "stub") hadStub = true;
@@ -367,6 +394,17 @@ export default function CampaignPlannerPage() {
                   body: post.body,
                   hashtags: post.hashtags,
                   content: post.content,
+                  aiInstruction: brief
+                    ? slotBriefToAiInstruction({
+                        ...brief,
+                        phase: brief.phase as
+                          | "intro"
+                          | "build"
+                          | "deepen"
+                          | "apply"
+                          | "close",
+                      })
+                    : s.aiInstruction,
                 }
               : s
           )
@@ -458,6 +496,7 @@ export default function CampaignPlannerPage() {
           .join("\n\n"),
         prompt: instruction || undefined,
         promptStyleId: slot.imagePromptStyleId,
+        referenceImageUrl: slot.reference_image_url ?? undefined,
       });
       if (r.image_url) {
         updateSlot(index, { image_url: r.image_url, video_url: null });
@@ -563,6 +602,7 @@ export default function CampaignPlannerPage() {
           const r = await imageMutation.mutateAsync({
             captionContext: slot.content || slot.body,
             promptStyleId: slot.imagePromptStyleId,
+            referenceImageUrl: slot.reference_image_url ?? undefined,
           });
           if (r.image_url) {
             const file = await urlToFile(r.image_url, `campaign-${i}.png`);
@@ -738,7 +778,11 @@ export default function CampaignPlannerPage() {
             </div>
             <Button
               onClick={handlePlan}
-              disabled={generatingProgress !== null || slotMutation.isPending}
+              disabled={
+                generatingProgress !== null ||
+                slotMutation.isPending ||
+                outlineMutation.isPending
+              }
             >
               {generatingProgress ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -746,7 +790,9 @@ export default function CampaignPlannerPage() {
                 <Sparkles className="mr-2 h-4 w-4" />
               )}
               {generatingProgress
-                ? `Generating ${generatingProgress.current} / ${generatingProgress.total}…`
+                ? generatingProgress.phase === "outline"
+                  ? "Planning content arc…"
+                  : `Generating ${generatingProgress.current} / ${generatingProgress.total}…`
                 : "Generate campaign incrementally"}
             </Button>
             <p className="text-xs text-muted-foreground">

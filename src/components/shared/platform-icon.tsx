@@ -1,11 +1,21 @@
 "use client";
 
-import { type Platform, PLATFORM_COLORS, PLATFORM_COLORS_DARK } from "@/lib/late-api";
+import {
+  type Platform,
+  normalizePlatform,
+  PLATFORM_COLORS,
+  PLATFORM_COLORS_DARK,
+} from "@/lib/late-api";
 import { cn } from "@/lib/utils";
+import { Globe } from "lucide-react";
 import { useTheme } from "next-themes";
+import type { CSSProperties, FC } from "react";
 
 // SVG icons for social platforms
-const platformIcons: Record<Platform, React.FC<{ className?: string; style?: React.CSSProperties }>> = {
+const platformIcons: Record<
+  Platform,
+  FC<{ className?: string; style?: CSSProperties }>
+> = {
   instagram: ({ className, style }) => (
     <svg className={className} style={style} viewBox="0 0 24 24" fill="currentColor">
       <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" />
@@ -74,7 +84,7 @@ const platformIcons: Record<Platform, React.FC<{ className?: string; style?: Rea
 };
 
 interface PlatformIconProps {
-  platform: Platform;
+  platform: Platform | string;
   className?: string;
   showColor?: boolean;
   size?: "xs" | "sm" | "md" | "lg" | "xl";
@@ -94,15 +104,27 @@ export function PlatformIcon({
   showColor = false,
   size = "md",
 }: PlatformIconProps) {
-  const Icon = platformIcons[platform];
+  const normalized = normalizePlatform(platform);
+  const Icon = normalized ? platformIcons[normalized] : null;
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
-  const color = isDark ? PLATFORM_COLORS_DARK[platform] : PLATFORM_COLORS[platform];
+  const color =
+    normalized &&
+    (isDark ? PLATFORM_COLORS_DARK[normalized] : PLATFORM_COLORS[normalized]);
+
+  if (!Icon) {
+    return (
+      <Globe
+        className={cn(sizeClasses[size], "text-muted-foreground", className)}
+        aria-label={typeof platform === "string" ? platform : "Unknown platform"}
+      />
+    );
+  }
 
   return (
     <Icon
       className={cn(sizeClasses[size], className)}
-      style={showColor ? { color } : undefined}
+      style={showColor && color ? { color } : undefined}
     />
   );
 }
@@ -111,15 +133,17 @@ export function PlatformBadge({
   platform,
   className,
 }: {
-  platform: Platform;
+  platform: Platform | string;
   className?: string;
 }) {
+  const normalized = normalizePlatform(platform);
   // Badge always uses the brand color as background with white icon
-  const color = PLATFORM_COLORS[platform];
+  const color = normalized ? PLATFORM_COLORS[normalized] : "#737373";
   // For black-based platforms on dark mode, use a lighter background
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
-  const isBlackBrand = ["tiktok", "twitter", "threads"].includes(platform);
+  const isBlackBrand =
+    normalized && ["tiktok", "twitter", "threads"].includes(normalized);
   const bgColor = isDark && isBlackBrand ? "#404040" : color;
 
   return (

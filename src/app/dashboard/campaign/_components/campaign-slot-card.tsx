@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  AiImageReferencePicker,
   ImagePromptStyleSelect,
   VideoPromptStyleSelect,
   VideoProviderSelect,
@@ -203,6 +204,11 @@ export function CampaignSlotCard({
           <ImagePromptStyleSelect
             value={slot.imagePromptStyleId}
             onValueChange={(id) => onUpdate({ imagePromptStyleId: id })}
+          />
+          <AiImageReferencePicker
+            value={slot.reference_image_url}
+            onChange={(url) => onUpdate({ reference_image_url: url })}
+            existingImageUrl={slot.image_url}
           />
           <div className="flex flex-wrap items-center gap-2">
             <Button

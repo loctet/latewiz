@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { PlatformIcon } from "@/components/shared/platform-icon";
 import { cn } from "@/lib/utils";
-import type { Platform } from "@/lib/late-api";
 import {
   getPostStatusBadgeConfig,
   type PostStatus,
@@ -178,14 +177,17 @@ export function PostCard({
 }
 
 interface PlatformIconsProps {
-  platforms: Array<{ platform: string }>;
+  platforms: Array<{ platform: string } | string>;
   max?: number;
   size?: "xs" | "sm";
 }
 
 export function PlatformIcons({ platforms, max = 4, size = "sm" }: PlatformIconsProps) {
-  const visiblePlatforms = platforms.slice(0, max);
-  const remaining = platforms.length - max;
+  const resolved = platforms
+    .map((p) => (typeof p === "string" ? p : p.platform))
+    .filter(Boolean);
+  const visiblePlatforms = resolved.slice(0, max);
+  const remaining = resolved.length - max;
 
   const containerSize = size === "xs" ? "h-5 w-5" : "h-6 w-6";
   const iconSize = "xs";
@@ -193,13 +195,13 @@ export function PlatformIcons({ platforms, max = 4, size = "sm" }: PlatformIcons
 
   return (
     <div className="flex -space-x-1">
-      {visiblePlatforms.map((p, i) => (
+      {visiblePlatforms.map((platform, i) => (
         <div
           key={i}
           className={`flex ${containerSize} items-center justify-center rounded-full border-2 border-muted bg-background`}
         >
           <PlatformIcon
-            platform={p.platform as Platform}
+            platform={platform}
             size={iconSize}
             showColor
           />

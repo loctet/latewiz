@@ -5,6 +5,28 @@ import {
   resolveOpenAiApiKey,
 } from "@/lib/openai";
 
+function parseReferenceImageUrls(
+  body: Record<string, unknown>
+): string[] | undefined {
+  const urls: string[] = [];
+  const single =
+    typeof body.reference_image_url === "string"
+      ? body.reference_image_url
+      : typeof body.referenceImageUrl === "string"
+        ? body.referenceImageUrl
+        : null;
+  if (single?.trim()) urls.push(single.trim());
+
+  const multi =
+    body.reference_image_urls ?? body.referenceImageUrls;
+  if (Array.isArray(multi)) {
+    for (const item of multi) {
+      if (typeof item === "string" && item.trim()) urls.push(item.trim());
+    }
+  }
+  return urls.length > 0 ? urls : undefined;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as Record<string, unknown>;
@@ -44,13 +66,16 @@ export async function POST(request: NextRequest) {
           ? (body.promptTemplates as Record<string, string>)
           : undefined;
 
+    const referenceImageUrls = parseReferenceImageUrls(body);
+
     const result = await generatePostImage(
       apiKey,
       niche,
       prompt,
       captionContext,
       promptStyleId,
-      templateOverrides
+      templateOverrides,
+      referenceImageUrls
     );
 
     let imageUrl = result.url;

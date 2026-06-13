@@ -39,6 +39,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import {
+  AiImageReferencePicker,
   AiMediaModeSelect,
   ImagePromptStyleSelect,
   VideoPromptStyleSelect,
@@ -62,6 +63,9 @@ export default function AiStudioPage() {
   const [generatedHashtags, setGeneratedHashtags] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
+  const [referenceImageUrl, setReferenceImageUrl] = useState<
+    string | undefined
+  >();
 
   const configured = status?.openai_configured ?? false;
   const videoConfigured = isVideoGenerationConfigured(videoProvider, status);
@@ -139,6 +143,7 @@ export default function AiStudioPage() {
         const r = await imageMutation.mutateAsync({
           prompt: topic.trim() || undefined,
           captionContext: ctx,
+          referenceImageUrl,
         });
         if (r.image_url) {
           setImageUrl(r.image_url);
@@ -300,7 +305,14 @@ export default function AiStudioPage() {
             onValueChange={(k: AiMediaKind) => setAiMediaKind(k)}
           />
           {aiMediaKind === "image" ? (
-            <ImagePromptStyleSelect />
+            <>
+              <ImagePromptStyleSelect />
+              <AiImageReferencePicker
+                value={referenceImageUrl}
+                onChange={setReferenceImageUrl}
+                existingImageUrl={imageUrl || null}
+              />
+            </>
           ) : (
             <>
               <VideoProviderSelect />

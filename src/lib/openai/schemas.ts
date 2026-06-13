@@ -31,3 +31,27 @@ export const CAMPAIGN_BATCH_JSON_SCHEMA = {
   required: ["posts"],
   additionalProperties: false,
 } as const;
+
+export const CAMPAIGN_OUTLINE_BEAT_SCHEMA = {
+  type: "object",
+  properties: {
+    subtopic: { type: "string" },
+    angle: { type: "string" },
+    keyPoint: { type: "string" },
+    searchHint: { type: "string" },
+  },
+  required: ["subtopic", "angle", "keyPoint", "searchHint"],
+  additionalProperties: false,
+} as const;
+
+export const CAMPAIGN_OUTLINE_JSON_SCHEMA = {
+  type: "object",
+  properties: {
+    beats: {
+      type: "array",
+      items: CAMPAIGN_OUTLINE_BEAT_SCHEMA,
+    },
+  },
+  required: ["beats"],
+  additionalProperties: false,
+} as const;

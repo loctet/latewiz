@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { Loader2, Sparkles, Wand2, ImageIcon, Film } from "lucide-react";
 import Link from "next/link";
 import { AiMediaModeSelect } from "./ai-media-mode-select";
+import { AiImageReferencePicker } from "./ai-image-reference-picker";
 import { ImagePromptStyleSelect } from "./image-prompt-style-select";
 import { VideoPromptStyleSelect } from "./video-prompt-style-select";
 import { VideoProviderSelect } from "./video-provider-select";
@@ -40,6 +41,7 @@ export function AiAssistPanel({
   hint,
 }: AiAssistPanelProps) {
   const [assistEnabled, setAssistEnabled] = useState(true);
+  const [referenceImageUrl, setReferenceImageUrl] = useState<string | undefined>();
   const aiMediaKind = useAiStore((s) => s.aiMediaKind);
   const setAiMediaKind = useAiStore((s) => s.setAiMediaKind);
   const videoProvider = useAiStore((s) => s.videoProvider);
@@ -103,6 +105,7 @@ export function AiAssistPanel({
         const r = await imageMutation.mutateAsync({
           captionContext,
           prompt: hint,
+          referenceImageUrl,
         });
         if (!r.image_url) {
           toast.error(r.detail ?? "No image returned");
@@ -165,7 +168,14 @@ export function AiAssistPanel({
             onValueChange={(k: AiMediaKind) => setAiMediaKind(k)}
           />
           {aiMediaKind === "image" ? (
-            <ImagePromptStyleSelect />
+            <>
+              <ImagePromptStyleSelect />
+              <AiImageReferencePicker
+                value={referenceImageUrl}
+                onChange={setReferenceImageUrl}
+                mediaSources={media}
+              />
+            </>
           ) : (
             <>
               <VideoProviderSelect />

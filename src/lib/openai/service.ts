@@ -1,4 +1,4 @@
-import type { CampaignPostDraft, DraftResult, NicheProfile } from "./types";
+import type { CampaignPostDraft, DraftResult, NicheProfile, PreviousCampaignPost } from "./types";
 import { defaultNicheProfile } from "./types";
 import { buildImagePromptFromStyle } from "@/lib/image-prompt-catalog";
 import { buildNicheUserContext, nicheToRecord } from "./niche-prompt";
@@ -9,9 +9,33 @@ import {
 } from "./sanitize-post-text";
 import {
   CAMPAIGN_BATCH_JSON_SCHEMA,
+  CAMPAIGN_OUTLINE_JSON_SCHEMA,
   CAMPAIGN_POST_JSON_SCHEMA,
   DRAFT_JSON_SCHEMA,
 } from "./schemas";
+import {
+  assignFallbackSlotBrief,
+  formatPriorPostsBlock,
+  formatSlotBriefBlock,
+  outlineBeatToSlotBrief,
+  type CampaignOutlineBeat,
+  type CampaignSlotBrief,
+} from "./campaign-arc";
+import {
+  buildGoalPriorityInstructions,
+  buildOutlineStrategyInstructions,
+  buildSlotFormatInstructions,
+  enforceBodyLength,
+  isDuplicateBody,
+  parseCampaignGoalConstraints,
+} from "./campaign-goal-format";
+import {
+  appendReferenceImagesToFormData,
+  loadReferenceImages,
+} from "./reference-image";
+
+export type { PreviousCampaignPost } from "./types";
+export type { CampaignSlotBrief, CampaignOutlineBeat } from "./campaign-arc";
 
 function summarizeOpenAiError(status: number, bodyRaw: string, label: string): string {
   try {
@@ -180,11 +204,134 @@ export async function generateCampaignBatch(
   };
 }
 
-export type PreviousCampaignPost = {
-  title: string;
-  body: string;
-  hashtags: string;
-};
+
+/**
+ * Plan distinct subtopics for each post so the campaign builds incrementally toward the goal.
+ */
+export async function generateCampaignOutline(
+  apiKey: string | null,
+  niche: NicheProfile,
+  params: {
+    campaignGoal: string;
+    totalPosts: number;
+    campaignHint?: string;
+    trendSnippets?: string[];
+  }
+): Promise<{
+  beats: CampaignSlotBrief[];
+  source: string;
+  detail: string | null;
+}> {
+  const goal = params.campaignGoal.trim() || "Grow audience engagement";
+  const total = params.totalPosts;
+  const constraints = parseCampaignGoalConstraints(goal);
+
+  const fallback = () =>
+    Array.from({ length: total }, (_, i) =>
+      assignFallbackSlotBrief(i, total, goal, constraints)
+    );
+
+  if (!apiKey) {
+    return {
+      beats: fallback(),
+      source: "stub",
+      detail: "Add an OpenAI key for AI-planned campaign arcs.",
+    };
+  }
+
+  const topic = niche.topic.trim() || "your niche";
+  const nicheContext = buildNicheUserContext(niche);
+  const trendLines = (params.trendSnippets ?? [])
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 6);
+
+  const goalBlock = buildGoalPriorityInstructions(goal, constraints);
+  const strategyBlock = buildOutlineStrategyInstructions(constraints, total);
+
+  const userInput = `Design a ${total}-post social media content roadmap.
+
+${goalBlock}
+
+Niche context (background only — goal defines format):
+${topic ? `Topic: ${topic}` : ""}
+
+${nicheContext}
+
+${params.campaignHint?.trim() ? `Extra theme notes: ${params.campaignHint.trim()}` : ""}
+
+${trendLines.length ? `Tone references:\n- ${trendLines.join("\n- ")}` : ""}
+
+${strategyBlock}`;
+
+  const outlineTaskInstructions =
+    constraints.format === "micro"
+      ? [
+          "You are an expert content strategist planning daily micro-post campaigns.",
+          "Return JSON only: {\"beats\":[{\"subtopic\":\"...\",\"angle\":\"...\",\"keyPoint\":\"...\",\"searchHint\":\"...\"}]}.",
+          "Each beat = one unique daily theme. Never plan educational definitions or repeated angles.",
+          "searchHint: leave empty unless the beat needs a specific quote lookup.",
+        ].join(" ")
+      : [
+          "You are an expert content strategist planning multi-post campaigns.",
+          "Return JSON only: {\"beats\":[{\"subtopic\":\"...\",\"angle\":\"...\",\"keyPoint\":\"...\",\"searchHint\":\"...\"}]}.",
+          "Each beat must cover DISTINCT knowledge the audience needs to reach the campaign goal.",
+          "Order beats so understanding builds incrementally — never repeat or overlap topics.",
+          "searchHint: short web-search phrase for fresh facts about that beat only.",
+        ].join(" ");
+
+  try {
+    const result = await generateStructuredContent<{
+      beats?: CampaignOutlineBeat[];
+    }>({
+      apiKey,
+      taskInstructions: outlineTaskInstructions,
+      userInput,
+      jsonSchema: { name: "campaign_outline", schema: CAMPAIGN_OUTLINE_JSON_SCHEMA },
+      researchParams: constraints.skipWebSearch
+        ? undefined
+        : {
+            niche,
+            campaignGoal: goal,
+            campaignHint: params.campaignHint,
+            totalPosts: total,
+            trendSnippets: params.trendSnippets,
+          },
+      maxOutputTokens: 4096,
+    });
+
+    if (!result.data?.beats?.length) {
+      return {
+        beats: fallback(),
+        source: "fallback",
+        detail: result.detail ?? "Outline generation failed; using default arc.",
+      };
+    }
+
+    const beats: CampaignSlotBrief[] = [];
+    for (let i = 0; i < total; i++) {
+      const row = result.data.beats[i];
+      if (row?.subtopic?.trim()) {
+        beats.push(outlineBeatToSlotBrief(i, total, row));
+      } else {
+        beats.push(assignFallbackSlotBrief(i, total, goal, constraints));
+      }
+    }
+
+    return {
+      beats,
+      source: result.source,
+      detail: result.detail,
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Unknown error";
+    return {
+      beats: fallback(),
+      source: "fallback",
+      detail: msg.slice(0, 400),
+    };
+  }
+}
 
 /**
  * Generate one campaign post at a time, using prior posts + goal so content builds incrementally.
@@ -200,6 +347,8 @@ export async function generateCampaignSlot(
     previousPosts: PreviousCampaignPost[];
     campaignHint?: string;
     trendSnippets?: string[];
+    slotBrief?: CampaignSlotBrief;
+    coveredSubtopics?: string[];
   }
 ): Promise<{
   post: CampaignPostDraft;
@@ -209,104 +358,161 @@ export async function generateCampaignSlot(
   const slotNum = params.slotIndex + 1;
   const goal = params.campaignGoal.trim() || "Grow audience engagement";
   const topic = niche.topic.trim() || "your niche";
+  const constraints = parseCampaignGoalConstraints(goal);
 
   if (!apiKey) {
+    const brief = assignFallbackSlotBrief(
+      params.slotIndex,
+      params.totalPosts,
+      goal,
+      constraints
+    );
     return {
       post: {
-        title: `${goal.slice(0, 40)} — step ${slotNum}`,
-        body: `Post ${slotNum} of ${params.totalPosts} toward: ${goal}. Edit before scheduling.`,
-        hashtags: "#content #growth",
+        title: constraints.format === "micro" ? `Jour ${slotNum}` : `${goal.slice(0, 40)} — step ${slotNum}`,
+        body:
+          constraints.format === "micro"
+            ? `Bonjour ! ${brief.subtopic} — message ${slotNum}/${params.totalPosts}.`
+            : `Post ${slotNum} of ${params.totalPosts} toward: ${goal}. Edit before scheduling.`,
+        hashtags: constraints.format === "micro" ? "" : "#content #growth",
       },
       source: "stub",
       detail: "Add an OpenAI key for goal-driven incremental generation.",
     };
   }
 
-  const priorBlock =
-    params.previousPosts.length > 0
-      ? params.previousPosts
-          .map(
-            (p, i) =>
-              `Post ${i + 1}: title="${p.title}" | body excerpt="${p.body.slice(0, 200)}..."`
-          )
-          .join("\n")
-      : "No previous posts yet — this is the opening post for the campaign.";
+  const brief =
+    params.slotBrief ??
+    assignFallbackSlotBrief(params.slotIndex, params.totalPosts, goal, constraints);
+
+  const priorBlock = formatPriorPostsBlock(params.previousPosts);
+  const briefBlock = formatSlotBriefBlock(brief);
+  const goalBlock = buildGoalPriorityInstructions(goal, constraints);
+  const formatBlock = buildSlotFormatInstructions(constraints);
 
   const trendLines = (params.trendSnippets ?? [])
     .map((s) => s.trim())
     .filter(Boolean)
     .slice(0, 8);
 
-  const userInput = `Campaign goal (every post must move toward this):
-${goal}
+  const buildUserInput = (retryNote?: string) =>
+    [
+      goalBlock,
+      "",
+      `This is post ${slotNum} of ${params.totalPosts} in the series.`,
+      `Scheduled for: ${params.scheduledAt}`,
+      topic ? `Niche context (background only): ${topic}` : "",
+      "",
+      briefBlock,
+      formatBlock ? `\n${formatBlock}` : "",
+      "",
+      "Posts already published in this campaign:",
+      priorBlock,
+      params.campaignHint?.trim()
+        ? `\nExtra theme notes: ${params.campaignHint.trim()}`
+        : "",
+      trendLines.length ? `\nTone references:\n- ${trendLines.join("\n- ")}` : "",
+      "",
+      constraints.format === "micro"
+        ? "Write ONE unique micro-message matching the goal format. Never copy or paraphrase prior posts."
+        : "Write ONE post that delivers ONLY the assigned subtopic/angle. Never reuse opening lines, statistics, or arguments from prior posts.",
+      retryNote ?? "",
+    ]
+      .filter(Boolean)
+      .join("\n");
 
-This is post ${slotNum} of ${params.totalPosts} in the series.
-Scheduled for: ${params.scheduledAt}
+  const slotTaskInstructions =
+    constraints.format === "micro"
+      ? [
+          "You write short, warm daily social micro-posts.",
+          "Return JSON only: {\"title\":\"...\",\"body\":\"...\",\"hashtags\":\"#a #b\"}.",
+          "Follow the campaign goal format exactly — NOT educational articles or blockchain definitions.",
+          "Each post must be emotionally distinct from all prior posts in the series.",
+          "Title can be short (e.g. day number) or empty string.",
+          SOCIAL_POST_FORMAT_INSTRUCTIONS,
+        ].join(" ")
+      : [
+          "You are an expert social media strategist.",
+          "Return JSON only: {\"title\":\"...\",\"body\":\"...\",\"hashtags\":\"#a #b\"}.",
+          "Write ONE post for a multi-part campaign — cover ONLY the assigned subtopic/angle.",
+          "Each post must add distinct knowledge; never repeat hooks, stats, or phrasing from earlier posts.",
+          "Do not start with the same opening pattern as prior posts in the series.",
+          "Use current web research for timely angles when relevant.",
+          SOCIAL_POST_FORMAT_INSTRUCTIONS,
+        ].join(" ");
 
-Audience topic: ${topic}
-
-Posts already planned (build on these — do not duplicate):
-${priorBlock}
-
-${params.campaignHint?.trim() ? `Extra theme notes: ${params.campaignHint.trim()}` : ""}
-
-${trendLines.length ? `Tone references:\n- ${trendLines.join("\n- ")}` : ""}
-
-Choose the beat that best fits slot ${slotNum} of ${params.totalPosts} (e.g. hook, educate, story, question, proof, soft CTA) so the full series achieves the campaign goal.`;
-
-  try {
-    const result = await generateStructuredContent<{
-      title?: string;
-      body?: string;
-      hashtags?: string;
-    }>({
-      apiKey,
-      taskInstructions: [
-        "You are an expert social media strategist.",
-        "Return JSON only: {\"title\":\"...\",\"body\":\"...\",\"hashtags\":\"#a #b\"}.",
-        "Write ONE post that advances a multi-part campaign toward a defined goal.",
-        "Each new post must add distinct value — never repeat hooks or angles from earlier posts.",
-        "Use current web research for timely angles when relevant.",
-        SOCIAL_POST_FORMAT_INSTRUCTIONS,
-      ].join(" "),
-      userInput,
-      jsonSchema: { name: "campaign_slot_post", schema: CAMPAIGN_POST_JSON_SCHEMA },
-      researchParams: {
+  const researchParams = constraints.skipWebSearch
+    ? undefined
+    : {
         niche,
         campaignGoal: goal,
         campaignHint: params.campaignHint,
         slotIndex: params.slotIndex,
         totalPosts: params.totalPosts,
         trendSnippets: params.trendSnippets,
-      },
-      maxOutputTokens: 2048,
-    });
+        searchHint: brief.searchHint || undefined,
+        coveredSubtopics: params.coveredSubtopics,
+      };
 
-    if (!result.data) {
+  try {
+    let detail: string | null = null;
+    let source = "openai";
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const retryNote =
+        attempt > 0
+          ? "\n\nRETRY: Your previous attempt duplicated an earlier post or ignored the goal format. Write something completely different that matches the goal."
+          : undefined;
+
+      const result = await generateStructuredContent<{
+        title?: string;
+        body?: string;
+        hashtags?: string;
+      }>({
+        apiKey,
+        taskInstructions: slotTaskInstructions,
+        userInput: buildUserInput(retryNote),
+        jsonSchema: { name: "campaign_slot_post", schema: CAMPAIGN_POST_JSON_SCHEMA },
+        researchParams,
+        maxOutputTokens: constraints.format === "micro" ? 512 : 2048,
+      });
+
+      detail = result.detail;
+      source = result.source;
+
+      if (!result.data) continue;
+
+      const clean = sanitizeDraftFields({
+        title: result.data.title ?? (constraints.format === "micro" ? "" : `Post ${slotNum}`),
+        body: result.data.body,
+        hashtags: result.data.hashtags,
+      });
+
+      const body = enforceBodyLength(clean.body, constraints.maxBodyChars);
+
+      if (attempt === 0 && isDuplicateBody(body, params.previousPosts)) {
+        continue;
+      }
+
       return {
         post: {
-          title: `Post ${slotNum}`,
-          body: "AI unavailable — edit manually.",
-          hashtags: "",
+          title: clean.title || (constraints.format === "micro" ? `Jour ${slotNum}` : `Post ${slotNum}`),
+          body,
+          hashtags: clean.hashtags,
         },
-        source: "fallback",
-        detail: result.detail ?? "Generation failed",
+        source,
+        detail,
       };
     }
 
-    const clean = sanitizeDraftFields({
-      title: result.data.title ?? `Post ${slotNum}`,
-      body: result.data.body,
-      hashtags: result.data.hashtags,
-    });
     return {
       post: {
-        title: clean.title || `Post ${slotNum}`,
-        body: clean.body,
-        hashtags: clean.hashtags,
+        title: `Post ${slotNum}`,
+        body: "AI unavailable — edit manually.",
+        hashtags: "",
       },
-      source: result.source,
-      detail: result.detail,
+      source: "fallback",
+      detail: detail ?? "Generation failed",
     };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown error";
@@ -448,13 +654,39 @@ export function resolvePostTextForBoard(
   return core;
 }
 
+function parseOpenAiImageResponse(bodyRaw: string): {
+  url: string | null;
+  b64_json: string | null;
+  detail: string | null;
+} {
+  const data = JSON.parse(bodyRaw) as {
+    data?: { url?: string; b64_json?: string }[];
+  };
+  const first = data.data?.[0];
+  const urlVal = first?.url?.trim();
+  const b64 = first?.b64_json?.replace(/\s+/g, "");
+
+  if (urlVal) {
+    return { url: urlVal, b64_json: null, detail: null };
+  }
+  if (b64) {
+    return { url: null, b64_json: b64, detail: null };
+  }
+  return {
+    url: null,
+    b64_json: null,
+    detail: "OpenAI Images response contained no image URL or b64_json.",
+  };
+}
+
 export async function generatePostImage(
   apiKey: string | null,
   niche: NicheProfile = defaultNicheProfile(),
   explicitPrompt?: string,
   captionContext?: string,
   promptStyleId?: string,
-  templateOverrides?: Record<string, string>
+  templateOverrides?: Record<string, string>,
+  referenceImageUrls?: string[]
 ): Promise<{
   url: string | null;
   b64_json: string | null;
@@ -512,29 +744,111 @@ export async function generatePostImage(
     templateOverrides
   );
 
-  const json: Record<string, unknown> = {
-    model,
-    prompt: brief,
-    n: 1,
-  };
+  const refs = (referenceImageUrls ?? [])
+    .map((u) => u.trim())
+    .filter(Boolean);
+  const useReferenceEdit = refs.length > 0;
 
-  if (isGptImage) {
-    json.size = size;
-    const gptQuality =
-      process.env.OPENAI_GPT_IMAGE_QUALITY?.trim() || "medium";
-    if (["low", "medium", "high", "auto"].includes(gptQuality)) {
-      json.quality = gptQuality;
-    }
-    const gptMod = process.env.OPENAI_GPT_IMAGE_MODERATION?.trim();
-    if (gptMod === "low") json.moderation = "low";
-  } else if (isDalle3) {
-    json.size = size;
-    json.quality = "standard";
-  } else if (isDalle2) {
-    json.size = size;
+  if (useReferenceEdit && isDalle3) {
+    return {
+      url: null,
+      b64_json: null,
+      source: "fallback",
+      detail:
+        "Reference images require a GPT Image model (e.g. gpt-image-2). DALL·E 3 does not support image inputs.",
+    };
   }
 
+  const gptQuality =
+    process.env.OPENAI_GPT_IMAGE_QUALITY?.trim() || "medium";
+  const gptMod = process.env.OPENAI_GPT_IMAGE_MODERATION?.trim();
+
   try {
+    if (useReferenceEdit) {
+      if (!isGptImage && !isDalle2) {
+        return {
+          url: null,
+          b64_json: null,
+          source: "fallback",
+          detail:
+            "Reference images require a GPT Image model (gpt-image-2) or DALL·E 2.",
+        };
+      }
+
+      const referenceFiles = await loadReferenceImages(refs);
+      const form = new FormData();
+      form.append("model", model);
+      form.append("prompt", brief);
+      appendReferenceImagesToFormData(form, referenceFiles);
+
+      if (isGptImage) {
+        form.append("size", size);
+        if (["low", "medium", "high", "auto"].includes(gptQuality)) {
+          form.append("quality", gptQuality);
+        }
+        if (gptMod === "low") form.append("moderation", "low");
+      } else if (isDalle2) {
+        form.append("size", size);
+      }
+
+      const res = await fetch("https://api.openai.com/v1/images/edits", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}` },
+        body: form,
+      });
+
+      const bodyRaw = await res.text();
+      if (!res.ok) {
+        return {
+          url: null,
+          b64_json: null,
+          source: "fallback",
+          detail: summarizeOpenAiError(
+            res.status,
+            bodyRaw,
+            "OpenAI Image edit"
+          ),
+        };
+      }
+
+      const parsed = parseOpenAiImageResponse(bodyRaw);
+      if (parsed.url || parsed.b64_json) {
+        return {
+          url: parsed.url,
+          b64_json: parsed.b64_json,
+          source: "openai",
+          detail: null,
+        };
+      }
+
+      return {
+        url: null,
+        b64_json: null,
+        source: "fallback",
+        detail:
+          parsed.detail ?? "OpenAI Image edit response contained no image.",
+      };
+    }
+
+    const json: Record<string, unknown> = {
+      model,
+      prompt: brief,
+      n: 1,
+    };
+
+    if (isGptImage) {
+      json.size = size;
+      if (["low", "medium", "high", "auto"].includes(gptQuality)) {
+        json.quality = gptQuality;
+      }
+      if (gptMod === "low") json.moderation = "low";
+    } else if (isDalle3) {
+      json.size = size;
+      json.quality = "standard";
+    } else if (isDalle2) {
+      json.size = size;
+    }
+
     const res = await fetch("https://api.openai.com/v1/images/generations", {
       method: "POST",
       headers: {
@@ -554,25 +868,23 @@ export async function generatePostImage(
       };
     }
 
-    const data = JSON.parse(bodyRaw) as {
-      data?: { url?: string; b64_json?: string }[];
-    };
-    const first = data.data?.[0];
-    const urlVal = first?.url?.trim();
-    const b64 = first?.b64_json?.replace(/\s+/g, "");
-
-    if (urlVal) {
-      return { url: urlVal, b64_json: null, source: "openai", detail: null };
-    }
-    if (b64) {
-      return { url: null, b64_json: b64, source: "openai", detail: null };
+    const parsed = parseOpenAiImageResponse(bodyRaw);
+    if (parsed.url || parsed.b64_json) {
+      return {
+        url: parsed.url,
+        b64_json: parsed.b64_json,
+        source: "openai",
+        detail: null,
+      };
     }
 
     return {
       url: null,
       b64_json: null,
       source: "fallback",
-      detail: "OpenAI Images response contained no image URL or b64_json.",
+      detail:
+        parsed.detail ??
+        "OpenAI Images response contained no image URL or b64_json.",
     };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown error";

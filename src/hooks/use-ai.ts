@@ -100,7 +100,15 @@ export function useGenerateImage() {
       prompt?: string;
       captionContext?: string;
       promptStyleId?: string;
+      referenceImageUrl?: string;
+      referenceImageUrls?: string[];
     }) => {
+      const referenceImageUrls =
+        params.referenceImageUrls ??
+        (params.referenceImageUrl?.trim()
+          ? [params.referenceImageUrl.trim()]
+          : undefined);
+
       const res = await fetch("/api/ai/generate-image", {
         method: "POST",
         headers: aiHeaders(openaiApiKey),
@@ -110,6 +118,7 @@ export function useGenerateImage() {
           prompt_style_id:
             params.promptStyleId ?? imagePromptStyleId,
           prompt_templates: imagePromptTemplates,
+          reference_image_urls: referenceImageUrls,
           niche,
         }),
       });
@@ -247,6 +256,8 @@ export interface CampaignSlot {
   imagePromptStyleId?: string;
   /** Video style for this slot's video generation */
   videoPromptStyleId?: string;
+  /** Optional reference image for image-to-image generation */
+  reference_image_url?: string | null;
 }
 
 export function useGenerateCampaignSlot() {
@@ -262,6 +273,16 @@ export function useGenerateCampaignSlot() {
       previousPosts: { title: string; body: string; hashtags: string }[];
       campaignHint?: string;
       trendSnippets?: string[];
+      slotBrief?: {
+        slotIndex: number;
+        phase: string;
+        beat: string;
+        subtopic: string;
+        angle: string;
+        keyPoint: string;
+        searchHint: string;
+      };
+      coveredSubtopics?: string[];
     }) => {
       const res = await fetch("/api/ai/campaign-slot", {
         method: "POST",
@@ -274,6 +295,8 @@ export function useGenerateCampaignSlot() {
           previous_posts: params.previousPosts,
           campaign_hint: params.campaignHint,
           trend_snippets: params.trendSnippets,
+          slot_brief: params.slotBrief,
+          covered_subtopics: params.coveredSubtopics,
           niche,
         }),
       });
@@ -285,6 +308,51 @@ export function useGenerateCampaignSlot() {
       }
       return res.json() as Promise<{
         post: CampaignSlot;
+        source: string;
+        detail?: string | null;
+      }>;
+    },
+  });
+}
+
+export function useGenerateCampaignOutline() {
+  const openaiApiKey = useAiStore((s) => s.openaiApiKey);
+  const niche = useAiStore((s) => s.niche);
+
+  return useMutation({
+    mutationFn: async (params: {
+      campaignGoal: string;
+      totalPosts: number;
+      campaignHint?: string;
+      trendSnippets?: string[];
+    }) => {
+      const res = await fetch("/api/ai/campaign-outline", {
+        method: "POST",
+        headers: aiHeaders(openaiApiKey),
+        body: JSON.stringify({
+          campaign_goal: params.campaignGoal,
+          total_posts: params.totalPosts,
+          campaign_hint: params.campaignHint,
+          trend_snippets: params.trendSnippets,
+          niche,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(
+          (err as { error?: string }).error ?? "Outline generation failed"
+        );
+      }
+      return res.json() as Promise<{
+        beats: {
+          slotIndex: number;
+          phase: string;
+          beat: string;
+          subtopic: string;
+          angle: string;
+          keyPoint: string;
+          searchHint: string;
+        }[];
         source: string;
         detail?: string | null;
       }>;

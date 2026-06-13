@@ -32,6 +32,25 @@ export const PLATFORMS: Platform[] = [
   "telegram",
 ];
 
+const PLATFORM_SET = new Set<string>(PLATFORMS);
+
+/** Map API/platform aliases to our canonical Platform ids. */
+const PLATFORM_ALIASES: Record<string, Platform> = {
+  x: "twitter",
+  google: "googlebusiness",
+};
+
+/** Normalize raw platform strings from the API to a supported Platform, if possible. */
+export function normalizePlatform(
+  value: string | undefined | null
+): Platform | null {
+  if (!value) return null;
+  const key = value.toLowerCase().trim();
+  if (PLATFORM_ALIASES[key]) return PLATFORM_ALIASES[key];
+  if (PLATFORM_SET.has(key)) return key as Platform;
+  return null;
+}
+
 export const PLATFORM_NAMES: Record<Platform, string> = {
   instagram: "Instagram",
   tiktok: "TikTok",
