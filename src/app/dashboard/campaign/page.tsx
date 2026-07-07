@@ -18,7 +18,11 @@ import {
   urlToFile,
 } from "@/hooks";
 import { buildCampaignSlotTimes } from "@/lib/openai";
-import { slotBriefToAiInstruction } from "@/lib/openai/campaign-arc";
+import {
+  assignListItemSlotBrief,
+  parseCampaignListItems,
+  slotBriefToAiInstruction,
+} from "@/lib/openai/campaign-arc";
 import { useAppStore, useAiStore } from "@/stores";
 import { PageContainer } from "@/components/dashboard";
 import {
@@ -27,6 +31,7 @@ import {
   clearCampaignDraft,
   type CampaignDraft,
   type CampaignSlotDraft,
+  type CampaignPlanningMode,
 } from "@/lib/campaign-draft-storage";
 import { isScheduleInFuture, minScheduleDateInput } from "@/lib/campaign-schedule-validation";
 import {
@@ -42,10 +47,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PlatformSelector } from "../compose/_components/platform-selector";
 import {
   CampaignMediaModeSelect,
   ImagePromptStyleSelect,
+  PostPromptStyleSelect,
   VideoPromptStyleSelect,
   VideoProviderSelect,
 } from "@/components/ai";
@@ -54,6 +61,7 @@ import { migrateCampaignMediaMode } from "@/lib/campaign-media";
 import { CampaignSlotCard } from "./_components/campaign-slot-card";
 import {
   CalendarClock,
+  ImageIcon,
   Loader2,
   Sparkles,
   Send,
@@ -70,6 +78,9 @@ export default function CampaignPlannerPage() {
   const { data: accountsData } = useAccounts();
   const { data: status } = useOpenAiStatus();
   const videoProvider = useAiStore((s) => s.videoProvider);
+  const imagePromptStyleId = useAiStore((s) => s.imagePromptStyleId);
+  const setImagePromptStyleId = useAiStore((s) => s.setImagePromptStyleId);
+  const postPromptStyleId = useAiStore((s) => s.postPromptStyleId);
   const videoConfigured = isVideoGenerationConfigured(videoProvider, status);
   const slotMutation = useGenerateCampaignSlot();
   const outlineMutation = useGenerateCampaignOutline();
@@ -88,6 +99,8 @@ export default function CampaignPlannerPage() {
   const [windowEnd, setWindowEnd] = useState("18:00");
   const [campaignGoal, setCampaignGoal] = useState("");
   const [campaignHint, setCampaignHint] = useState("");
+  const [campaignMode, setCampaignMode] = useState<CampaignPlanningMode>("arc");
+  const [listItemsBlock, setListItemsBlock] = useState("");
   const [trendBlock, setTrendBlock] = useState("");
   const [slots, setSlots] = useState<CampaignSlotDraft[]>([]);
   const [generatingProgress, setGeneratingProgress] = useState<{
@@ -104,6 +117,10 @@ export default function CampaignPlannerPage() {
   const [regeneratingImageIndex, setRegeneratingImageIndex] = useState<
     number | null
   >(null);
+  const [generatingImagesProgress, setGeneratingImagesProgress] = useState<{
+    current: number;
+    total: number;
+  } | null>(null);
   const [regeneratingVideoIndex, setRegeneratingVideoIndex] = useState<
     number | null
   >(null);
@@ -113,6 +130,14 @@ export default function CampaignPlannerPage() {
   const [savedCampaigns, setSavedCampaigns] = useState<SavedCampaign[]>([]);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const minStartDate = minScheduleDateInput();
+  const listItems = parseCampaignListItems(listItemsBlock);
+  const isListMode = campaignMode === "list";
+  const effectivePlanDays = isListMode
+    ? Math.max(1, Math.ceil(listItems.length / postsPerDay) || 1)
+    : planDays;
+  const plannedSlotCount = isListMode
+    ? listItems.length
+    : postsPerDay * planDays;
 
   const accounts = (accountsData?.accounts || []) as {
     _id: string;
@@ -130,6 +155,8 @@ export default function CampaignPlannerPage() {
     setWindowEnd(draft.windowEnd);
     setCampaignGoal(draft.campaignGoal ?? "");
     setCampaignHint(draft.campaignHint);
+    setCampaignMode(draft.campaignMode === "list" ? "list" : "arc");
+    setListItemsBlock(draft.listItemsBlock ?? "");
     setTrendBlock(draft.trendBlock);
     setSelectedAccountIds(draft.selectedAccountIds);
     setMediaMode(migrateCampaignMediaMode(draft));
@@ -159,6 +186,8 @@ export default function CampaignPlannerPage() {
       windowEnd,
       campaignGoal,
       campaignHint,
+      campaignMode,
+      listItemsBlock,
       trendBlock,
       selectedAccountIds,
       mediaMode,
@@ -172,6 +201,8 @@ export default function CampaignPlannerPage() {
       windowEnd,
       campaignGoal,
       campaignHint,
+      campaignMode,
+      listItemsBlock,
       trendBlock,
       selectedAccountIds,
       mediaMode,
@@ -217,6 +248,8 @@ export default function CampaignPlannerPage() {
       startDate: saved.startDate,
       windowStart: saved.windowStart,
       windowEnd: saved.windowEnd,
+      campaignMode: saved.campaignMode === "list" ? "list" : "arc",
+      listItemsBlock: saved.listItemsBlock ?? "",
       campaignGoal: saved.campaignGoal ?? "",
       campaignHint: saved.campaignHint,
       trendBlock: saved.trendBlock,
@@ -241,6 +274,8 @@ export default function CampaignPlannerPage() {
     setSlots([]);
     setCampaignGoal("");
     setCampaignHint("");
+    setCampaignMode("arc");
+    setListItemsBlock("");
     setTrendBlock("");
     setDraftRestored(false);
     setStartDate(minScheduleDateInput());
@@ -256,6 +291,8 @@ export default function CampaignPlannerPage() {
       windowEnd,
       campaignGoal,
       campaignHint,
+      campaignMode,
+      listItemsBlock,
       trendBlock,
       selectedAccountIds,
       mediaMode,
@@ -272,6 +309,8 @@ export default function CampaignPlannerPage() {
     windowEnd,
     campaignGoal,
     campaignHint,
+    campaignMode,
+    listItemsBlock,
     trendBlock,
     selectedAccountIds,
     mediaMode,
@@ -294,15 +333,39 @@ export default function CampaignPlannerPage() {
       return;
     }
 
-    const requestedTotal = postsPerDay * planDays;
-    const slotTimes = buildCampaignSlotTimes(
+    const listModeItems = isListMode ? parseCampaignListItems(listItemsBlock) : [];
+    if (isListMode && listModeItems.length === 0) {
+      toast.error("Add at least one item to your list (one per line)");
+      return;
+    }
+
+    const requestedTotal = isListMode
+      ? listModeItems.length
+      : postsPerDay * planDays;
+    const scheduleDays = isListMode ? effectivePlanDays : planDays;
+    let slotTimes = buildCampaignSlotTimes(
       startDate,
-      planDays,
+      scheduleDays,
       postsPerDay,
       windowStart,
       windowEnd,
       timezone
-    );
+    ).slice(0, requestedTotal);
+
+    if (isListMode && slotTimes.length < requestedTotal) {
+      let extraDays = scheduleDays;
+      while (extraDays < 31 && slotTimes.length < requestedTotal) {
+        extraDays++;
+        slotTimes = buildCampaignSlotTimes(
+          startDate,
+          extraDays,
+          postsPerDay,
+          windowStart,
+          windowEnd,
+          timezone
+        ).slice(0, requestedTotal);
+      }
+    }
 
     if (slotTimes.length === 0) {
       toast.error(
@@ -335,7 +398,11 @@ export default function CampaignPlannerPage() {
     }));
     setSlots(emptySlots);
     setDraftRestored(true);
-    setGeneratingProgress({ current: 0, total, phase: "outline" });
+    setGeneratingProgress({
+      current: 0,
+      total,
+      phase: isListMode ? "posts" : "outline",
+    });
 
     const previous: { title: string; body: string; hashtags: string }[] = [];
     let hadStub = false;
@@ -350,14 +417,20 @@ export default function CampaignPlannerPage() {
     }[] = [];
 
     try {
-      const outline = await outlineMutation.mutateAsync({
-        campaignGoal: goal,
-        totalPosts: total,
-        campaignHint: campaignHint.trim() || undefined,
-        trendSnippets,
-      });
-      outlineBeats = outline.beats;
-      if (outline.source === "stub") hadStub = true;
+      if (isListMode) {
+        outlineBeats = listModeItems.slice(0, total).map((item, i) =>
+          assignListItemSlotBrief(item, i, total, goal)
+        );
+      } else {
+        const outline = await outlineMutation.mutateAsync({
+          campaignGoal: goal,
+          totalPosts: total,
+          campaignHint: campaignHint.trim() || undefined,
+          trendSnippets,
+        });
+        outlineBeats = outline.beats;
+        if (outline.source === "stub") hadStub = true;
+      }
 
       setGeneratingProgress({ current: 0, total, phase: "posts" });
 
@@ -374,6 +447,8 @@ export default function CampaignPlannerPage() {
           trendSnippets,
           slotBrief: brief,
           coveredSubtopics: outlineBeats.slice(0, i).map((b) => b.subtopic),
+          postPromptStyleId,
+          isListMode,
         });
 
         if (r.source === "stub") hadStub = true;
@@ -414,7 +489,11 @@ export default function CampaignPlannerPage() {
       if (hadStub) {
         toast.message("Using placeholder copy — add OpenAI key for full AI.");
       }
-      toast.success(`Generated ${total} posts toward your campaign goal`);
+      toast.success(
+        isListMode
+          ? `Generated ${total} post${total === 1 ? "" : "s"} (one per list item)`
+          : `Generated ${total} posts toward your campaign goal`
+      );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Planning failed");
     } finally {
@@ -481,6 +560,26 @@ export default function CampaignPlannerPage() {
     }
   };
 
+  const generateSlotImage = async (
+    index: number,
+    slot: CampaignSlotDraft
+  ): Promise<{ ok: boolean; detail?: string | null }> => {
+    const instruction = slot.aiInstruction?.trim();
+    const r = await imageMutation.mutateAsync({
+      captionContext: [slot.title, slot.body, slot.hashtags, instruction]
+        .filter(Boolean)
+        .join("\n\n"),
+      prompt: instruction || undefined,
+      promptStyleId: slot.imagePromptStyleId ?? imagePromptStyleId,
+      referenceImageUrl: slot.reference_image_url ?? undefined,
+    });
+    if (r.image_url) {
+      updateSlot(index, { image_url: r.image_url, video_url: null });
+      return { ok: true };
+    }
+    return { ok: false, detail: r.detail };
+  };
+
   const regenerateSlotImage = async (index: number) => {
     const slot = slots[index];
     if (!status?.openai_configured) {
@@ -489,25 +588,63 @@ export default function CampaignPlannerPage() {
     }
     setRegeneratingImageIndex(index);
     try {
-      const instruction = slot.aiInstruction?.trim();
-      const r = await imageMutation.mutateAsync({
-        captionContext: [slot.title, slot.body, slot.hashtags, instruction]
-          .filter(Boolean)
-          .join("\n\n"),
-        prompt: instruction || undefined,
-        promptStyleId: slot.imagePromptStyleId,
-        referenceImageUrl: slot.reference_image_url ?? undefined,
-      });
-      if (r.image_url) {
-        updateSlot(index, { image_url: r.image_url, video_url: null });
+      const result = await generateSlotImage(index, slot);
+      if (result.ok) {
         toast.success("Image regenerated");
       } else {
-        toast.error(r.detail ?? "No image returned");
+        toast.error(result.detail ?? "No image returned");
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Image generation failed");
     } finally {
       setRegeneratingImageIndex(null);
+    }
+  };
+
+  const generateAllSlotImages = async (regenerateExisting = false) => {
+    if (!status?.openai_configured) {
+      toast.error("Add OpenAI key in Settings first.");
+      return;
+    }
+
+    const targets = slots
+      .map((slot, index) => ({ slot, index }))
+      .filter(({ slot }) => regenerateExisting || !slot.image_url);
+
+    if (targets.length === 0) {
+      toast.message("All slots already have images");
+      return;
+    }
+
+    setGeneratingImagesProgress({ current: 0, total: targets.length });
+    let ok = 0;
+    let fail = 0;
+
+    for (let i = 0; i < targets.length; i++) {
+      const { slot, index } = targets[i];
+      setGeneratingImagesProgress({ current: i + 1, total: targets.length });
+      setRegeneratingImageIndex(index);
+      try {
+        const result = await generateSlotImage(index, slot);
+        if (result.ok) ok++;
+        else fail++;
+      } catch {
+        fail++;
+      }
+    }
+
+    setRegeneratingImageIndex(null);
+    setGeneratingImagesProgress(null);
+
+    if (ok > 0) {
+      toast.success(
+        `Generated ${ok} image${ok === 1 ? "" : "s"} for scheduled posts`
+      );
+    }
+    if (fail > 0) {
+      toast.error(
+        `${fail} image${fail === 1 ? "" : "s"} could not be generated`
+      );
     }
   };
 
@@ -601,7 +738,7 @@ export default function CampaignPlannerPage() {
         } else if (mediaMode === "image" && status?.openai_configured) {
           const r = await imageMutation.mutateAsync({
             captionContext: slot.content || slot.body,
-            promptStyleId: slot.imagePromptStyleId,
+            promptStyleId: slot.imagePromptStyleId ?? imagePromptStyleId,
             referenceImageUrl: slot.reference_image_url ?? undefined,
           });
           if (r.image_url) {
@@ -690,11 +827,47 @@ export default function CampaignPlannerPage() {
           <CardHeader>
             <CardTitle className="text-base">Schedule window</CardTitle>
             <CardDescription>
-              {postsPerDay} posts/day × {planDays} days ={" "}
-              {postsPerDay * planDays} total slots
+              {isListMode
+                ? listItems.length > 0
+                  ? `${listItems.length} post${listItems.length === 1 ? "" : "s"} (one per list item) · ~${effectivePlanDays} day${effectivePlanDays === 1 ? "" : "s"} at ${postsPerDay}/day`
+                  : "Add list items below — one post per line"
+                : `${postsPerDay} posts/day × ${planDays} days = ${postsPerDay * planDays} total slots`}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <Tabs
+              value={campaignMode}
+              onValueChange={(v) =>
+                setCampaignMode(v === "list" ? "list" : "arc")
+              }
+            >
+              <TabsList>
+                <TabsTrigger value="arc">Content arc</TabsTrigger>
+                <TabsTrigger value="list">One post per list item</TabsTrigger>
+              </TabsList>
+              <TabsContent value="arc" className="mt-4 space-y-4">
+                <p className="text-xs text-muted-foreground">
+                  AI plans a multi-post series that builds toward your campaign
+                  goal.
+                </p>
+              </TabsContent>
+              <TabsContent value="list" className="mt-4 space-y-4">
+                <div className="space-y-2">
+                  <Label>List items (one per line)</Label>
+                  <Textarea
+                    value={listItemsBlock}
+                    onChange={(e) => setListItemsBlock(e.target.value)}
+                    rows={6}
+                    placeholder={`Bitcoin\nEthereum\nSolana\nCardano`}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Each line becomes one post. Use the campaign goal below to
+                    describe what to write about every item (e.g. detailed
+                    market analysis).
+                  </p>
+                </div>
+              </TabsContent>
+            </Tabs>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label>Posts per day</Label>
@@ -708,16 +881,35 @@ export default function CampaignPlannerPage() {
                   }
                 />
               </div>
-              <div className="space-y-2">
-                <Label>Days</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  max={31}
-                  value={planDays}
-                  onChange={(e) => setPlanDays(Number(e.target.value) || 1)}
-                />
-              </div>
+              {!isListMode ? (
+                <div className="space-y-2">
+                  <Label>Days</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={31}
+                    value={planDays}
+                    onChange={(e) => setPlanDays(Number(e.target.value) || 1)}
+                  />
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Label>Days (auto)</Label>
+                  <Input
+                    type="text"
+                    readOnly
+                    value={
+                      listItems.length > 0
+                        ? String(effectivePlanDays)
+                        : "—"
+                    }
+                    className="bg-muted"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Calculated from list length ÷ posts per day.
+                  </p>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label>Start date</Label>
                 <Input
@@ -754,12 +946,22 @@ export default function CampaignPlannerPage() {
                 value={campaignGoal}
                 onChange={(e) => setCampaignGoal(e.target.value)}
                 rows={3}
-                placeholder="e.g. Launch our new course and get 50 sign-ups in 2 weeks"
+                placeholder={
+                  isListMode
+                    ? "e.g. Detailed market analysis with price action, catalysts, and outlook"
+                    : "e.g. Launch our new course and get 50 sign-ups in 2 weeks"
+                }
               />
               <p className="text-xs text-muted-foreground">
-                AI generates each post one at a time, building toward this goal.
+                {isListMode
+                  ? "This goal applies to every list item — each post focuses on one item only."
+                  : "AI generates each post one at a time, building toward this goal."}
               </p>
             </div>
+            <PostPromptStyleSelect
+              campaignGoal={campaignGoal}
+              isListMode={isListMode}
+            />
             <div className="space-y-2">
               <Label>Supporting theme (optional)</Label>
               <Input
@@ -793,7 +995,9 @@ export default function CampaignPlannerPage() {
                 ? generatingProgress.phase === "outline"
                   ? "Planning content arc…"
                   : `Generating ${generatingProgress.current} / ${generatingProgress.total}…`
-                : "Generate campaign incrementally"}
+                : isListMode
+                  ? `Generate ${plannedSlotCount || ""} post${plannedSlotCount === 1 ? "" : "s"} from list`
+                  : "Generate campaign incrementally"}
             </Button>
             <p className="text-xs text-muted-foreground">
               Niche & language:{" "}
@@ -839,6 +1043,9 @@ export default function CampaignPlannerPage() {
               <CardDescription>
                 Each slot must be after now. Edit date and time, then schedule
                 when ready. Goal: {campaignGoal.trim() || "—"}
+                {isListMode && listItems.length > 0
+                  ? ` · ${listItems.length} list item${listItems.length === 1 ? "" : "s"}`
+                  : ""}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -851,7 +1058,55 @@ export default function CampaignPlannerPage() {
                       !status?.openai_configured && !status?.fal_configured
                     }
                   />
-                  {mediaMode === "image" && <ImagePromptStyleSelect />}
+                  {mediaMode === "image" && (
+                    <>
+                      <ImagePromptStyleSelect
+                        onValueChange={(id) => {
+                          setImagePromptStyleId(id);
+                          setSlots((prev) =>
+                            prev.map((s) => ({ ...s, imagePromptStyleId: id }))
+                          );
+                        }}
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => generateAllSlotImages(false)}
+                          disabled={
+                            generatingImagesProgress !== null ||
+                            regeneratingImageIndex !== null ||
+                            !status?.openai_configured
+                          }
+                        >
+                          {generatingImagesProgress ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <ImageIcon className="mr-2 h-4 w-4" />
+                          )}
+                          {generatingImagesProgress
+                            ? `Generating ${generatingImagesProgress.current} / ${generatingImagesProgress.total}…`
+                            : "Generate images for all slots"}
+                        </Button>
+                        {slots.some((s) => s.image_url) && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => generateAllSlotImages(true)}
+                            disabled={
+                              generatingImagesProgress !== null ||
+                              regeneratingImageIndex !== null ||
+                              !status?.openai_configured
+                            }
+                          >
+                            Regenerate all images
+                          </Button>
+                        )}
+                      </div>
+                    </>
+                  )}
                   {mediaMode === "video" && (
                     <>
                       <VideoProviderSelect />
@@ -859,10 +1114,17 @@ export default function CampaignPlannerPage() {
                     </>
                   )}
                 </div>
-                {mediaMode !== "none" && (
+                {mediaMode === "image" && (
                   <p className="text-xs text-muted-foreground w-full">
-                    On schedule, {mediaMode === "video" ? "videos" : "images"}{" "}
-                    are generated for slots that do not already have media.
+                    Pick an image style above, then generate images for every
+                    slot at once. Slots without images still get one on schedule
+                    if you skip bulk generation.
+                  </p>
+                )}
+                {mediaMode === "video" && (
+                  <p className="text-xs text-muted-foreground w-full">
+                    On schedule, videos are generated for slots that do not
+                    already have media.
                   </p>
                 )}
               </div>

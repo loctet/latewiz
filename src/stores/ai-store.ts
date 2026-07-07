@@ -12,6 +12,9 @@ import {
   type CustomImagePromptStyle,
 } from "@/lib/image-prompt-catalog";
 import { DEFAULT_VIDEO_PROMPT_STYLE_ID } from "@/lib/video-prompt-catalog";
+import {
+  AUTO_POST_PROMPT_STYLE_ID,
+} from "@/lib/post-prompt-catalog";
 import type { AiMediaKind } from "@/lib/campaign-media";
 import {
   DEFAULT_VIDEO_PROVIDER,
@@ -25,6 +28,7 @@ interface AiState {
   falApiKey: string | null;
   niche: NicheProfile;
   imagePromptStyleId: string;
+  postPromptStyleId: string;
   videoPromptStyleId: string;
   videoProvider: VideoProvider;
   aiMediaKind: AiMediaKind;
@@ -40,6 +44,7 @@ interface AiState {
   setVideoProvider: (provider: VideoProvider) => void;
   setNiche: (niche: Partial<NicheProfile>) => void;
   setImagePromptStyleId: (id: string) => void;
+  setPostPromptStyleId: (id: string) => void;
   setVideoPromptStyleId: (id: string) => void;
   setAiMediaKind: (kind: AiMediaKind) => void;
   setImagePromptTemplate: (styleId: string, template: string) => void;
@@ -69,6 +74,7 @@ export const useAiStore = create<AiState>()(
       falApiKey: null,
       niche: defaultNicheProfile(),
       imagePromptStyleId: DEFAULT_IMAGE_PROMPT_STYLE_ID,
+      postPromptStyleId: AUTO_POST_PROMPT_STYLE_ID,
       videoPromptStyleId: DEFAULT_VIDEO_PROMPT_STYLE_ID,
       videoProvider: DEFAULT_VIDEO_PROVIDER,
       aiMediaKind: "image",
@@ -105,6 +111,8 @@ export const useAiStore = create<AiState>()(
         set({ niche: { ...get().niche, ...partial } }),
 
       setImagePromptStyleId: (id) => set({ imagePromptStyleId: id }),
+
+      setPostPromptStyleId: (id) => set({ postPromptStyleId: id }),
 
       setVideoPromptStyleId: (id) => set({ videoPromptStyleId: id }),
 
@@ -208,6 +216,8 @@ export const useAiStore = create<AiState>()(
           niche: { ...defaultNicheProfile(), ...p?.niche },
           imagePromptStyleId:
             p?.imagePromptStyleId ?? DEFAULT_IMAGE_PROMPT_STYLE_ID,
+          postPromptStyleId:
+            p?.postPromptStyleId ?? AUTO_POST_PROMPT_STYLE_ID,
           videoPromptStyleId:
             p?.videoPromptStyleId ?? DEFAULT_VIDEO_PROMPT_STYLE_ID,
           videoProvider:
@@ -225,6 +235,7 @@ export const useAiStore = create<AiState>()(
         falApiKey: state.falApiKey,
         niche: state.niche,
         imagePromptStyleId: state.imagePromptStyleId,
+        postPromptStyleId: state.postPromptStyleId,
         videoPromptStyleId: state.videoPromptStyleId,
         videoProvider: state.videoProvider,
         aiMediaKind: state.aiMediaKind,

@@ -84,6 +84,17 @@ export async function POST(request: NextRequest) {
       ? coveredRaw.map((s) => String(s))
       : [];
 
+    const postPromptStyleId =
+      typeof body.post_prompt_style_id === "string"
+        ? body.post_prompt_style_id
+        : typeof body.postPromptStyleId === "string"
+          ? body.postPromptStyleId
+          : undefined;
+
+    const isListMode =
+      body.is_list_mode === true ||
+      body.isListMode === true;
+
     const result = await generateCampaignSlot(apiKey, niche, {
       campaignGoal,
       slotIndex,
@@ -106,6 +117,8 @@ export async function POST(request: NextRequest) {
             }
           : undefined,
       coveredSubtopics,
+      postPromptStyleId,
+      isListMode,
     });
 
     const content = [result.post.body, result.post.hashtags]

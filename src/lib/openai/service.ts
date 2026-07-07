@@ -33,6 +33,11 @@ import {
   appendReferenceImagesToFormData,
   loadReferenceImages,
 } from "./reference-image";
+import {
+  buildPostPromptStructureBlock,
+  buildPostPromptTaskInstructions,
+  resolvePostPromptStyle,
+} from "@/lib/post-prompt-catalog";
 
 export type { PreviousCampaignPost } from "./types";
 export type { CampaignSlotBrief, CampaignOutlineBeat } from "./campaign-arc";
@@ -349,6 +354,8 @@ export async function generateCampaignSlot(
     trendSnippets?: string[];
     slotBrief?: CampaignSlotBrief;
     coveredSubtopics?: string[];
+    postPromptStyleId?: string;
+    isListMode?: boolean;
   }
 ): Promise<{
   post: CampaignPostDraft;
@@ -385,6 +392,25 @@ export async function generateCampaignSlot(
     params.slotBrief ??
     assignFallbackSlotBrief(params.slotIndex, params.totalPosts, goal, constraints);
 
+  const isListItem =
+    params.isListMode ?? brief.beat === "list item focus";
+  const postStyle = resolvePostPromptStyle({
+    styleId: params.postPromptStyleId,
+    campaignGoal: goal,
+    isListMode: isListItem,
+    listSubject: brief.subtopic,
+  });
+  const usePostTemplate =
+    constraints.format !== "micro" && postStyle.minBodyChars > 0;
+  const structureBlock = usePostTemplate
+    ? buildPostPromptStructureBlock(postStyle, {
+        subject: brief.subtopic,
+        goal,
+        slotNum,
+        totalPosts: params.totalPosts,
+      })
+    : "";
+
   const priorBlock = formatPriorPostsBlock(params.previousPosts);
   const briefBlock = formatSlotBriefBlock(brief);
   const goalBlock = buildGoalPriorityInstructions(goal, constraints);
@@ -405,6 +431,7 @@ export async function generateCampaignSlot(
       "",
       briefBlock,
       formatBlock ? `\n${formatBlock}` : "",
+      structureBlock ? `\n${structureBlock}` : "",
       "",
       "Posts already published in this campaign:",
       priorBlock,
@@ -431,15 +458,32 @@ export async function generateCampaignSlot(
           "Title can be short (e.g. day number) or empty string.",
           SOCIAL_POST_FORMAT_INSTRUCTIONS,
         ].join(" ")
-      : [
-          "You are an expert social media strategist.",
-          "Return JSON only: {\"title\":\"...\",\"body\":\"...\",\"hashtags\":\"#a #b\"}.",
-          "Write ONE post for a multi-part campaign — cover ONLY the assigned subtopic/angle.",
-          "Each post must add distinct knowledge; never repeat hooks, stats, or phrasing from earlier posts.",
-          "Do not start with the same opening pattern as prior posts in the series.",
-          "Use current web research for timely angles when relevant.",
-          SOCIAL_POST_FORMAT_INSTRUCTIONS,
-        ].join(" ");
+      : usePostTemplate
+        ? buildPostPromptTaskInstructions(postStyle)
+        : [
+            "You are an expert social media strategist.",
+            "Return JSON only: {\"title\":\"...\",\"body\":\"...\",\"hashtags\":\"#a #b\"}.",
+            "Write ONE post for a multi-part campaign — cover ONLY the assigned subtopic/angle.",
+            "Each post must add distinct knowledge; never repeat hooks, stats, or phrasing from earlier posts.",
+            "Do not start with the same opening pattern as prior posts in the series.",
+            "Use current web research for timely angles when relevant.",
+            SOCIAL_POST_FORMAT_INSTRUCTIONS,
+          ].join(" ");
+
+  const maxOutputTokens =
+    constraints.format === "micro"
+      ? 512
+      : usePostTemplate
+        ? postStyle.maxOutputTokens
+        : 2048;
+
+  const researchSearchHint =
+    brief.searchHint?.trim() ||
+    (postStyle.id === "crypto-market-analysis"
+      ? `${brief.subtopic} cryptocurrency price market cap news analysis`
+      : usePostTemplate
+        ? `${brief.subtopic} ${goal}`
+        : undefined);
 
   const researchParams = constraints.skipWebSearch
     ? undefined
@@ -450,19 +494,25 @@ export async function generateCampaignSlot(
         slotIndex: params.slotIndex,
         totalPosts: params.totalPosts,
         trendSnippets: params.trendSnippets,
-        searchHint: brief.searchHint || undefined,
+        searchHint: researchSearchHint,
         coveredSubtopics: params.coveredSubtopics,
       };
+
+  const maxAttempts = usePostTemplate ? 3 : 2;
 
   try {
     let detail: string | null = null;
     let source = "openai";
+    let lastBodyTooShort = false;
 
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const retryNote =
         attempt > 0
-          ? "\n\nRETRY: Your previous attempt duplicated an earlier post or ignored the goal format. Write something completely different that matches the goal."
+          ? lastBodyTooShort && postStyle.minBodyChars > 0
+            ? `\n\nRETRY: Your previous body was too short (under ${postStyle.minBodyChars} characters). Write the FULL structured analysis with all required sections and substantive paragraphs.`
+            : "\n\nRETRY: Your previous attempt duplicated an earlier post or ignored the goal format. Write something completely different that matches the goal."
           : undefined;
+      lastBodyTooShort = false;
 
       const result = await generateStructuredContent<{
         title?: string;
@@ -474,7 +524,7 @@ export async function generateCampaignSlot(
         userInput: buildUserInput(retryNote),
         jsonSchema: { name: "campaign_slot_post", schema: CAMPAIGN_POST_JSON_SCHEMA },
         researchParams,
-        maxOutputTokens: constraints.format === "micro" ? 512 : 2048,
+        maxOutputTokens,
       });
 
       detail = result.detail;
@@ -489,6 +539,15 @@ export async function generateCampaignSlot(
       });
 
       const body = enforceBodyLength(clean.body, constraints.maxBodyChars);
+
+      if (
+        postStyle.minBodyChars > 0 &&
+        body.length < postStyle.minBodyChars &&
+        attempt < maxAttempts - 1
+      ) {
+        lastBodyTooShort = true;
+        continue;
+      }
 
       if (attempt === 0 && isDuplicateBody(body, params.previousPosts)) {
         continue;

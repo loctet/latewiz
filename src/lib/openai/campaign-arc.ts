@@ -164,3 +164,39 @@ export function formatSlotBriefBlock(brief: CampaignSlotBrief): string {
 export function slotBriefToAiInstruction(brief: CampaignSlotBrief): string {
   return `Subtopic: ${brief.subtopic}. Angle: ${brief.angle}. Key point: ${brief.keyPoint}`;
 }
+
+/** Non-empty lines from a user-provided list (one item per post). */
+export function parseCampaignListItems(text: string): string[] {
+  return text
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/** Slot brief when each list line maps to exactly one post. */
+export function assignListItemSlotBrief(
+  listItem: string,
+  slotIndex: number,
+  totalPosts: number,
+  campaignGoal: string
+): CampaignSlotBrief {
+  const item = listItem.trim();
+  const goal = campaignGoal.trim() || "In-depth coverage";
+  const isMarketAnalysis =
+    /market\s*anal|analyse?\s+(?:de\s+)?march|detail+ed?\s+market/i.test(goal);
+  return {
+    slotIndex,
+    phase: phaseForSlot(slotIndex, totalPosts),
+    beat: "list item focus",
+    subtopic: item,
+    angle: isMarketAnalysis
+      ? `Expert market analysis for ${item}`
+      : `${goal} — dedicated to ${item}`,
+    keyPoint: isMarketAnalysis
+      ? `Institutional-quality market analysis for ${item}: price context, catalysts, technical read, risks, and outlook. Cover ONLY ${item}.`
+      : `Write ${goal.toLowerCase()} for ${item} only. Do not cover other assets or topics from the list.`,
+    searchHint: isMarketAnalysis
+      ? `${item} cryptocurrency price market cap volume news analysis`
+      : `${item} ${goal} latest developments`,
+  };
+}

@@ -8,12 +8,17 @@ const STORAGE_KEY = "latewiz-campaign-draft";
 
 export type CampaignSlotDraft = CampaignSlot;
 
+export type CampaignPlanningMode = "arc" | "list";
+
 export type CampaignDraft = {
   postsPerDay: number;
   planDays: number;
   startDate: string;
   windowStart: string;
   windowEnd: string;
+  /** "arc" = AI-planned series; "list" = one post per line in listItemsBlock */
+  campaignMode?: CampaignPlanningMode;
+  listItemsBlock?: string;
   campaignGoal: string;
   campaignHint: string;
   trendBlock: string;
@@ -43,6 +48,8 @@ function serializeSlots(slots: CampaignSlotDraft[]): CampaignSlotDraft[] {
 function normalizeDraft(parsed: CampaignDraft): CampaignDraft {
   return {
     ...parsed,
+    campaignMode: parsed.campaignMode === "list" ? "list" : "arc",
+    listItemsBlock: parsed.listItemsBlock ?? "",
     mediaMode: migrateCampaignMediaMode(parsed),
   };
 }

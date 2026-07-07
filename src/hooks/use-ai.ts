@@ -283,6 +283,8 @@ export function useGenerateCampaignSlot() {
         searchHint: string;
       };
       coveredSubtopics?: string[];
+      postPromptStyleId?: string;
+      isListMode?: boolean;
     }) => {
       const res = await fetch("/api/ai/campaign-slot", {
         method: "POST",
@@ -297,6 +299,8 @@ export function useGenerateCampaignSlot() {
           trend_snippets: params.trendSnippets,
           slot_brief: params.slotBrief,
           covered_subtopics: params.coveredSubtopics,
+          post_prompt_style_id: params.postPromptStyleId,
+          is_list_mode: params.isListMode,
           niche,
         }),
       });
