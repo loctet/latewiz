@@ -118,9 +118,9 @@ export default function CampaignPlannerPage() {
   const [regeneratingCopyIndex, setRegeneratingCopyIndex] = useState<
     number | null
   >(null);
-  const [regeneratingImageIndex, setRegeneratingImageIndex] = useState<
-    number | null
-  >(null);
+  const [regeneratingImageIndices, setRegeneratingImageIndices] = useState<
+    number[]
+  >([]);
   const [generatingImagesProgress, setGeneratingImagesProgress] = useState<{
     current: number;
     total: number;
@@ -591,7 +591,7 @@ export default function CampaignPlannerPage() {
       toast.error("Add OpenAI key in Settings first.");
       return;
     }
-    setRegeneratingImageIndex(index);
+    setRegeneratingImageIndices([index]);
     try {
       const result = await generateSlotImage(index, slot);
       if (result.ok) {
@@ -602,7 +602,7 @@ export default function CampaignPlannerPage() {
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Image generation failed");
     } finally {
-      setRegeneratingImageIndex(null);
+      setRegeneratingImageIndices([]);
     }
   };
 
@@ -621,24 +621,32 @@ export default function CampaignPlannerPage() {
       return;
     }
 
+    const targetIndices = targets.map(({ index }) => index);
     setGeneratingImagesProgress({ current: 0, total: targets.length });
+    setRegeneratingImageIndices(targetIndices);
+
+    const results = await Promise.allSettled(
+      targets.map(async ({ slot, index }) => {
+        try {
+          return await generateSlotImage(index, slot);
+        } finally {
+          setGeneratingImagesProgress((prev) =>
+            prev
+              ? { ...prev, current: Math.min(prev.current + 1, prev.total) }
+              : null
+          );
+        }
+      })
+    );
+
     let ok = 0;
     let fail = 0;
-
-    for (let i = 0; i < targets.length; i++) {
-      const { slot, index } = targets[i];
-      setGeneratingImagesProgress({ current: i + 1, total: targets.length });
-      setRegeneratingImageIndex(index);
-      try {
-        const result = await generateSlotImage(index, slot);
-        if (result.ok) ok++;
-        else fail++;
-      } catch {
-        fail++;
-      }
+    for (const result of results) {
+      if (result.status === "fulfilled" && result.value.ok) ok++;
+      else fail++;
     }
 
-    setRegeneratingImageIndex(null);
+    setRegeneratingImageIndices([]);
     setGeneratingImagesProgress(null);
 
     if (ok > 0) {
@@ -1136,7 +1144,7 @@ export default function CampaignPlannerPage() {
                           onClick={() => generateAllSlotImages(false)}
                           disabled={
                             generatingImagesProgress !== null ||
-                            regeneratingImageIndex !== null ||
+                            regeneratingImageIndices.length > 0 ||
                             !status?.openai_configured
                           }
                         >
@@ -1157,7 +1165,7 @@ export default function CampaignPlannerPage() {
                             onClick={() => generateAllSlotImages(true)}
                             disabled={
                               generatingImagesProgress !== null ||
-                              regeneratingImageIndex !== null ||
+                              regeneratingImageIndices.length > 0 ||
                               !status?.openai_configured
                             }
                           >
@@ -1196,7 +1204,7 @@ export default function CampaignPlannerPage() {
                     onRegenerateImage={() => regenerateSlotImage(i)}
                     onRegenerateVideo={() => regenerateSlotVideo(i)}
                     copyLoading={regeneratingCopyIndex === i}
-                    imageLoading={regeneratingImageIndex === i}
+                    imageLoading={regeneratingImageIndices.includes(i)}
                     videoLoading={regeneratingVideoIndex === i}
                   />
                 ))}
