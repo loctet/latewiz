@@ -12,6 +12,8 @@ import {
   isVideoGenerationConfigured,
   useUploadMedia,
   urlToFile,
+  useImageWatermarkSettings,
+  watermarkImageIfEnabled,
   type UploadedMedia,
 } from "@/hooks";
 import { useAiStore } from "@/stores";
@@ -45,6 +47,7 @@ export function AiAssistPanel({
   const aiMediaKind = useAiStore((s) => s.aiMediaKind);
   const setAiMediaKind = useAiStore((s) => s.setAiMediaKind);
   const videoProvider = useAiStore((s) => s.videoProvider);
+  const imageWatermarkSettings = useImageWatermarkSettings();
   const { data: status } = useOpenAiStatus();
   const videoConfigured = isVideoGenerationConfigured(videoProvider, status);
   const draftMutation = useGenerateDraft();
@@ -111,7 +114,11 @@ export function AiAssistPanel({
           toast.error(r.detail ?? "No image returned");
           return;
         }
-        const file = await urlToFile(r.image_url);
+        const stamped = await watermarkImageIfEnabled(
+          r.image_url,
+          imageWatermarkSettings
+        );
+        const file = await urlToFile(stamped);
         const uploaded = await uploadMutation.mutateAsync(file);
         onMediaChange([...media.filter((m) => m.type !== "image"), uploaded]);
         toast.success("AI image added to post");

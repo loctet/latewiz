@@ -21,6 +21,10 @@ import {
   type VideoProvider,
 } from "@/lib/video-providers";
 import { isPlausibleFalApiKey } from "@/lib/fal/resolve-key";
+import {
+  DEFAULT_IMAGE_WATERMARK_OPACITY,
+  type ImageWatermarkPosition,
+} from "@/lib/image-watermark";
 import { safeLocalStorage } from "@/lib/safe-storage";
 
 interface AiState {
@@ -37,6 +41,10 @@ interface AiState {
   /** User-created image prompt styles (template text in imagePromptTemplates) */
   customImagePromptStyles: CustomImagePromptStyle[];
   videoPromptTemplates: Record<string, string>;
+  imageWatermarkEnabled: boolean;
+  imageWatermarkText: string;
+  imageWatermarkOpacity: number;
+  imageWatermarkPosition: ImageWatermarkPosition;
   generatedMedia: GeneratedMediaItem[];
 
   setOpenaiApiKey: (key: string | null) => void;
@@ -62,6 +70,10 @@ interface AiState {
   setVideoPromptTemplate: (styleId: string, template: string) => void;
   resetVideoPromptTemplate: (styleId: string) => void;
   resetAllVideoPromptTemplates: () => void;
+  setImageWatermarkEnabled: (enabled: boolean) => void;
+  setImageWatermarkText: (text: string) => void;
+  setImageWatermarkOpacity: (opacity: number) => void;
+  setImageWatermarkPosition: (position: ImageWatermarkPosition) => void;
   addGeneratedMedia: (item: Omit<GeneratedMediaItem, "id" | "createdAt">) => void;
   removeGeneratedMedia: (id: string) => void;
   clearGeneratedMedia: () => void;
@@ -81,6 +93,10 @@ export const useAiStore = create<AiState>()(
       imagePromptTemplates: {},
       customImagePromptStyles: [],
       videoPromptTemplates: {},
+      imageWatermarkEnabled: false,
+      imageWatermarkText: "",
+      imageWatermarkOpacity: DEFAULT_IMAGE_WATERMARK_OPACITY,
+      imageWatermarkPosition: "bottom-right",
       generatedMedia: [],
 
       setOpenaiApiKey: (key) => {
@@ -187,6 +203,16 @@ export const useAiStore = create<AiState>()(
 
       resetAllVideoPromptTemplates: () => set({ videoPromptTemplates: {} }),
 
+      setImageWatermarkEnabled: (enabled) =>
+        set({ imageWatermarkEnabled: enabled }),
+      setImageWatermarkText: (text) => set({ imageWatermarkText: text }),
+      setImageWatermarkOpacity: (opacity) =>
+        set({
+          imageWatermarkOpacity: Math.min(0.6, Math.max(0.1, opacity)),
+        }),
+      setImageWatermarkPosition: (position) =>
+        set({ imageWatermarkPosition: position }),
+
       addGeneratedMedia: (item) => {
         const entry: GeneratedMediaItem = {
           ...item,
@@ -227,6 +253,15 @@ export const useAiStore = create<AiState>()(
           imagePromptTemplates: p?.imagePromptTemplates ?? {},
           customImagePromptStyles: p?.customImagePromptStyles ?? [],
           videoPromptTemplates: p?.videoPromptTemplates ?? {},
+          imageWatermarkEnabled: p?.imageWatermarkEnabled ?? false,
+          imageWatermarkText: p?.imageWatermarkText ?? "",
+          imageWatermarkOpacity:
+            p?.imageWatermarkOpacity ?? DEFAULT_IMAGE_WATERMARK_OPACITY,
+          imageWatermarkPosition:
+            p?.imageWatermarkPosition === "bottom-left" ||
+            p?.imageWatermarkPosition === "center-diagonal"
+              ? p.imageWatermarkPosition
+              : "bottom-right",
           generatedMedia: [],
         };
       },
@@ -242,6 +277,10 @@ export const useAiStore = create<AiState>()(
         imagePromptTemplates: state.imagePromptTemplates,
         customImagePromptStyles: state.customImagePromptStyles,
         videoPromptTemplates: state.videoPromptTemplates,
+        imageWatermarkEnabled: state.imageWatermarkEnabled,
+        imageWatermarkText: state.imageWatermarkText,
+        imageWatermarkOpacity: state.imageWatermarkOpacity,
+        imageWatermarkPosition: state.imageWatermarkPosition,
         // Never persist generatedMedia (base64 images blow localStorage quota)
       }),
       storage: createJSONStorage(() => safeLocalStorage),

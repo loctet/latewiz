@@ -96,6 +96,11 @@ export {
   type NicheProfile,
 } from "./use-ai";
 
+export {
+  useImageWatermarkSettings,
+  watermarkImageIfEnabled,
+} from "./use-image-watermark";
+
 export type { VideoProvider } from "@/lib/video-providers";
 
 export {

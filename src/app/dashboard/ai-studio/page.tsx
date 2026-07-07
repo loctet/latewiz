@@ -9,6 +9,8 @@ import {
   useGenerateVideo,
   useOpenAiStatus,
   isVideoGenerationConfigured,
+  useImageWatermarkSettings,
+  watermarkImageIfEnabled,
 } from "@/hooks";
 import { useAiStore } from "@/stores";
 import type { AiMediaKind } from "@/lib/campaign-media";
@@ -55,6 +57,7 @@ export default function AiStudioPage() {
   const aiMediaKind = useAiStore((s) => s.aiMediaKind);
   const setAiMediaKind = useAiStore((s) => s.setAiMediaKind);
   const videoProvider = useAiStore((s) => s.videoProvider);
+  const imageWatermarkSettings = useImageWatermarkSettings();
 
   const [topic, setTopic] = useState("");
   const [tone, setTone] = useState("professional");
@@ -146,7 +149,11 @@ export default function AiStudioPage() {
           referenceImageUrl,
         });
         if (r.image_url) {
-          setImageUrl(r.image_url);
+          const stamped = await watermarkImageIfEnabled(
+            r.image_url,
+            imageWatermarkSettings
+          );
+          setImageUrl(stamped);
           setVideoUrl("");
           toast.success("Image ready — saved to your media library.");
         } else {

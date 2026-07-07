@@ -16,6 +16,8 @@ import {
   isVideoGenerationConfigured,
   useUploadMedia,
   urlToFile,
+  useImageWatermarkSettings,
+  watermarkImageIfEnabled,
 } from "@/hooks";
 import { buildCampaignSlotTimes } from "@/lib/openai";
 import {
@@ -52,6 +54,7 @@ import { PlatformSelector } from "../compose/_components/platform-selector";
 import {
   CampaignMediaModeSelect,
   ImagePromptStyleSelect,
+  ImageWatermarkControls,
   PostPromptStyleSelect,
   VideoPromptStyleSelect,
   VideoProviderSelect,
@@ -81,6 +84,7 @@ export default function CampaignPlannerPage() {
   const imagePromptStyleId = useAiStore((s) => s.imagePromptStyleId);
   const setImagePromptStyleId = useAiStore((s) => s.setImagePromptStyleId);
   const postPromptStyleId = useAiStore((s) => s.postPromptStyleId);
+  const imageWatermarkSettings = useImageWatermarkSettings();
   const videoConfigured = isVideoGenerationConfigured(videoProvider, status);
   const slotMutation = useGenerateCampaignSlot();
   const outlineMutation = useGenerateCampaignOutline();
@@ -124,6 +128,7 @@ export default function CampaignPlannerPage() {
   const [regeneratingVideoIndex, setRegeneratingVideoIndex] = useState<
     number | null
   >(null);
+  const [applyingWatermark, setApplyingWatermark] = useState(false);
   const [draftRestored, setDraftRestored] = useState(false);
   const [activeSavedId, setActiveSavedId] = useState<string | null>(null);
   const [saveName, setSaveName] = useState("");
@@ -648,6 +653,56 @@ export default function CampaignPlannerPage() {
     }
   };
 
+  const applyWatermarkToExistingImages = async () => {
+    if (!imageWatermarkSettings.enabled || !imageWatermarkSettings.text.trim()) {
+      toast.error("Enable signature and enter text first");
+      return;
+    }
+
+    const targets = slots
+      .map((slot, index) => ({ slot, index }))
+      .filter(({ slot }) => slot.image_url);
+
+    if (targets.length === 0) {
+      toast.message("No images to stamp yet");
+      return;
+    }
+
+    setApplyingWatermark(true);
+    let ok = 0;
+    let fail = 0;
+
+    for (const { slot, index } of targets) {
+      try {
+        const stamped = await watermarkImageIfEnabled(
+          slot.image_url!,
+          imageWatermarkSettings
+        );
+        if (stamped !== slot.image_url) {
+          updateSlot(index, { image_url: stamped });
+          ok++;
+        } else {
+          fail++;
+        }
+      } catch {
+        fail++;
+      }
+    }
+
+    setApplyingWatermark(false);
+
+    if (ok > 0) {
+      toast.success(
+        `Signature applied to ${ok} image${ok === 1 ? "" : "s"}`
+      );
+    }
+    if (fail > 0 && ok === 0) {
+      toast.error("Could not apply signature to images");
+    }
+  };
+
+  const existingImageCount = slots.filter((s) => s.image_url).length;
+
   const regenerateSlotVideo = async (index: number) => {
     const slot = slots[index];
     if (!videoConfigured) {
@@ -1058,6 +1113,11 @@ export default function CampaignPlannerPage() {
                       !status?.openai_configured && !status?.fal_configured
                     }
                   />
+                  <ImageWatermarkControls
+                    existingImageCount={existingImageCount}
+                    applyingToExisting={applyingWatermark}
+                    onApplyToExisting={applyWatermarkToExistingImages}
+                  />
                   {mediaMode === "image" && (
                     <>
                       <ImagePromptStyleSelect
@@ -1114,19 +1174,13 @@ export default function CampaignPlannerPage() {
                     </>
                   )}
                 </div>
-                {mediaMode === "image" && (
-                  <p className="text-xs text-muted-foreground w-full">
-                    Pick an image style above, then generate images for every
-                    slot at once. Slots without images still get one on schedule
-                    if you skip bulk generation.
-                  </p>
-                )}
-                {mediaMode === "video" && (
-                  <p className="text-xs text-muted-foreground w-full">
-                    On schedule, videos are generated for slots that do not
-                    already have media.
-                  </p>
-                )}
+                <p className="text-xs text-muted-foreground w-full">
+                  {mediaMode === "image"
+                    ? "Generate images first, then use Apply signature to stamp existing images before scheduling."
+                    : mediaMode === "video"
+                      ? "On schedule, videos are generated for slots that do not already have media."
+                      : "Choose Image as media type to generate images with your signature."}
+                </p>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

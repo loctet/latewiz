@@ -33,11 +33,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Key, Moon, Sun, Globe, LogOut, ExternalLink, Target, ImageIcon, Film } from "lucide-react";
+import { Key, Moon, Sun, Globe, LogOut, ExternalLink, Target, ImageIcon, Film, Stamp } from "lucide-react";
 import Link from "next/link";
 import {
   ImagePromptTemplatesEditor,
   VideoPromptTemplatesEditor,
+  ImageWatermarkSettings,
 } from "@/components/settings";
 
 export default function SettingsPage() {
@@ -383,6 +384,24 @@ export default function SettingsPage() {
               Used in AI Studio, Compose, and Campaign when generating video.
             </p>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Image signature / filigrane */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Stamp className="h-4 w-4" />
+            Image signature
+          </CardTitle>
+          <CardDescription>
+            Overlay your signature text on generated images with adjustable
+            transparency. Applied automatically in Campaign and Compose — no
+            AI involved.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ImageWatermarkSettings />
         </CardContent>
       </Card>
 
