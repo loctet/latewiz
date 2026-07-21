@@ -43,3 +43,5 @@ next-env.d.ts
 # AI generated uploads (kept locally, not in git)
 /public/uploads/generated/*
 !/public/uploads/generated/.gitkeep
+
+/hostinger-cron
