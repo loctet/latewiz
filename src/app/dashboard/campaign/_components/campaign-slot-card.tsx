@@ -14,6 +14,8 @@ import type { CampaignMediaMode } from "@/lib/campaign-media";
 import {
   isoToLocalDateInput,
   isoToLocalTimeInput,
+  isoToDateInputInTimezone,
+  isoToTimeInputInTimezone,
   localDateTimeToIso,
 } from "@/lib/campaign-slot-datetime";
 import {
@@ -32,11 +34,14 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
 
 interface CampaignSlotCardProps {
   slot: CampaignSlotDraft;
   index: number;
   mediaMode: CampaignMediaMode;
+  timezone?: string;
+  deferredMode?: boolean;
   onUpdate: (patch: Partial<CampaignSlotDraft>) => void;
   onRemove: () => void;
   onRegenerateCopy: () => void;
@@ -51,6 +56,8 @@ export function CampaignSlotCard({
   slot,
   index,
   mediaMode,
+  timezone,
+  deferredMode = false,
   onUpdate,
   onRemove,
   onRegenerateCopy,
@@ -63,14 +70,18 @@ export function CampaignSlotCard({
   const syncContent = (body: string, hashtags: string) =>
     [body, hashtags].filter(Boolean).join("\n\n");
 
-  const scheduleDate = isoToLocalDateInput(slot.scheduled_at);
-  const scheduleTime = isoToLocalTimeInput(slot.scheduled_at);
+  const scheduleDate = timezone
+    ? isoToDateInputInTimezone(slot.scheduled_at, timezone)
+    : isoToLocalDateInput(slot.scheduled_at);
+  const scheduleTime = timezone
+    ? isoToTimeInputInTimezone(slot.scheduled_at, timezone)
+    : isoToLocalTimeInput(slot.scheduled_at);
   const minDate = minScheduleDateInput();
   const minTime = minScheduleTimeInput(scheduleDate);
   const scheduleInPast = !isScheduleInFuture(slot.scheduled_at);
 
   const updateSchedule = (date: string, time: string) => {
-    const iso = localDateTimeToIso(date, time);
+    const iso = localDateTimeToIso(date, time, timezone);
     if (!isScheduleInFuture(iso)) {
       toast.error("Pick a date and time after now");
       return;
@@ -84,9 +95,24 @@ export function CampaignSlotCard({
   return (
     <div className="rounded-lg border bg-card p-4 space-y-3">
       <div className="flex justify-between items-start gap-2">
-        <span className="text-xs font-medium text-muted-foreground">
-          Slot {index + 1}
-        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-muted-foreground">
+            Slot {index + 1}
+          </span>
+          {slot.generationStatus ? (
+            <Badge
+              variant={
+                slot.generationStatus === "failed"
+                  ? "destructive"
+                  : slot.generationStatus === "generated"
+                    ? "secondary"
+                    : "outline"
+              }
+            >
+              {slot.generationStatus.replaceAll("_", " ")}
+            </Badge>
+          ) : null}
+        </div>
         <Button
           variant="ghost"
           size="icon"
@@ -127,6 +153,14 @@ export function CampaignSlotCard({
           Must be scheduled after the current date and time
         </p>
       )}
+      {deferredMode && (
+        <p className="text-xs text-muted-foreground">
+          Final copy and media will be generated near publish time using this slot&apos;s instructions and settings.
+        </p>
+      )}
+      {slot.lastError ? (
+        <p className="text-xs text-destructive">{slot.lastError}</p>
+      ) : null}
 
       <div className="space-y-2">
         <Label className="text-xs">Title</Label>
@@ -188,7 +222,7 @@ export function CampaignSlotCard({
           variant="secondary"
           size="sm"
           onClick={onRegenerateCopy}
-          disabled={copyLoading}
+          disabled={copyLoading || deferredMode}
         >
           {copyLoading ? (
             <Loader2 className="mr-2 h-3 w-3 animate-spin" />
@@ -216,7 +250,7 @@ export function CampaignSlotCard({
               variant="outline"
               size="sm"
               onClick={onRegenerateImage}
-              disabled={imageLoading}
+              disabled={imageLoading || deferredMode}
             >
               {imageLoading ? (
                 <Loader2 className="mr-2 h-3 w-3 animate-spin" />
@@ -226,7 +260,6 @@ export function CampaignSlotCard({
               {slot.image_url ? "Regenerate image" : "Generate image"}
             </Button>
             {slot.image_url && (
-              /* eslint-disable-next-line @next/next/no-img-element */
               <img
                 src={slot.image_url}
                 alt=""
@@ -250,7 +283,7 @@ export function CampaignSlotCard({
               variant="outline"
               size="sm"
               onClick={onRegenerateVideo}
-              disabled={videoLoading}
+              disabled={videoLoading || deferredMode}
             >
               {videoLoading ? (
                 <Loader2 className="mr-2 h-3 w-3 animate-spin" />

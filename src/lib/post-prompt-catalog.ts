@@ -28,6 +28,56 @@ Keep it readable in one scroll — no filler.`,
     matchPatterns: [],
   },
   {
+    id: "news-roundup",
+    label: "Recent news roundup",
+    description:
+      "Digest of the latest headlines from live web research — 5–10 distinct stories with context.",
+    expertRole:
+      "senior crypto and blockchain news editor who curates today's most important headlines for a smart general audience",
+    structureTemplate: `Write a timely news roundup post about: {{subject}}
+
+Campaign intent: {{goal}}
+
+Required structure (plain-text section headings on their own line):
+
+HOOK
+One compelling opening line on why today's news matters for this audience.
+
+TOP STORIES
+Cover 5–8 DISTINCT recent headlines pulled from the web research block. For each story:
+- Start with a clear headline (paraphrase the source, do not copy verbatim)
+- 1–2 sentences summarizing what happened
+- One line on why it matters for crypto/blockchain watchers
+
+Use only stories supported by web research. Skip any headline you cannot verify from the research block.
+
+MARKET MOOD (optional, if research supports it)
+Brief read on overall sentiment — regulation, majors, DeFi, ETFs, etc.
+
+BOTTOM LINE
+2–3 sentences synthesizing the day's narrative.
+
+Quality bar:
+- Minimum {{minBodyChars}} characters in the body (before hashtags).
+- Every story must trace to web research — never invent events, prices, or dates.
+- Prefer the most recent sources in the research block.
+- Write in the same language as the brief when the brief is not in English.`,
+    minBodyChars: 900,
+    maxOutputTokens: 4096,
+    matchPatterns: [
+      /actualit/i,
+      /\bnews\b/i,
+      /headlines?/i,
+      /roundup/i,
+      /r[eé]cent/i,
+      /breaking/i,
+      /derni[eè]res?\s+nouvelles/i,
+      /fil d.?actualit/i,
+      /aujourd.?hui/i,
+      /today'?s?\s+(?:news|headlines)/i,
+    ],
+  },
+  {
     id: "crypto-market-analysis",
     label: "Crypto market analysis (expert)",
     description:

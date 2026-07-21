@@ -3,6 +3,7 @@ import {
   type CampaignMediaMode,
   migrateCampaignMediaMode,
 } from "@/lib/campaign-media";
+import type { CampaignGenerationMode } from "@/lib/scheduled-campaigns";
 
 const STORAGE_KEY = "latewiz-campaign-draft";
 
@@ -11,6 +12,7 @@ export type CampaignSlotDraft = CampaignSlot;
 export type CampaignPlanningMode = "arc" | "list";
 
 export type CampaignDraft = {
+  generationMode?: CampaignGenerationMode;
   postsPerDay: number;
   planDays: number;
   startDate: string;
@@ -48,6 +50,7 @@ function serializeSlots(slots: CampaignSlotDraft[]): CampaignSlotDraft[] {
 function normalizeDraft(parsed: CampaignDraft): CampaignDraft {
   return {
     ...parsed,
+    generationMode: parsed.generationMode === "deferred" ? "deferred" : "immediate",
     campaignMode: parsed.campaignMode === "list" ? "list" : "arc",
     listItemsBlock: parsed.listItemsBlock ?? "",
     mediaMode: migrateCampaignMediaMode(parsed),

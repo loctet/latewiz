@@ -26,6 +26,7 @@ import { AiImageReferencePicker } from "./ai-image-reference-picker";
 import { ImagePromptStyleSelect } from "./image-prompt-style-select";
 import { VideoPromptStyleSelect } from "./video-prompt-style-select";
 import { VideoProviderSelect } from "./video-provider-select";
+import { PostPromptStyleSelect } from "./post-prompt-style-select";
 
 interface AiAssistPanelProps {
   content: string;
@@ -50,6 +51,7 @@ export function AiAssistPanel({
   const imageWatermarkSettings = useImageWatermarkSettings();
   const { data: status } = useOpenAiStatus();
   const videoConfigured = isVideoGenerationConfigured(videoProvider, status);
+  const postPromptStyleId = useAiStore((s) => s.postPromptStyleId);
   const draftMutation = useGenerateDraft();
   const imageMutation = useGenerateImage();
   const videoMutation = useGenerateVideo();
@@ -59,7 +61,10 @@ export function AiAssistPanel({
 
   const applyDraft = async () => {
     try {
-      const r = await draftMutation.mutateAsync(hint);
+      const r = await draftMutation.mutateAsync({
+        hint: (hint ?? content.trim()) || undefined,
+        postPromptStyleId,
+      });
       const parts = [r.draft.body, r.draft.hashtags].filter(Boolean);
       onContentChange(parts.join("\n\n"));
       if (r.source === "stub") {
@@ -170,6 +175,10 @@ export function AiAssistPanel({
 
       {assistEnabled && (
         <>
+          <PostPromptStyleSelect
+            variant="compose"
+            campaignGoal={hint ?? content.trim()}
+          />
           <AiMediaModeSelect
             value={aiMediaKind}
             onValueChange={(k: AiMediaKind) => setAiMediaKind(k)}

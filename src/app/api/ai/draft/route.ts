@@ -16,8 +16,14 @@ export async function POST(request: NextRequest) {
     const niche = parseNicheFromBody(body);
     const hint =
       typeof body.hint === "string" ? body.hint : undefined;
+    const postPromptStyleId =
+      typeof body.post_prompt_style_id === "string"
+        ? body.post_prompt_style_id
+        : typeof body.postPromptStyleId === "string"
+          ? body.postPromptStyleId
+          : undefined;
 
-    const draft = await generateDraft(apiKey, niche, hint);
+    const draft = await generateDraft(apiKey, niche, hint, postPromptStyleId);
     return NextResponse.json({ draft, source: draft.source, detail: draft.detail });
   } catch (err) {
     console.error("AI draft error:", err);

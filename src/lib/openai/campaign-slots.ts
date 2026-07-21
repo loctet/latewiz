@@ -1,3 +1,5 @@
+import { fromZonedTime } from "@/lib/timezones";
+
 /** Random in [0, 1) — injectable for tests */
 export type Rng = () => number;
 
@@ -29,7 +31,7 @@ export function buildCampaignSlotTimes(
 
     const tStart = parseLocalDateTime(ymd, windowStart, timezone);
     const tEnd = parseLocalDateTime(ymd, windowEnd, timezone);
-    let startMs = tStart.getTime();
+    const startMs = tStart.getTime();
     let endMs = tEnd.getTime();
     if (endMs <= startMs) {
       endMs = startMs + 9 * 60 * 60 * 1000;
@@ -152,22 +154,14 @@ function parseLocalDateTime(
   timezone: string
 ): Date {
   const [h, m] = hi.split(":").map(Number);
-  const base = new Date(
-    `${ymd}T${String(h).padStart(2, "0")}:${String(m ?? 0).padStart(2, "0")}:00`
-  );
   try {
-    const formatter = new Intl.DateTimeFormat("en-US", {
-      timeZone: timezone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    });
-    void formatter;
+    return fromZonedTime(
+      `${ymd}T${String(h).padStart(2, "0")}:${String(m ?? 0).padStart(2, "0")}:00`,
+      timezone
+    );
   } catch {
-    /* use local parse fallback */
+    return new Date(
+      `${ymd}T${String(h).padStart(2, "0")}:${String(m ?? 0).padStart(2, "0")}:00`
+    );
   }
-  return base;
 }

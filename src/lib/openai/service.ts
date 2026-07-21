@@ -38,6 +38,7 @@ import {
   buildPostPromptTaskInstructions,
   resolvePostPromptStyle,
 } from "@/lib/post-prompt-catalog";
+import { isNewsIntent } from "@/lib/web-search/build-query";
 
 export type { PreviousCampaignPost } from "./types";
 export type { CampaignSlotBrief, CampaignOutlineBeat } from "./campaign-arc";
@@ -66,7 +67,8 @@ export function isOpenAiConfigured(apiKey: string | null): boolean {
 export async function generateDraft(
   apiKey: string | null,
   niche: NicheProfile,
-  hint?: string
+  hint?: string,
+  postPromptStyleId?: string
 ): Promise<DraftResult> {
   if (!apiKey) {
     const topic = niche.topic || "your niche";
@@ -82,9 +84,54 @@ export async function generateDraft(
 
   const nicheContext = buildNicheUserContext(niche);
   const hintText = hint?.trim() ?? "";
-  const userInput = hintText
-    ? `Topic / brief (use this as the primary subject; search the web for the latest on it):\n${hintText}\n\n${nicheContext}\n\nWrite one timely post grounded in current web research when available.`
-    : `Generate one timely post aligned with this niche.\n\n${nicheContext}\n\nSearch the web for recent trends and facts relevant to this audience.`;
+  const topic = niche.topic.trim() || "your niche";
+  const subject = hintText || topic;
+  const goal = hintText || `Timely post for ${topic}`;
+
+  const postStyle = resolvePostPromptStyle({
+    styleId: postPromptStyleId,
+    campaignGoal: hintText || topic,
+    isListMode: false,
+    listSubject: hintText || undefined,
+  });
+  const usePostTemplate = postStyle.minBodyChars > 0;
+  const structureBlock = usePostTemplate
+    ? buildPostPromptStructureBlock(postStyle, {
+        subject,
+        goal,
+        slotNum: 1,
+        totalPosts: 1,
+      })
+    : "";
+
+  const userInput = [
+    hintText
+      ? `Topic / brief (primary subject — search the web for the latest on it):\n${hintText}`
+      : `Generate one timely post aligned with this niche.`,
+    structureBlock ? `\n${structureBlock}` : "",
+    `\n${nicheContext}`,
+    usePostTemplate
+      ? "\nWrite ONE post following the structure above. Use web research for timely facts."
+      : "\nWrite one timely post grounded in current web research when available.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const taskInstructions = usePostTemplate
+    ? buildPostPromptTaskInstructions(postStyle)
+    : [
+        "You write concise, timely social media posts.",
+        "Return JSON with keys title, body, hashtags.",
+        "Prioritize recent developments from web research over generic or outdated claims.",
+        SOCIAL_POST_FORMAT_INSTRUCTIONS,
+      ].join(" ");
+
+  const maxOutputTokens = usePostTemplate ? postStyle.maxOutputTokens : undefined;
+
+  const newsIntent = isNewsIntent(hintText, goal);
+  const researchSearchHint = newsIntent
+    ? `${hintText || topic} crypto blockchain news headlines today`.slice(0, 200)
+    : undefined;
 
   try {
     const result = await generateStructuredContent<{
@@ -93,15 +140,15 @@ export async function generateDraft(
       hashtags?: string;
     }>({
       apiKey,
-      taskInstructions: [
-        "You write concise, timely social media posts.",
-        "Return JSON with keys title, body, hashtags.",
-        "Prioritize recent developments from web research over generic or outdated claims.",
-        SOCIAL_POST_FORMAT_INSTRUCTIONS,
-      ].join(" "),
+      taskInstructions,
       userInput,
       jsonSchema: { name: "social_post_draft", schema: DRAFT_JSON_SCHEMA },
-      researchParams: { niche, hint: hintText || hint },
+      researchParams: {
+        niche,
+        hint: hintText || hint,
+        searchHint: researchSearchHint,
+      },
+      maxOutputTokens,
     });
 
     if (!result.data) {

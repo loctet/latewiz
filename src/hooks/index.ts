@@ -101,6 +101,14 @@ export {
   watermarkImageIfEnabled,
 } from "./use-image-watermark";
 
+export {
+  useScheduledCampaigns,
+  useSaveScheduledCampaign,
+  useDeleteScheduledCampaign,
+  useRunScheduledCampaign,
+  scheduledCampaignKeys,
+} from "./use-scheduled-campaigns";
+
 export type { VideoProvider } from "@/lib/video-providers";
 
 export {

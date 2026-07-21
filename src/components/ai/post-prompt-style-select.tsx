@@ -22,6 +22,8 @@ interface PostPromptStyleSelectProps {
   onValueChange?: (id: string) => void;
   campaignGoal?: string;
   isListMode?: boolean;
+  /** "compose" uses topic/hint-based auto-matching label */
+  variant?: "campaign" | "compose";
   className?: string;
 }
 
@@ -30,6 +32,7 @@ export function PostPromptStyleSelect({
   onValueChange,
   campaignGoal = "",
   isListMode = false,
+  variant = "campaign",
   className,
 }: PostPromptStyleSelectProps) {
   const storedId = useAiStore((s) => s.postPromptStyleId);
@@ -66,7 +69,9 @@ export function PostPromptStyleSelect({
             <SelectGroup>
               <SelectLabel>Matching</SelectLabel>
               <SelectItem value={AUTO_POST_PROMPT_STYLE_ID}>
-                Auto (from campaign goal)
+                {variant === "compose"
+                  ? "Auto (from topic or hint)"
+                  : "Auto (from campaign goal)"}
               </SelectItem>
             </SelectGroup>
             <SelectGroup>

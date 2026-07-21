@@ -1,5 +1,6 @@
 import type { NicheProfile } from "@/lib/openai/types";
 import { buildNicheImageLanguageNote } from "@/lib/openai/niche-prompt";
+import { foldAccentsForImagePrompt } from "@/lib/openai/sanitize-post-text";
 
 export const DEFAULT_IMAGE_PROMPT_STYLE_ID = "notebook-educational";
 
@@ -297,5 +298,6 @@ export function buildImagePromptFromStyle(
   const id = styleId || DEFAULT_IMAGE_PROMPT_STYLE_ID;
   const template = getEffectiveTemplate(id, templateOverrides, customStyles);
   const langNote = buildNicheImageLanguageNote(niche);
-  return applyImagePromptTemplate(template, subject, langNote);
+  const safeSubject = foldAccentsForImagePrompt(subject);
+  return applyImagePromptTemplate(template, safeSubject, langNote);
 }

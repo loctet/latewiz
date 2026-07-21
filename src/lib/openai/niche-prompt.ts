@@ -100,5 +100,14 @@ export function buildNicheUserContext(niche: NicheProfile): string {
 /** Image prompt appendix: language for on-image text */
 export function buildNicheImageLanguageNote(niche: NicheProfile): string {
   const langLabel = resolveNicheLanguage(niche.language);
-  return `All handwritten text, titles, labels, and table headers on the infographic must be in ${langLabel}.`;
+  const code = (niche.language ?? "en").trim().toLowerCase() || "en";
+  if (code === "en") {
+    return `All handwritten text, titles, labels, and table headers on the infographic must be in ${langLabel}.`;
+  }
+  return [
+    `All handwritten text, titles, labels, and table headers on the infographic must be in ${langLabel}.`,
+    "CRITICAL typography rule: spell every on-image word WITHOUT accent marks or special characters (plain A–Z only).",
+    "Examples for French: write APERCU DU MARCHE (not APERÇU DU MARCHÉ), Negociation (not Négociation), meme-coin (not même-coin).",
+    "The social caption uses proper accents; only the handwriting in the drawing omits them so letters render cleanly.",
+  ].join(" ");
 }

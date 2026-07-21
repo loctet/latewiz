@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAiStore } from "@/stores/ai-store";
 import type { DraftResult, NicheProfile } from "@/lib/openai/types";
+import type { CampaignSlotBrief } from "@/lib/openai";
 import type { VideoProvider } from "@/lib/video-providers";
 import { generatedMediaKeys } from "./use-generated-media";
 
@@ -34,6 +35,7 @@ export function useOpenAiStatus() {
       return res.json() as Promise<{
         openai_configured: boolean;
         fal_configured?: boolean;
+        scheduled_campaigns_configured?: boolean;
         default_video_provider?: VideoProvider;
         video_providers_configured?: Record<VideoProvider, boolean>;
         web_search_mode?: "openai_native" | "tavily_serper" | "disabled";
@@ -65,13 +67,23 @@ export function isVideoGenerationConfigured(
 export function useGenerateDraft() {
   const openaiApiKey = useAiStore((s) => s.openaiApiKey);
   const niche = useAiStore((s) => s.niche);
+  const postPromptStyleId = useAiStore((s) => s.postPromptStyleId);
 
   return useMutation({
-    mutationFn: async (hint?: string) => {
+    mutationFn: async (
+      params?: string | { hint?: string; postPromptStyleId?: string }
+    ) => {
+      const hint = typeof params === "string" ? params : params?.hint;
       const res = await fetch("/api/ai/draft", {
         method: "POST",
         headers: aiHeaders(openaiApiKey),
-        body: JSON.stringify({ hint, niche }),
+        body: JSON.stringify({
+          hint,
+          niche,
+          post_prompt_style_id:
+            (typeof params === "object" ? params?.postPromptStyleId : undefined) ??
+            postPromptStyleId,
+        }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -248,6 +260,7 @@ export interface CampaignSlot {
   body: string;
   hashtags: string;
   content: string;
+  generationStatus?: "pending_generation" | "processing" | "generated" | "failed" | "cancelled";
   image_url?: string | null;
   video_url?: string | null;
   /** Appended to AI prompt when regenerating this slot */
@@ -258,6 +271,11 @@ export interface CampaignSlot {
   videoPromptStyleId?: string;
   /** Optional reference image for image-to-image generation */
   reference_image_url?: string | null;
+  brief?: CampaignSlotBrief;
+  detail?: string | null;
+  generatedAt?: string | null;
+  postId?: string | null;
+  lastError?: string | null;
 }
 
 export function useGenerateCampaignSlot() {

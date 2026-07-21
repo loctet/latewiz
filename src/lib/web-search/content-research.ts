@@ -1,6 +1,7 @@
 import type { NicheProfile } from "@/lib/openai/types";
 import {
   buildContentResearchQuery,
+  isNewsIntent,
   type ContentResearchParams,
 } from "./build-query";
 import { formatWebContextForPrompt } from "./format-context";
@@ -24,7 +25,13 @@ export async function fetchContentWebResearch(
     return { block: "", usedWebSearch: false, query: null };
   }
 
-  const ctx = await searchWeb(query);
+  const newsIntent = isNewsIntent(
+    params.searchHint,
+    params.hint,
+    params.campaignGoal,
+    params.campaignHint
+  );
+  const ctx = await searchWeb(query, { newsIntent });
   const block = formatWebContextForPrompt(ctx);
   return {
     block,

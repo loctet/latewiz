@@ -14,12 +14,17 @@ import {
   useGenerateVideo,
   useOpenAiStatus,
   isVideoGenerationConfigured,
+  useScheduledCampaigns,
+  useSaveScheduledCampaign,
+  useDeleteScheduledCampaign,
+  useRunScheduledCampaign,
   useUploadMedia,
   urlToFile,
   useImageWatermarkSettings,
   watermarkImageIfEnabled,
 } from "@/hooks";
 import { buildCampaignSlotTimes } from "@/lib/openai";
+import { sanitizeSocialPostText } from "@/lib/openai/sanitize-post-text";
 import {
   assignListItemSlotBrief,
   parseCampaignListItems,
@@ -44,6 +49,7 @@ import {
   type SavedCampaign,
 } from "@/lib/saved-campaigns-storage";
 import { SavedCampaignsPanel } from "./_components/saved-campaigns-panel";
+import { ScheduledCampaignsPanel } from "./_components/scheduled-campaigns-panel";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -72,6 +78,11 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import type { Platform } from "@/lib/late-api";
+import type {
+  CampaignGenerationMode,
+  ScheduledCampaign,
+  ScheduledCampaignInput,
+} from "@/lib/scheduled-campaigns";
 
 export default function CampaignPlannerPage() {
   const router = useRouter();
@@ -93,6 +104,10 @@ export default function CampaignPlannerPage() {
   const imageMutation = useGenerateImage();
   const videoMutation = useGenerateVideo();
   const uploadMutation = useUploadMedia();
+  const { data: scheduledCampaignsData } = useScheduledCampaigns();
+  const saveScheduledCampaignMutation = useSaveScheduledCampaign();
+  const deleteScheduledCampaignMutation = useDeleteScheduledCampaign();
+  const runScheduledCampaignMutation = useRunScheduledCampaign();
 
   const [postsPerDay, setPostsPerDay] = useState(3);
   const [planDays, setPlanDays] = useState(7);
@@ -103,6 +118,8 @@ export default function CampaignPlannerPage() {
   const [windowEnd, setWindowEnd] = useState("18:00");
   const [campaignGoal, setCampaignGoal] = useState("");
   const [campaignHint, setCampaignHint] = useState("");
+  const [generationMode, setGenerationMode] =
+    useState<CampaignGenerationMode>("immediate");
   const [campaignMode, setCampaignMode] = useState<CampaignPlanningMode>("arc");
   const [listItemsBlock, setListItemsBlock] = useState("");
   const [trendBlock, setTrendBlock] = useState("");
@@ -131,12 +148,16 @@ export default function CampaignPlannerPage() {
   const [applyingWatermark, setApplyingWatermark] = useState(false);
   const [draftRestored, setDraftRestored] = useState(false);
   const [activeSavedId, setActiveSavedId] = useState<string | null>(null);
+  const [activeScheduledId, setActiveScheduledId] = useState<string | null>(null);
+  const [runningCampaignId, setRunningCampaignId] = useState<string | null>(null);
   const [saveName, setSaveName] = useState("");
   const [savedCampaigns, setSavedCampaigns] = useState<SavedCampaign[]>([]);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const minStartDate = minScheduleDateInput();
   const listItems = parseCampaignListItems(listItemsBlock);
+  const scheduledCampaigns = scheduledCampaignsData?.campaigns ?? [];
   const isListMode = campaignMode === "list";
+  const isDeferredMode = generationMode === "deferred";
   const effectivePlanDays = isListMode
     ? Math.max(1, Math.ceil(listItems.length / postsPerDay) || 1)
     : planDays;
@@ -153,6 +174,7 @@ export default function CampaignPlannerPage() {
   );
 
   const applyDraft = useCallback((draft: CampaignDraft, savedId?: string | null) => {
+    setGenerationMode(draft.generationMode === "deferred" ? "deferred" : "immediate");
     setPostsPerDay(draft.postsPerDay);
     setPlanDays(draft.planDays);
     setStartDate(draft.startDate);
@@ -168,6 +190,33 @@ export default function CampaignPlannerPage() {
     setSlots(draft.slots);
     setDraftRestored(true);
     if (savedId !== undefined) setActiveSavedId(savedId);
+    setActiveScheduledId(null);
+  }, []);
+
+  const applyScheduledCampaign = useCallback((campaign: ScheduledCampaign) => {
+    setGenerationMode(campaign.generationMode);
+    setPostsPerDay(campaign.postsPerDay);
+    setPlanDays(campaign.planDays);
+    setStartDate(campaign.startDate);
+    setWindowStart(campaign.windowStart);
+    setWindowEnd(campaign.windowEnd);
+    setCampaignGoal(campaign.campaignGoal);
+    setCampaignHint(campaign.campaignHint);
+    setCampaignMode(campaign.campaignMode);
+    setListItemsBlock(campaign.listItemsBlock);
+    setTrendBlock(campaign.trendBlock);
+    setSelectedAccountIds(campaign.selectedAccountIds);
+    setMediaMode(campaign.mediaMode);
+    setSlots(
+      campaign.slots.map((slot) => ({
+        ...slot,
+        generationStatus: slot.status,
+      }))
+    );
+    setDraftRestored(true);
+    setActiveScheduledId(campaign.id);
+    setActiveSavedId(null);
+    setSaveName(campaign.name);
   }, []);
 
   const refreshSavedList = useCallback(() => {
@@ -184,6 +233,7 @@ export default function CampaignPlannerPage() {
 
   const getCurrentDraft = useCallback(
     (): Omit<CampaignDraft, "savedAt"> => ({
+      generationMode,
       postsPerDay,
       planDays,
       startDate,
@@ -206,6 +256,7 @@ export default function CampaignPlannerPage() {
       windowEnd,
       campaignGoal,
       campaignHint,
+      generationMode,
       campaignMode,
       listItemsBlock,
       trendBlock,
@@ -215,7 +266,127 @@ export default function CampaignPlannerPage() {
     ]
   );
 
-  const handleSaveForLater = () => {
+  const getCurrentScheduledCampaignInput = useCallback(
+    (): ScheduledCampaignInput => ({
+      id: activeScheduledId ?? undefined,
+      name: saveName.trim() || campaignGoal.trim().slice(0, 48) || "Untitled campaign",
+      profileId: profileId ?? null,
+      generationMode: "deferred",
+      generationLeadMinutes: 60,
+      timezone,
+      postsPerDay,
+      planDays,
+      startDate,
+      windowStart,
+      windowEnd,
+      campaignMode,
+      campaignGoal,
+      campaignHint,
+      trendBlock,
+      listItemsBlock,
+      mediaMode,
+      niche: useAiStore.getState().niche,
+      postPromptStyleId,
+      imagePromptStyleId,
+      videoPromptStyleId: useAiStore.getState().videoPromptStyleId,
+      videoProvider,
+      imagePromptTemplates: useAiStore.getState().imagePromptTemplates,
+      videoPromptTemplates: useAiStore.getState().videoPromptTemplates,
+      imageWatermarkSettings,
+      selectedAccountIds,
+      targets: selectedAccounts.map((account) => ({
+        accountId: account._id,
+        platform: account.platform as Platform,
+      })),
+      slots: slots.map((slot) => ({
+        id: "id" in slot && typeof slot.id === "string" ? slot.id : undefined,
+        scheduled_at: slot.scheduled_at,
+        status:
+          slot.generationStatus === "generated" ||
+          slot.generationStatus === "failed" ||
+          slot.generationStatus === "processing" ||
+          slot.generationStatus === "cancelled"
+            ? slot.generationStatus
+            : "pending_generation",
+        title: slot.title,
+        body: slot.body,
+        hashtags: slot.hashtags,
+        content: slot.content,
+        image_url: slot.image_url,
+        video_url: slot.video_url,
+        aiInstruction: slot.aiInstruction,
+        imagePromptStyleId: slot.imagePromptStyleId ?? imagePromptStyleId,
+        videoPromptStyleId:
+          slot.videoPromptStyleId ?? useAiStore.getState().videoPromptStyleId,
+        reference_image_url: slot.reference_image_url ?? null,
+        brief: slot.brief,
+        detail: slot.detail ?? null,
+        generatedAt: slot.generatedAt ?? null,
+        postId: slot.postId ?? null,
+        lastError: slot.lastError ?? null,
+      })),
+    }),
+    [
+      activeScheduledId,
+      campaignGoal,
+      campaignHint,
+      campaignMode,
+      imagePromptStyleId,
+      imageWatermarkSettings,
+      listItemsBlock,
+      mediaMode,
+      planDays,
+      postPromptStyleId,
+      postsPerDay,
+      profileId,
+      saveName,
+      selectedAccountIds,
+      selectedAccounts,
+      slots,
+      startDate,
+      timezone,
+      trendBlock,
+      videoProvider,
+      windowEnd,
+      windowStart,
+    ]
+  );
+
+  const handleSaveForLater = async () => {
+    if (isDeferredMode) {
+      if (!status?.scheduled_campaigns_configured) {
+        toast.error(
+          "Scheduled campaigns require server-managed AI and Zernio keys."
+        );
+        return;
+      }
+      if (!profileId || selectedAccounts.length === 0) {
+        toast.error("Select at least one account");
+        return;
+      }
+      if (slots.length === 0) {
+        toast.error("Plan the campaign first");
+        return;
+      }
+      try {
+        const saved = await saveScheduledCampaignMutation.mutateAsync(
+          getCurrentScheduledCampaignInput()
+        );
+        setActiveScheduledId(saved.campaign.id);
+        setSaveName(saved.campaign.name);
+        toast.success(
+          activeScheduledId
+            ? "Scheduled campaign updated"
+            : "Scheduled campaign saved for cron"
+        );
+      } catch (e) {
+        toast.error(
+          e instanceof Error ? e.message : "Could not save scheduled campaign"
+        );
+      }
+      return;
+    }
+
     const name = saveName.trim() || campaignGoal.trim().slice(0, 48) || "Untitled campaign";
     const saved = saveSavedCampaign({
       id: activeSavedId ?? undefined,
@@ -257,6 +428,7 @@ export default function CampaignPlannerPage() {
       listItemsBlock: saved.listItemsBlock ?? "",
       campaignGoal: saved.campaignGoal ?? "",
       campaignHint: saved.campaignHint,
+      generationMode: saved.generationMode ?? "immediate",
       trendBlock: saved.trendBlock,
       selectedAccountIds: saved.selectedAccountIds,
       mediaMode: migrateCampaignMediaMode(saved),
@@ -265,7 +437,30 @@ export default function CampaignPlannerPage() {
     toast.success(`Opened "${saved.name}"`);
   };
 
-  const handleDeleteSaved = (id: string) => {
+  const handleLoadScheduled = (id: string) => {
+    const campaign = scheduledCampaigns.find((item) => item.id === id);
+    if (!campaign) {
+      toast.error("Scheduled campaign not found");
+      return;
+    }
+    applyScheduledCampaign(campaign);
+    toast.success(`Opened "${campaign.name}"`);
+  };
+
+  const handleDeleteSaved = async (id: string) => {
+    if (scheduledCampaigns.some((campaign) => campaign.id === id)) {
+      try {
+        await deleteScheduledCampaignMutation.mutateAsync(id);
+        if (activeScheduledId === id) setActiveScheduledId(null);
+        toast.success("Scheduled campaign removed");
+      } catch (e) {
+        toast.error(
+          e instanceof Error ? e.message : "Could not delete scheduled campaign"
+        );
+      }
+      return;
+    }
+
     if (!deleteSavedCampaign(id, profileKey)) return;
     if (activeSavedId === id) setActiveSavedId(null);
     refreshSavedList();
@@ -275,16 +470,32 @@ export default function CampaignPlannerPage() {
   const handleNewCampaign = () => {
     clearCampaignDraft();
     setActiveSavedId(null);
+    setActiveScheduledId(null);
     setSaveName("");
     setSlots([]);
     setCampaignGoal("");
     setCampaignHint("");
+    setGenerationMode("immediate");
     setCampaignMode("arc");
     setListItemsBlock("");
     setTrendBlock("");
     setDraftRestored(false);
     setStartDate(minScheduleDateInput());
     toast.message("New campaign started");
+  };
+
+  const handleRunScheduled = async (id: string) => {
+    setRunningCampaignId(id);
+    try {
+      const result = await runScheduledCampaignMutation.mutateAsync(id);
+      toast.success(
+        `Run complete: ${result.result.generated} generated, ${result.result.failed} failed`
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to run campaign");
+    } finally {
+      setRunningCampaignId(null);
+    }
   };
 
   const persistDraft = useCallback(() => {
@@ -294,6 +505,7 @@ export default function CampaignPlannerPage() {
       startDate,
       windowStart,
       windowEnd,
+      generationMode,
       campaignGoal,
       campaignHint,
       campaignMode,
@@ -312,6 +524,7 @@ export default function CampaignPlannerPage() {
     startDate,
     windowStart,
     windowEnd,
+    generationMode,
     campaignGoal,
     campaignHint,
     campaignMode,
@@ -400,6 +613,7 @@ export default function CampaignPlannerPage() {
       hashtags: "",
       content: "",
       aiInstruction: "",
+      generationStatus: isDeferredMode ? "pending_generation" : undefined,
     }));
     setSlots(emptySlots);
     setDraftRestored(true);
@@ -435,6 +649,53 @@ export default function CampaignPlannerPage() {
         });
         outlineBeats = outline.beats;
         if (outline.source === "stub") hadStub = true;
+      }
+
+      if (isDeferredMode) {
+        const deferredSlots: CampaignSlotDraft[] = slotTimes.map(
+          (scheduled_at, i) => {
+            const brief = outlineBeats[i];
+            return {
+              scheduled_at,
+              title: "",
+              body: "",
+              hashtags: "",
+              content: "",
+              aiInstruction: brief
+                ? slotBriefToAiInstruction({
+                    ...brief,
+                    phase: brief.phase as
+                      | "intro"
+                      | "build"
+                      | "deepen"
+                      | "apply"
+                      | "close",
+                  })
+                : "",
+              generationStatus: "pending_generation",
+              imagePromptStyleId,
+              videoPromptStyleId: useAiStore.getState().videoPromptStyleId,
+              brief: brief
+                ? {
+                    ...brief,
+                    phase: brief.phase as
+                      | "intro"
+                      | "build"
+                      | "deepen"
+                      | "apply"
+                      | "close",
+                  }
+                : undefined,
+            };
+          }
+        );
+        setSlots(deferredSlots);
+        toast.success(
+          isListMode
+            ? `Planned ${total} deferred slot${total === 1 ? "" : "s"} from your list`
+            : `Planned ${total} deferred campaign slot${total === 1 ? "" : "s"}`
+        );
+        return;
       }
 
       setGeneratingProgress({ current: 0, total, phase: "posts" });
@@ -746,6 +1007,11 @@ export default function CampaignPlannerPage() {
   };
 
   const commitCampaign = async () => {
+    if (isDeferredMode) {
+      await handleSaveForLater();
+      return;
+    }
+
     if (!profileId || selectedAccountIds.length === 0) {
       toast.error("Select at least one account");
       return;
@@ -812,9 +1078,10 @@ export default function CampaignPlannerPage() {
         }
 
         await createPostMutation.mutateAsync({
-          content:
+          content: sanitizeSocialPostText(
             slot.content ||
-            [slot.body, slot.hashtags].filter(Boolean).join("\n\n"),
+              [slot.body, slot.hashtags].filter(Boolean).join("\n\n")
+          ),
           platforms,
           scheduledFor: slot.scheduled_at,
           timezone,
@@ -851,7 +1118,7 @@ export default function CampaignPlannerPage() {
             Campaign Planner
           </h1>
           <p className="text-muted-foreground mt-1 max-w-3xl">
-            Plan posts locally, save campaigns to finish later, then schedule via{" "}
+            Plan posts now, or save a deferred cron campaign that generates fresh research, copy, and media near publish time via{" "}
             <a
               href="https://docs.zernio.com/"
               target="_blank"
@@ -865,22 +1132,47 @@ export default function CampaignPlannerPage() {
         </div>
         <Button variant="outline" size="sm" onClick={handleSaveForLater}>
           <Save className="mr-2 h-4 w-4" />
-          Save for later
+          {isDeferredMode ? "Save scheduled campaign" : "Save for later"}
         </Button>
       </div>
 
-      <SavedCampaignsPanel
-        saved={savedCampaigns}
-        activeSavedId={activeSavedId}
-        saveName={saveName}
-        onSaveNameChange={setSaveName}
-        onSave={handleSaveForLater}
-        onLoad={handleLoadSaved}
-        onDelete={handleDeleteSaved}
-        onNew={handleNewCampaign}
-      />
+      {isDeferredMode ? (
+        <ScheduledCampaignsPanel
+          campaigns={scheduledCampaigns}
+          activeId={activeScheduledId}
+          saveName={saveName}
+          saving={saveScheduledCampaignMutation.isPending}
+          runningId={runningCampaignId}
+          onSaveNameChange={setSaveName}
+          onSave={() => {
+            void handleSaveForLater();
+          }}
+          onLoad={handleLoadScheduled}
+          onDelete={(id) => {
+            void handleDeleteSaved(id);
+          }}
+          onRun={(id) => {
+            void handleRunScheduled(id);
+          }}
+        />
+      ) : (
+        <SavedCampaignsPanel
+          saved={savedCampaigns}
+          activeSavedId={activeSavedId}
+          saveName={saveName}
+          onSaveNameChange={setSaveName}
+          onSave={() => {
+            void handleSaveForLater();
+          }}
+          onLoad={handleLoadSaved}
+          onDelete={(id) => {
+            void handleDeleteSaved(id);
+          }}
+          onNew={handleNewCampaign}
+        />
+      )}
 
-      {draftRestored && slots.length > 0 && !activeSavedId && (
+      {draftRestored && slots.length > 0 && !activeSavedId && !activeScheduledId && (
         <p className="text-xs text-muted-foreground rounded-md bg-muted px-3 py-2">
           Restored in-progress draft from this browser session.
         </p>
@@ -898,6 +1190,39 @@ export default function CampaignPlannerPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label>Generation timing</Label>
+              <Tabs
+                value={generationMode}
+                onValueChange={(value) => {
+                  const nextMode =
+                    value === "deferred" ? "deferred" : "immediate";
+                  setGenerationMode(nextMode);
+                  if (nextMode === "deferred") {
+                    setActiveSavedId(null);
+                  } else {
+                    setActiveScheduledId(null);
+                  }
+                }}
+              >
+                <TabsList>
+                  <TabsTrigger value="immediate">Generate now</TabsTrigger>
+                  <TabsTrigger value="deferred">
+                    Generate 1 hour before publish
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+              <p className="text-xs text-muted-foreground">
+                {isDeferredMode
+                  ? "Use this for time-sensitive news or market analysis so AI and web research run near publish time on the server."
+                  : "Use this when you want to generate copy and media immediately, then schedule finished posts yourself."}
+              </p>
+              {isDeferredMode && !status?.scheduled_campaigns_configured ? (
+                <p className="text-xs text-destructive">
+                  Server-managed scheduled campaigns need `LATE_API_KEY` plus AI credentials configured on the server.
+                </p>
+              ) : null}
+            </div>
             <Tabs
               value={campaignMode}
               onValueChange={(v) =>
@@ -1059,8 +1384,12 @@ export default function CampaignPlannerPage() {
                   ? "Planning content arc…"
                   : `Generating ${generatingProgress.current} / ${generatingProgress.total}…`
                 : isListMode
-                  ? `Generate ${plannedSlotCount || ""} post${plannedSlotCount === 1 ? "" : "s"} from list`
-                  : "Generate campaign incrementally"}
+                  ? isDeferredMode
+                    ? `Plan ${plannedSlotCount || ""} deferred slot${plannedSlotCount === 1 ? "" : "s"} from list`
+                    : `Generate ${plannedSlotCount || ""} post${plannedSlotCount === 1 ? "" : "s"} from list`
+                  : isDeferredMode
+                    ? "Plan deferred campaign slots"
+                    : "Generate campaign incrementally"}
             </Button>
             <p className="text-xs text-muted-foreground">
               Niche & language:{" "}
@@ -1104,8 +1433,9 @@ export default function CampaignPlannerPage() {
                 Planned slots ({slots.length})
               </CardTitle>
               <CardDescription>
-                Each slot must be after now. Edit date and time, then schedule
-                when ready. Goal: {campaignGoal.trim() || "—"}
+                {isDeferredMode
+                  ? "Each slot stays pending until cron generates its final content near publish time."
+                  : "Each slot must be after now. Edit date and time, then schedule when ready."} Goal: {campaignGoal.trim() || "—"}
                 {isListMode && listItems.length > 0
                   ? ` · ${listItems.length} list item${listItems.length === 1 ? "" : "s"}`
                   : ""}
@@ -1136,43 +1466,45 @@ export default function CampaignPlannerPage() {
                           );
                         }}
                       />
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => generateAllSlotImages(false)}
-                          disabled={
-                            generatingImagesProgress !== null ||
-                            regeneratingImageIndices.length > 0 ||
-                            !status?.openai_configured
-                          }
-                        >
-                          {generatingImagesProgress ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          ) : (
-                            <ImageIcon className="mr-2 h-4 w-4" />
-                          )}
-                          {generatingImagesProgress
-                            ? `Generating ${generatingImagesProgress.current} / ${generatingImagesProgress.total}…`
-                            : "Generate images for all slots"}
-                        </Button>
-                        {slots.some((s) => s.image_url) && (
+                      {!isDeferredMode ? (
+                        <div className="flex flex-wrap gap-2">
                           <Button
                             type="button"
-                            variant="outline"
+                            variant="secondary"
                             size="sm"
-                            onClick={() => generateAllSlotImages(true)}
+                            onClick={() => generateAllSlotImages(false)}
                             disabled={
                               generatingImagesProgress !== null ||
                               regeneratingImageIndices.length > 0 ||
                               !status?.openai_configured
                             }
                           >
-                            Regenerate all images
+                            {generatingImagesProgress ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                              <ImageIcon className="mr-2 h-4 w-4" />
+                            )}
+                            {generatingImagesProgress
+                              ? `Generating ${generatingImagesProgress.current} / ${generatingImagesProgress.total}…`
+                              : "Generate images for all slots"}
                           </Button>
-                        )}
-                      </div>
+                          {slots.some((s) => s.image_url) && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => generateAllSlotImages(true)}
+                              disabled={
+                                generatingImagesProgress !== null ||
+                                regeneratingImageIndices.length > 0 ||
+                                !status?.openai_configured
+                              }
+                            >
+                              Regenerate all images
+                            </Button>
+                          )}
+                        </div>
+                      ) : null}
                     </>
                   )}
                   {mediaMode === "video" && (
@@ -1183,7 +1515,13 @@ export default function CampaignPlannerPage() {
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground w-full">
-                  {mediaMode === "image"
+                  {isDeferredMode
+                    ? mediaMode === "image"
+                      ? "Images will be generated and uploaded by cron near publish time. Browser-only watermark stamping is skipped in deferred mode."
+                      : mediaMode === "video"
+                        ? "Videos will be generated by cron near publish time. If media generation fails, the slot falls back to text-only posting."
+                        : "Deferred mode keeps content fresh by generating text near publish time."
+                    : mediaMode === "image"
                     ? "Generate images first, then use Apply signature to stamp existing images before scheduling."
                     : mediaMode === "video"
                       ? "On schedule, videos are generated for slots that do not already have media."
@@ -1206,6 +1544,8 @@ export default function CampaignPlannerPage() {
                     copyLoading={regeneratingCopyIndex === i}
                     imageLoading={regeneratingImageIndices.includes(i)}
                     videoLoading={regeneratingVideoIndex === i}
+                    timezone={timezone}
+                    deferredMode={isDeferredMode}
                   />
                 ))}
               </div>
@@ -1216,14 +1556,22 @@ export default function CampaignPlannerPage() {
             size="lg"
             className="w-full sm:w-auto"
             onClick={commitCampaign}
-            disabled={committing || createPostMutation.isPending}
+            disabled={
+              committing ||
+              createPostMutation.isPending ||
+              saveScheduledCampaignMutation.isPending
+            }
           >
             {committing ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
               <Send className="mr-2 h-4 w-4" />
             )}
-            Schedule {slots.length} posts to Zernio
+            {isDeferredMode
+              ? activeScheduledId
+                ? "Update scheduled campaign"
+                : "Save scheduled campaign for cron"
+              : `Schedule ${slots.length} post${slots.length === 1 ? "" : "s"} to Zernio`}
           </Button>
         </>
       )}

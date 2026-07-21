@@ -44,6 +44,7 @@ import {
   AiImageReferencePicker,
   AiMediaModeSelect,
   ImagePromptStyleSelect,
+  PostPromptStyleSelect,
   VideoPromptStyleSelect,
   VideoProviderSelect,
 } from "@/components/ai";
@@ -57,6 +58,7 @@ export default function AiStudioPage() {
   const aiMediaKind = useAiStore((s) => s.aiMediaKind);
   const setAiMediaKind = useAiStore((s) => s.setAiMediaKind);
   const videoProvider = useAiStore((s) => s.videoProvider);
+  const postPromptStyleId = useAiStore((s) => s.postPromptStyleId);
   const imageWatermarkSettings = useImageWatermarkSettings();
 
   const [topic, setTopic] = useState("");
@@ -98,12 +100,21 @@ export default function AiStudioPage() {
       return;
     }
     try {
-      const r = await draftMutation.mutateAsync(hintPayload);
+      const r = await draftMutation.mutateAsync({
+        hint: hintPayload,
+        postPromptStyleId,
+      });
       setGeneratedTitle(r.draft.title);
       setGeneratedBody(r.draft.body);
       setGeneratedHashtags(r.draft.hashtags);
       if (r.source === "stub") {
         toast.message("Using placeholder — add OpenAI key in Settings.");
+      } else if (r.source === "openai+web" || r.source === "openai+fallback-search") {
+        toast.success("Caption generated with live web research.");
+      } else if (r.source === "openai") {
+        toast.message(
+          "Caption generated without confirmed web search — results may be generic. Check Settings → Live web research."
+        );
       }
       if (r.source === "fallback" && r.detail) {
         toast.error(r.detail);
@@ -284,6 +295,10 @@ export default function AiStudioPage() {
               </Select>
             </div>
           </div>
+          <PostPromptStyleSelect
+            variant="compose"
+            campaignGoal={topic.trim()}
+          />
           <Button onClick={handleGenerate} disabled={draftMutation.isPending}>
             {draftMutation.isPending ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />

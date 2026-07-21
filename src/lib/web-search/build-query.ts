@@ -14,6 +14,14 @@ export type ContentResearchParams = {
   coveredSubtopics?: string[];
 };
 
+const NEWS_INTENT_RE =
+  /actualit|news|headlines?|roundup|r[eé]cent|breaking|derni[eè]res?\s+nouvelles|fil d.?actualit|aujourd.?hui|today'?s?\s+(?:news|headlines)/i;
+
+/** Brief asks for a timely news digest rather than evergreen commentary. */
+export function isNewsIntent(...texts: (string | undefined)[]): boolean {
+  return texts.some((t) => t?.trim() && NEWS_INTENT_RE.test(t));
+}
+
 /** Build a search query aimed at recent, niche-relevant information. */
 export function buildContentResearchQuery(params: ContentResearchParams): string {
   const parts: string[] = [];
@@ -39,7 +47,17 @@ export function buildContentResearchQuery(params: ContentResearchParams): string
   const goal = params.campaignGoal?.trim();
   if (goal) parts.push(goal.slice(0, 120));
 
-  parts.push(`latest news trends ${year} ${month}`);
+  const newsIntent = isNewsIntent(
+    params.searchHint,
+    params.hint,
+    params.campaignGoal,
+    params.campaignHint
+  );
+  if (newsIntent) {
+    parts.push(`breaking news headlines today ${year}`);
+  } else {
+    parts.push(`latest news trends ${year} ${month}`);
+  }
 
   if (
     params.slotIndex != null &&

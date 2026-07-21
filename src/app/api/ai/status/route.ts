@@ -11,7 +11,6 @@ import {
   type VideoProvider,
 } from "@/lib/video-providers";
 import {
-  isWebSearchConfigured,
   isWebSearchEnabled,
 } from "@/lib/web-search";
 
@@ -42,6 +41,8 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     openai_configured: openaiConfigured,
     fal_configured: falConfigured,
+    scheduled_campaigns_configured:
+      Boolean(process.env.LATE_API_KEY?.trim()) && openaiConfigured,
     default_video_provider: parseVideoProvider(undefined),
     video_providers_configured,
     web_search_mode,
