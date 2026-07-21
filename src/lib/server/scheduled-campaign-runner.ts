@@ -38,12 +38,69 @@ function buildSlotContent(
   return [slot.body, slot.hashtags].filter(Boolean).join("\n\n");
 }
 
-async function persistGeneratedImage(
+function errorMessage(error: unknown): string {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message.slice(0, 500);
+  }
+  if (typeof error === "string" && error.trim()) {
+    return error.slice(0, 500);
+  }
+  if (error && typeof error === "object") {
+    const record = error as Record<string, unknown>;
+    const nested =
+      (typeof record.message === "string" && record.message) ||
+      (typeof record.error === "string" && record.error) ||
+      (record.error &&
+      typeof record.error === "object" &&
+      typeof (record.error as { message?: unknown }).message === "string"
+        ? String((record.error as { message: string }).message)
+        : null);
+    if (nested) return nested.slice(0, 500);
+    try {
+      return JSON.stringify(error).slice(0, 500);
+    } catch {
+      /* ignore */
+    }
+  }
+  return "Unknown error";
+}
+
+async function persistGeneratedImageBestEffort(
   sourceUrl: string,
   captionDigest: string
 ): Promise<string> {
-  const saved = await saveGeneratedImageFile(sourceUrl, captionDigest);
-  return saved.url;
+  // Vercel filesystem is ephemeral/read-only for most paths — never fail the post for this.
+  try {
+    const saved = await saveGeneratedImageFile(sourceUrl, captionDigest);
+    return saved.url;
+  } catch (error) {
+    console.warn(
+      "Skipping local generated-image persist:",
+      errorMessage(error)
+    );
+    return sourceUrl;
+  }
+}
+
+async function persistGeneratedVideoBestEffort(
+  sourceUrl: string,
+  captionDigest: string,
+  durationSeconds?: string
+): Promise<string> {
+  try {
+    const saved = await saveGeneratedVideoFile(
+      sourceUrl,
+      captionDigest,
+      durationSeconds
+    );
+    return saved.url;
+  } catch (error) {
+    console.warn(
+      "Skipping local generated-video persist:",
+      errorMessage(error)
+    );
+    return sourceUrl;
+  }
 }
 
 async function maybeGenerateMedia(
@@ -80,7 +137,7 @@ async function maybeGenerateMedia(
     }
 
     const imageUrl = imageResult.url ?? `data:image/png;base64,${imageResult.b64_json}`;
-    const savedLocalUrl = await persistGeneratedImage(imageUrl, digest);
+    const previewUrl = await persistGeneratedImageBestEffort(imageUrl, digest);
     const uploaded = await uploadMediaFromUrl(
       lateKey,
       imageUrl,
@@ -90,7 +147,7 @@ async function maybeGenerateMedia(
     return {
       mediaItems: [{ type: "image", url: uploaded.url }],
       slotPatch: {
-        image_url: savedLocalUrl,
+        image_url: previewUrl,
         video_url: null,
         detail: imageResult.detail,
       },
@@ -122,7 +179,7 @@ async function maybeGenerateMedia(
       };
     }
 
-    const savedVideo = await saveGeneratedVideoFile(
+    const previewUrl = await persistGeneratedVideoBestEffort(
       videoResult.url,
       digest,
       videoResult.duration_seconds
@@ -136,7 +193,7 @@ async function maybeGenerateMedia(
     return {
       mediaItems: [{ type: "video", url: uploaded.url }],
       slotPatch: {
-        video_url: savedVideo.url,
+        video_url: previewUrl,
         image_url: null,
         detail: videoResult.detail,
       },
@@ -154,6 +211,11 @@ async function createScheduledPost(
   const lateKey = serverLateKey();
   if (!lateKey) {
     throw new Error("LATE_API_KEY is required for scheduled campaigns.");
+  }
+  if (!campaign.targets.length) {
+    throw new Error(
+      "No publishing targets on this campaign. Re-save the deferred campaign with at least one account selected."
+    );
   }
 
   const late = createLateClient(lateKey);
@@ -179,18 +241,24 @@ async function createScheduledPost(
   return (data as { _id?: string; id?: string } | null)?._id ?? data?.id ?? null;
 }
 
+type SlotProcessResult = {
+  status: "generated" | "failed" | "skipped";
+  error?: string;
+};
+
 async function processScheduledCampaignSlot(
   campaignId: string,
   slotId: string
-): Promise<"generated" | "failed" | "skipped"> {
+): Promise<SlotProcessResult> {
   const acquired = await acquireScheduledCampaignSlot(campaignId, slotId);
   const acquiredSlot = acquired?.slots.find((slot) => slot.id === slotId);
   if (!acquired || !acquiredSlot || acquiredSlot.status !== "processing") {
-    return "skipped";
+    return { status: "skipped" };
   }
 
   const lateKey = serverLateKey();
   if (!lateKey) {
+    const message = "LATE_API_KEY is missing on the server.";
     await updateScheduledCampaign(campaignId, (campaign) => ({
       ...campaign,
       slots: campaign.slots.map((slot) =>
@@ -198,13 +266,13 @@ async function processScheduledCampaignSlot(
           ? {
               ...slot,
               status: "failed",
-              lastError: "LATE_API_KEY is missing on the server.",
+              lastError: message,
               processingLeaseUntil: null,
             }
           : slot
       ),
     }));
-    return "failed";
+    return { status: "failed", error: message };
   }
 
   try {
@@ -215,7 +283,7 @@ async function processScheduledCampaignSlot(
     );
     const slotIndex = sortedSlots.findIndex((slot) => slot.id === slotId);
     const slot = sortedSlots[slotIndex];
-    if (!slot) return "skipped";
+    if (!slot) return { status: "skipped" };
 
     const previousPosts = sortedSlots
       .slice(0, slotIndex)
@@ -311,10 +379,14 @@ async function processScheduledCampaignSlot(
       ),
     }));
 
-    return "generated";
+    return { status: "generated" };
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message.slice(0, 500) : "Unknown error";
+    const message = errorMessage(error);
+    console.error(
+      `Scheduled campaign slot failed (${campaignId}/${slotId}):`,
+      message,
+      error
+    );
     await updateScheduledCampaign(campaignId, (campaign) => ({
       ...campaign,
       slots: campaign.slots.map((slot) =>
@@ -329,7 +401,7 @@ async function processScheduledCampaignSlot(
       ),
       status: "failed",
     }));
-    return "failed";
+    return { status: "failed", error: message };
   }
 }
 
@@ -342,14 +414,21 @@ export async function runDueScheduledCampaigns(
   let failed = 0;
   let skipped = 0;
   const slotIds: string[] = [];
+  const failures: NonNullable<ScheduledCampaignRunResult["failures"]> = [];
 
   for (const item of due) {
     processed++;
     slotIds.push(item.slot.id);
     const result = await processScheduledCampaignSlot(item.campaign.id, item.slot.id);
-    if (result === "generated") generated++;
-    else if (result === "failed") failed++;
-    else skipped++;
+    if (result.status === "generated") generated++;
+    else if (result.status === "failed") {
+      failed++;
+      failures.push({
+        campaignId: item.campaign.id,
+        slotId: item.slot.id,
+        error: result.error ?? "Unknown error",
+      });
+    } else skipped++;
   }
 
   return {
@@ -359,6 +438,7 @@ export async function runDueScheduledCampaigns(
     failed,
     skipped,
     slotIds,
+    failures,
   };
 }
 
@@ -375,14 +455,21 @@ export async function runScheduledCampaign(
   let failed = 0;
   let skipped = 0;
   const slotIds: string[] = [];
+  const failures: NonNullable<ScheduledCampaignRunResult["failures"]> = [];
   for (const slot of campaign.slots) {
     if (slot.status !== "pending_generation" && slot.status !== "failed") continue;
     processed++;
     slotIds.push(slot.id);
     const result = await processScheduledCampaignSlot(campaignId, slot.id);
-    if (result === "generated") generated++;
-    else if (result === "failed") failed++;
-    else skipped++;
+    if (result.status === "generated") generated++;
+    else if (result.status === "failed") {
+      failed++;
+      failures.push({
+        campaignId,
+        slotId: slot.id,
+        error: result.error ?? "Unknown error",
+      });
+    } else skipped++;
   }
 
   return {
@@ -392,5 +479,6 @@ export async function runScheduledCampaign(
     failed,
     skipped,
     slotIds,
+    failures,
   };
 }

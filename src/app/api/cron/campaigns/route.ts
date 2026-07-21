@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runDueScheduledCampaigns } from "@/lib/server/scheduled-campaign-runner";
 
+export const maxDuration = 300;
+
 function isAuthorized(request: NextRequest): boolean {
   const expected = process.env.CRON_SECRET?.trim();
   if (!expected) return true;
@@ -19,7 +21,12 @@ async function handle(request: NextRequest) {
   } catch (error) {
     console.error("Run scheduled campaign cron error:", error);
     return NextResponse.json(
-      { error: "Failed to process scheduled campaigns" },
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to process scheduled campaigns",
+      },
       { status: 500 }
     );
   }

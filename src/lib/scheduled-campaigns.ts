@@ -107,6 +107,11 @@ export type ScheduledCampaignRunResult = {
   failed: number;
   skipped: number;
   slotIds: string[];
+  failures?: Array<{
+    campaignId: string;
+    slotId: string;
+    error: string;
+  }>;
 };
 
 export function isDeferredCampaign(
