@@ -36,6 +36,7 @@ export function useOpenAiStatus() {
         openai_configured: boolean;
         fal_configured?: boolean;
         scheduled_campaigns_configured?: boolean;
+        scheduled_campaign_storage?: "redis" | "filesystem" | "unavailable";
         default_video_provider?: VideoProvider;
         video_providers_configured?: Record<VideoProvider, boolean>;
         web_search_mode?: "openai_native" | "tavily_serper" | "disabled";

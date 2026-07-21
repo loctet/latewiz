@@ -1,5 +1,3 @@
-import { promises as fs } from "fs";
-import path from "path";
 import { randomUUID } from "crypto";
 import {
   type ScheduledCampaign,
@@ -10,35 +8,30 @@ import {
 } from "@/lib/scheduled-campaigns";
 import { normalizeWatermarkSettings } from "@/lib/image-watermark";
 import { defaultNicheProfile } from "@/lib/openai/types";
+import {
+  readCampaignStore,
+  writeCampaignStore,
+} from "@/lib/server/scheduled-campaign-persistence";
 
 type CampaignStoreData = {
   campaigns: ScheduledCampaign[];
 };
 
-const STORE_DIR = path.join(process.cwd(), "data");
-const STORE_PATH = path.join(STORE_DIR, "scheduled-campaigns.json");
 const PROCESSING_LEASE_MS = 10 * 60 * 1000;
 
-async function ensureStoreDir(): Promise<void> {
-  await fs.mkdir(STORE_DIR, { recursive: true });
-}
-
 async function readStore(): Promise<CampaignStoreData> {
-  try {
-    const raw = await fs.readFile(STORE_PATH, "utf8");
-    const parsed = JSON.parse(raw) as CampaignStoreData;
-    const campaigns = Array.isArray(parsed.campaigns)
-      ? parsed.campaigns.map(normalizeCampaign)
-      : [];
-    return { campaigns };
-  } catch {
-    return { campaigns: [] };
-  }
+  const parsed = await readCampaignStore();
+  return {
+    campaigns: Array.isArray(parsed.campaigns)
+      ? parsed.campaigns.map((campaign) =>
+          normalizeCampaign(campaign as Partial<ScheduledCampaign>)
+        )
+      : [],
+  };
 }
 
 async function writeStore(store: CampaignStoreData): Promise<void> {
-  await ensureStoreDir();
-  await fs.writeFile(STORE_PATH, JSON.stringify(store, null, 2), "utf8");
+  await writeCampaignStore(store);
 }
 
 function normalizeSlot(

@@ -13,6 +13,7 @@ import {
 import {
   isWebSearchEnabled,
 } from "@/lib/web-search";
+import { getScheduledCampaignStorageMode } from "@/lib/server/scheduled-campaign-persistence";
 
 export async function GET(request: NextRequest) {
   const headerKey = request.headers.get("x-openai-api-key");
@@ -20,6 +21,7 @@ export async function GET(request: NextRequest) {
   const falKey = resolveFalApiKey(request.headers.get("x-fal-api-key"));
   const openaiConfigured = isOpenAiConfigured(key);
   const falConfigured = Boolean(falKey);
+  const campaignStorageMode = getScheduledCampaignStorageMode();
   const videoProviders: VideoProvider[] = ["openai-sora", "fal-pika"];
   const video_providers_configured = Object.fromEntries(
     videoProviders.map((p) => [
@@ -42,7 +44,10 @@ export async function GET(request: NextRequest) {
     openai_configured: openaiConfigured,
     fal_configured: falConfigured,
     scheduled_campaigns_configured:
-      Boolean(process.env.LATE_API_KEY?.trim()) && openaiConfigured,
+      Boolean(process.env.LATE_API_KEY?.trim()) &&
+      openaiConfigured &&
+      campaignStorageMode !== "unavailable",
+    scheduled_campaign_storage: campaignStorageMode,
     default_video_provider: parseVideoProvider(undefined),
     video_providers_configured,
     web_search_mode,

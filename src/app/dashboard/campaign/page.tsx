@@ -1219,7 +1219,7 @@ export default function CampaignPlannerPage() {
               </p>
               {isDeferredMode && !status?.scheduled_campaigns_configured ? (
                 <p className="text-xs text-destructive">
-                  Server-managed scheduled campaigns need `LATE_API_KEY` plus AI credentials configured on the server.
+                  Deferred campaigns need server `LATE_API_KEY`, `OPENAI_API_KEY`, and Upstash Redis on Vercel (`UPSTASH_REDIS_REST_KV_REST_API_URL` + `UPSTASH_REDIS_REST_KV_REST_API_TOKEN`).
                 </p>
               ) : null}
             </div>

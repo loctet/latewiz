@@ -4,6 +4,7 @@ import {
   saveScheduledCampaign,
 } from "@/lib/server/scheduled-campaign-store";
 import type { ScheduledCampaignInput } from "@/lib/scheduled-campaigns";
+import { storageErrorMessage } from "@/lib/server/api-error";
 
 export async function GET() {
   try {
@@ -12,7 +13,12 @@ export async function GET() {
   } catch (error) {
     console.error("List scheduled campaigns error:", error);
     return NextResponse.json(
-      { error: "Failed to list scheduled campaigns" },
+      {
+        error: storageErrorMessage(
+          error,
+          "Failed to list scheduled campaigns"
+        ),
+      },
       { status: 500 }
     );
   }
@@ -26,7 +32,12 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Save scheduled campaign error:", error);
     return NextResponse.json(
-      { error: "Failed to save scheduled campaign" },
+      {
+        error: storageErrorMessage(
+          error,
+          "Failed to save scheduled campaign"
+        ),
+      },
       { status: 500 }
     );
   }
