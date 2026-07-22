@@ -1,10 +1,16 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { Space_Grotesk, DM_Sans } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 
-const inter = Inter({
-  variable: "--font-inter",
+const spaceGrotesk = Space_Grotesk({
+  variable: "--font-space-grotesk",
+  subsets: ["latin"],
+  display: "swap",
+});
+
+const dmSans = DM_Sans({
+  variable: "--font-dm-sans",
   subsets: ["latin"],
   display: "swap",
 });
@@ -16,11 +22,13 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "LateWiz - Open Source Social Media Scheduling",
+  title: "LateWiz - AI Social Media Scheduling",
   description:
-    "Your social media scheduling wizard. Schedule posts across 13 platforms with a single tool, powered by Zernio.",
+    "Generate captions, images, and videos with AI, then schedule across 13 platforms. Open source and powered by Zernio.",
   keywords: [
     "social media scheduler",
+    "AI content generation",
+    "AI captions",
     "open source",
     "instagram scheduler",
     "tiktok scheduler",
@@ -28,6 +36,7 @@ export const metadata: Metadata = {
     "linkedin scheduler",
     "social media management",
     "content scheduling",
+    "AI campaign planner",
   ],
   authors: [{ name: "Zernio", url: "https://zernio.com" }],
   icons: {
@@ -39,9 +48,9 @@ export const metadata: Metadata = {
   },
   manifest: "/site.webmanifest",
   openGraph: {
-    title: "LateWiz - Open Source Social Media Scheduling",
+    title: "LateWiz - AI Social Media Scheduling",
     description:
-      "Your social media scheduling wizard. Schedule posts across 13 platforms with a single tool.",
+      "Generate captions, images, and videos with AI, then schedule across 13 platforms.",
     url: "https://latewiz.com",
     siteName: "LateWiz",
     type: "website",
@@ -50,15 +59,15 @@ export const metadata: Metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "LateWiz - Open Source Social Media Scheduling",
+        alt: "LateWiz - AI Social Media Scheduling",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "LateWiz - Open Source Social Media Scheduling",
+    title: "LateWiz - AI Social Media Scheduling",
     description:
-      "Your social media scheduling wizard. Schedule posts across 13 platforms with a single tool.",
+      "Generate captions, images, and videos with AI, then schedule across 13 platforms.",
     images: ["/og-image.png"],
   },
   metadataBase: new URL("https://latewiz.com"),
@@ -71,7 +80,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.variable} font-sans antialiased`}>
+      <body
+        className={`${spaceGrotesk.variable} ${dmSans.variable} font-sans antialiased`}
+      >
         <Providers>{children}</Providers>
       </body>
     </html>

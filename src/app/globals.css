@@ -6,7 +6,8 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-inter);
+  --font-sans: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -172,6 +173,9 @@
 
 
 @layer utilities {
+  .font-heading {
+    font-family: var(--font-heading);
+  }
   .hover-lift {
     @apply transition-transform duration-200 hover:-translate-y-0.5;
   }
@@ -181,6 +185,80 @@
   /* Safe area insets for notched devices */
   .pb-safe {
     padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+/* Landing page atmosphere + motion */
+@keyframes landing-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes landing-grid-drift {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 48px 48px;
+  }
+}
+
+@keyframes landing-orb-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.04);
+  }
+}
+
+.landing-fade-up {
+  animation: landing-fade-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.landing-delay-1 {
+  animation-delay: 80ms;
+}
+.landing-delay-2 {
+  animation-delay: 160ms;
+}
+.landing-delay-3 {
+  animation-delay: 240ms;
+}
+.landing-delay-4 {
+  animation-delay: 320ms;
+}
+
+.landing-grid {
+  background-image:
+    linear-gradient(to right, color-mix(in oklab, var(--foreground) 6%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklab, var(--foreground) 6%, transparent) 1px, transparent 1px);
+  background-size: 48px 48px;
+  animation: landing-grid-drift 28s linear infinite;
+}
+
+.landing-orb {
+  animation: landing-orb-pulse 8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-fade-up,
+  .landing-grid,
+  .landing-orb {
+    animation: none !important;
+  }
+  .landing-fade-up {
+    opacity: 1;
+    transform: none;
   }
 }
 
