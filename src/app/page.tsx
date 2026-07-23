@@ -48,7 +48,7 @@ export default function LandingPage() {
 
   useEffect(() => {
     if (!isPending && session?.user) {
-      router.push("/dashboard");
+      router.replace("/dashboard");
     }
   }, [session, isPending, router]);
 

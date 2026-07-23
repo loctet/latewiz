@@ -5,6 +5,8 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useTheme } from "next-themes";
 import { useAuthStore, useAppStore } from "@/stores";
+import { useSession } from "@/lib/auth-client";
+import { logoutLateWiz } from "@/components/session-bootstrap";
 import { useProfiles } from "@/hooks";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -99,7 +101,8 @@ export default function DashboardLayout({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { apiKey, usageStats, logout, hasHydrated } = useAuthStore();
+  const { data: session, isPending: sessionPending } = useSession();
+  const { usageStats } = useAuthStore();
   const { defaultProfileId, setDefaultProfileId } = useAppStore();
   const { theme, setTheme } = useTheme();
   const { data: profilesData } = useProfiles();
@@ -107,20 +110,21 @@ export default function DashboardLayout({
   const profiles = profilesData?.profiles || [];
   const currentProfile = profiles.find((p: any) => p._id === defaultProfileId) || profiles[0];
 
-  // Redirect to home if not authenticated (only after hydration)
+  // Gate on LateWiz account session — not the in-memory Zernio key
+  // (vault unlock is async and must not bounce users to the landing page).
   useEffect(() => {
-    if (hasHydrated && !apiKey) {
-      router.push("/");
+    if (sessionPending) return;
+    if (!session?.user) {
+      router.replace(`/login?next=${encodeURIComponent(pathname)}`);
     }
-  }, [apiKey, hasHydrated, router]);
+  }, [session, sessionPending, pathname, router]);
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logoutLateWiz();
     router.push("/");
   };
 
-  // Don't render until hydrated to avoid flash
-  if (!hasHydrated || !apiKey) {
+  if (sessionPending || !session?.user) {
     return null;
   }
 
@@ -292,7 +296,7 @@ export default function DashboardLayout({
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-8 w-8 p-0">
                   <img
-                    src={getAvatarUrl(apiKey || "user", "bottts")}
+                    src={getAvatarUrl(session.user.id || session.user.email || "user", "bottts")}
                     alt="User avatar"
                     className="h-7 w-7 rounded-full"
                   />
