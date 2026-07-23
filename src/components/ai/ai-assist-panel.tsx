@@ -19,8 +19,17 @@ import {
 import { useAiStore } from "@/stores";
 import type { AiMediaKind } from "@/lib/campaign-media";
 import { toast } from "sonner";
-import { Loader2, Sparkles, Wand2, ImageIcon, Film } from "lucide-react";
+import {
+  ChevronDown,
+  Loader2,
+  Sparkles,
+  Wand2,
+  ImageIcon,
+  Film,
+  SlidersHorizontal,
+} from "lucide-react";
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 import { AiMediaModeSelect } from "./ai-media-mode-select";
 import { AiImageReferencePicker } from "./ai-image-reference-picker";
 import { ImagePromptStyleSelect } from "./image-prompt-style-select";
@@ -36,6 +45,16 @@ interface AiAssistPanelProps {
   hint?: string;
 }
 
+/** Prefer draft text from the composer; keep any external hint as extra context. */
+function buildDraftHint(content: string, hint?: string): string | undefined {
+  const draft = content.trim();
+  const brief = hint?.trim();
+  if (draft && brief && draft !== brief) {
+    return `Brief: ${brief}\n\nExisting draft / notes to refine:\n${draft}`;
+  }
+  return draft || brief || undefined;
+}
+
 export function AiAssistPanel({
   content,
   onContentChange,
@@ -44,6 +63,7 @@ export function AiAssistPanel({
   hint,
 }: AiAssistPanelProps) {
   const [assistEnabled, setAssistEnabled] = useState(true);
+  const [optionsOpen, setOptionsOpen] = useState(false);
   const [referenceImageUrl, setReferenceImageUrl] = useState<string | undefined>();
   const aiMediaKind = useAiStore((s) => s.aiMediaKind);
   const setAiMediaKind = useAiStore((s) => s.setAiMediaKind);
@@ -58,11 +78,12 @@ export function AiAssistPanel({
   const uploadMutation = useUploadMedia();
 
   const configured = status?.openai_configured ?? false;
+  const draftHint = buildDraftHint(content, hint);
 
   const applyDraft = async () => {
     try {
       const r = await draftMutation.mutateAsync({
-        hint: (hint ?? content.trim()) || undefined,
+        hint: draftHint,
         postPromptStyleId,
       });
       const parts = [r.draft.body, r.draft.hashtags].filter(Boolean);
@@ -72,7 +93,11 @@ export function AiAssistPanel({
       } else if (r.source === "fallback" && r.detail) {
         toast.error(r.detail);
       } else {
-        toast.success("Caption generated");
+        toast.success(
+          content.trim()
+            ? "Caption suggested from your draft"
+            : "Caption generated"
+        );
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Generation failed");
@@ -141,26 +166,91 @@ export function AiAssistPanel({
     uploadMutation.isPending;
 
   return (
-    <div className="rounded-lg border border-dashed border-primary/30 bg-primary/5 p-4 space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-primary" />
+    <div className="rounded-lg border border-dashed border-primary/25 bg-primary/[0.04]">
+      <div className="flex flex-wrap items-center gap-2 px-3 py-2">
+        <div className="flex items-center gap-1.5 shrink-0">
+          <Sparkles className="h-3.5 w-3.5 text-primary" />
           <span className="text-sm font-medium">AI Assist</span>
         </div>
-        <div className="flex items-center gap-2">
+
+        <div className="flex items-center gap-1.5 ml-auto sm:ml-0">
           <Switch
             id="ai-assist"
             checked={assistEnabled}
             onCheckedChange={setAssistEnabled}
+            className="scale-90"
           />
-          <Label htmlFor="ai-assist" className="text-xs text-muted-foreground">
-            Enabled
+          <Label
+            htmlFor="ai-assist"
+            className="text-xs text-muted-foreground sr-only sm:not-sr-only"
+          >
+            {assistEnabled ? "On" : "Off"}
           </Label>
         </div>
+
+        {assistEnabled && (
+          <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto sm:ml-auto">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="h-8"
+              onClick={applyDraft}
+              disabled={draftMutation.isPending}
+            >
+              {draftMutation.isPending ? (
+                <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+              ) : (
+                <Wand2 className="mr-1.5 h-3 w-3" />
+              )}
+              Suggest caption
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="h-8"
+              onClick={generateMedia}
+              disabled={
+                mediaPending ||
+                (aiMediaKind === "video" ? !videoConfigured : !configured)
+              }
+            >
+              {mediaPending ? (
+                <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+              ) : aiMediaKind === "video" ? (
+                <Film className="mr-1.5 h-3 w-3" />
+              ) : (
+                <ImageIcon className="mr-1.5 h-3 w-3" />
+              )}
+              {aiMediaKind === "video" ? "Generate video" : "Generate image"}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2"
+              onClick={() => setOptionsOpen((o) => !o)}
+              aria-expanded={optionsOpen}
+            >
+              <SlidersHorizontal className="mr-1 h-3 w-3" />
+              Options
+              <ChevronDown
+                className={cn(
+                  "ml-0.5 h-3 w-3 transition-transform duration-200",
+                  optionsOpen && "rotate-180"
+                )}
+              />
+            </Button>
+            <Button type="button" variant="ghost" size="sm" className="h-8" asChild>
+              <Link href="/dashboard/ai-studio">Studio</Link>
+            </Button>
+          </div>
+        )}
       </div>
 
-      {!configured && (
-        <p className="text-xs text-muted-foreground">
+      {!configured && assistEnabled && (
+        <p className="px-3 pb-2 text-xs text-muted-foreground">
           OpenAI not configured.{" "}
           <Link href="/dashboard/settings" className="underline text-primary">
             Add your API key
@@ -173,70 +263,37 @@ export function AiAssistPanel({
         </p>
       )}
 
-      {assistEnabled && (
-        <>
-          <PostPromptStyleSelect
-            variant="compose"
-            campaignGoal={hint ?? content.trim()}
-          />
-          <AiMediaModeSelect
-            value={aiMediaKind}
-            onValueChange={(k: AiMediaKind) => setAiMediaKind(k)}
-          />
+      {assistEnabled && optionsOpen && (
+        <div className="border-t border-primary/15 px-3 py-3 space-y-3 animate-in fade-in-0 slide-in-from-top-1 duration-200">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <PostPromptStyleSelect
+              variant="compose"
+              compact
+              campaignGoal={draftHint ?? ""}
+            />
+            <AiMediaModeSelect
+              compact
+              value={aiMediaKind}
+              onValueChange={(k: AiMediaKind) => setAiMediaKind(k)}
+            />
+          </div>
           {aiMediaKind === "image" ? (
-            <>
-              <ImagePromptStyleSelect />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <ImagePromptStyleSelect compact />
               <AiImageReferencePicker
+                compact
                 value={referenceImageUrl}
                 onChange={setReferenceImageUrl}
                 mediaSources={media}
               />
-            </>
+            </div>
           ) : (
-            <>
-              <VideoProviderSelect />
-              <VideoPromptStyleSelect />
-            </>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <VideoProviderSelect compact />
+              <VideoPromptStyleSelect compact />
+            </div>
           )}
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={applyDraft}
-              disabled={draftMutation.isPending}
-            >
-              {draftMutation.isPending ? (
-                <Loader2 className="mr-2 h-3 w-3 animate-spin" />
-              ) : (
-                <Wand2 className="mr-2 h-3 w-3" />
-              )}
-              Suggest caption
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={generateMedia}
-              disabled={
-                mediaPending ||
-                (aiMediaKind === "video" ? !videoConfigured : !configured)
-              }
-            >
-              {mediaPending ? (
-                <Loader2 className="mr-2 h-3 w-3 animate-spin" />
-              ) : aiMediaKind === "video" ? (
-                <Film className="mr-2 h-3 w-3" />
-              ) : (
-                <ImageIcon className="mr-2 h-3 w-3" />
-              )}
-              {aiMediaKind === "video" ? "Generate video" : "Generate image"}
-            </Button>
-            <Button type="button" variant="ghost" size="sm" asChild>
-              <Link href="/dashboard/ai-studio">Open AI Studio</Link>
-            </Button>
-          </div>
-        </>
+        </div>
       )}
     </div>
   );

@@ -17,12 +17,15 @@ import {
 interface VideoPromptStyleSelectProps {
   value?: string;
   onValueChange?: (id: string) => void;
+  /** Hide description under the select */
+  compact?: boolean;
   className?: string;
 }
 
 export function VideoPromptStyleSelect({
   value: controlledValue,
   onValueChange,
+  compact = false,
   className,
 }: VideoPromptStyleSelectProps) {
   const storedId = useAiStore((s) => s.videoPromptStyleId);
@@ -38,10 +41,10 @@ export function VideoPromptStyleSelect({
 
   return (
     <div className={className}>
-      <div className="space-y-2">
-        <Label>Video style</Label>
+      <div className={compact ? "space-y-1.5" : "space-y-2"}>
+        <Label className={compact ? "text-xs" : undefined}>Video style</Label>
         <Select value={value} onValueChange={handleChange}>
-          <SelectTrigger className="w-full">
+          <SelectTrigger className="w-full" size={compact ? "sm" : undefined}>
             <SelectValue placeholder="Select video style" />
           </SelectTrigger>
           <SelectContent>
@@ -53,7 +56,9 @@ export function VideoPromptStyleSelect({
             ))}
           </SelectContent>
         </Select>
-        <p className="text-xs text-muted-foreground">{style.description}</p>
+        {!compact && (
+          <p className="text-xs text-muted-foreground">{style.description}</p>
+        )}
       </div>
     </div>
   );

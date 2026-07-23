@@ -15,6 +15,8 @@ interface AiImageReferencePickerProps {
   /** Existing slot/campaign image URL */
   existingImageUrl?: string | null;
   disabled?: boolean;
+  /** Hide help text; tighter spacing */
+  compact?: boolean;
 }
 
 export function AiImageReferencePicker({
@@ -23,6 +25,7 @@ export function AiImageReferencePicker({
   mediaSources = [],
   existingImageUrl,
   disabled,
+  compact = false,
 }: AiImageReferencePickerProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const uploadMutation = useUploadMedia();
@@ -44,14 +47,16 @@ export function AiImageReferencePicker({
   };
 
   return (
-    <div className="space-y-2">
+    <div className={compact ? "space-y-1.5" : "space-y-2"}>
       <Label className="text-xs text-muted-foreground">
         Reference image (optional)
       </Label>
-      <p className="text-xs text-muted-foreground">
-        Upload or pick an image to guide AI generation (style, layout, or
-        subject).
-      </p>
+      {!compact && (
+        <p className="text-xs text-muted-foreground">
+          Upload or pick an image to guide AI generation (style, layout, or
+          subject).
+        </p>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
         <input
@@ -127,7 +132,11 @@ export function AiImageReferencePicker({
         <img
           src={value}
           alt="Reference for AI generation"
-          className="h-20 w-20 rounded-md border object-cover"
+          className={
+            compact
+              ? "h-12 w-12 rounded-md border object-cover"
+              : "h-20 w-20 rounded-md border object-cover"
+          }
         />
       )}
     </div>

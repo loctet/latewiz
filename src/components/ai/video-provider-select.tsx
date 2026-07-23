@@ -17,12 +17,15 @@ import {
 interface VideoProviderSelectProps {
   value?: VideoProvider;
   onValueChange?: (id: VideoProvider) => void;
+  /** Hide description under the select */
+  compact?: boolean;
   className?: string;
 }
 
 export function VideoProviderSelect({
   value: controlledValue,
   onValueChange,
+  compact = false,
   className,
 }: VideoProviderSelectProps) {
   const stored = useAiStore((s) => s.videoProvider);
@@ -39,10 +42,10 @@ export function VideoProviderSelect({
 
   return (
     <div className={className}>
-      <div className="space-y-2">
-        <Label>Video generator</Label>
+      <div className={compact ? "space-y-1.5" : "space-y-2"}>
+        <Label className={compact ? "text-xs" : undefined}>Video generator</Label>
         <Select value={value} onValueChange={handleChange}>
-          <SelectTrigger className="w-full">
+          <SelectTrigger className="w-full" size={compact ? "sm" : undefined}>
             <SelectValue placeholder="Select provider" />
           </SelectTrigger>
           <SelectContent>
@@ -53,7 +56,9 @@ export function VideoProviderSelect({
             ))}
           </SelectContent>
         </Select>
-        <p className="text-xs text-muted-foreground">{provider.description}</p>
+        {!compact && (
+          <p className="text-xs text-muted-foreground">{provider.description}</p>
+        )}
       </div>
     </div>
   );

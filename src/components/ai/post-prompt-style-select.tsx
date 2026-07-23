@@ -24,6 +24,8 @@ interface PostPromptStyleSelectProps {
   isListMode?: boolean;
   /** "compose" uses topic/hint-based auto-matching label */
   variant?: "campaign" | "compose";
+  /** Hide description under the select */
+  compact?: boolean;
   className?: string;
 }
 
@@ -33,6 +35,7 @@ export function PostPromptStyleSelect({
   campaignGoal = "",
   isListMode = false,
   variant = "campaign",
+  compact = false,
   className,
 }: PostPromptStyleSelectProps) {
   const storedId = useAiStore((s) => s.postPromptStyleId);
@@ -57,12 +60,18 @@ export function PostPromptStyleSelect({
     }
   };
 
+  const description =
+    value === AUTO_POST_PROMPT_STYLE_ID && resolved
+      ? `Auto-selected: ${resolved.label} — ${resolved.description}`
+      : POST_PROMPT_STYLES.find((s) => s.id === value)?.description ??
+        "Choose how AI structures and lengths each post.";
+
   return (
     <div className={className}>
-      <div className="space-y-2">
-        <Label>Post template</Label>
+      <div className={compact ? "space-y-1.5" : "space-y-2"}>
+        <Label className={compact ? "text-xs" : undefined}>Post template</Label>
         <Select value={value} onValueChange={handleChange}>
-          <SelectTrigger className="w-full">
+          <SelectTrigger className="w-full" size={compact ? "sm" : undefined}>
             <SelectValue placeholder="Select post template" />
           </SelectTrigger>
           <SelectContent>
@@ -84,12 +93,9 @@ export function PostPromptStyleSelect({
             </SelectGroup>
           </SelectContent>
         </Select>
-        <p className="text-xs text-muted-foreground">
-          {value === AUTO_POST_PROMPT_STYLE_ID && resolved
-            ? `Auto-selected: ${resolved.label} — ${resolved.description}`
-            : POST_PROMPT_STYLES.find((s) => s.id === value)?.description ??
-              "Choose how AI structures and lengths each post."}
-        </p>
+        {!compact && (
+          <p className="text-xs text-muted-foreground">{description}</p>
+        )}
       </div>
     </div>
   );

@@ -165,13 +165,6 @@ export default function ComposePage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <AiAssistPanel
-            content={content}
-            onContentChange={setContent}
-            media={media}
-            onMediaChange={setMedia}
-            hint={aiHint}
-          />
           <div className="space-y-2">
             <Textarea
               placeholder="What's on your mind?"
@@ -192,6 +185,14 @@ export default function ComposePage() {
               </span>
             </div>
           </div>
+
+          <AiAssistPanel
+            content={content}
+            onContentChange={setContent}
+            media={media}
+            onMediaChange={setMedia}
+            hint={aiHint}
+          />
 
           <div className="rounded-lg bg-muted p-4">
             <div className="flex items-center gap-2 mb-3">

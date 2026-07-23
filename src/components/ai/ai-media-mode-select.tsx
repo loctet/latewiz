@@ -13,12 +13,15 @@ const OPTIONS: { value: AiMediaKind; label: string }[] = [
 interface AiMediaModeSelectProps {
   value?: AiMediaKind;
   onValueChange?: (kind: AiMediaKind) => void;
+  /** Inline label + tighter control */
+  compact?: boolean;
   className?: string;
 }
 
 export function AiMediaModeSelect({
   value: controlledValue,
   onValueChange,
+  compact = false,
   className,
 }: AiMediaModeSelectProps) {
   const stored = useAiStore((s) => s.aiMediaKind);
@@ -31,16 +34,26 @@ export function AiMediaModeSelect({
   };
 
   return (
-    <div className={cn("space-y-2", className)}>
-      <Label>AI media type</Label>
-      <div className="flex flex-wrap gap-2">
+    <div
+      className={cn(
+        compact
+          ? "flex items-center justify-between gap-3"
+          : "space-y-2",
+        className
+      )}
+    >
+      <Label className={compact ? "text-xs shrink-0" : undefined}>
+        AI media type
+      </Label>
+      <div className={cn("flex", compact ? "gap-1" : "flex-wrap gap-2")}>
         {OPTIONS.map((opt) => (
           <button
             key={opt.value}
             type="button"
             onClick={() => handleChange(opt.value)}
             className={cn(
-              "rounded-md border px-3 py-1.5 text-sm font-medium transition-colors",
+              "rounded-md border font-medium transition-colors",
+              compact ? "px-2.5 py-1 text-xs" : "px-3 py-1.5 text-sm",
               value === opt.value
                 ? "border-primary bg-primary text-primary-foreground"
                 : "border-input bg-background hover:bg-muted"

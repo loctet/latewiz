@@ -20,12 +20,15 @@ interface ImagePromptStyleSelectProps {
   /** Override store value (controlled) */
   value?: string;
   onValueChange?: (id: string) => void;
+  /** Hide description under the select */
+  compact?: boolean;
   className?: string;
 }
 
 export function ImagePromptStyleSelect({
   value: controlledValue,
   onValueChange,
+  compact = false,
   className,
 }: ImagePromptStyleSelectProps) {
   const storedId = useAiStore((s) => s.imagePromptStyleId);
@@ -45,10 +48,10 @@ export function ImagePromptStyleSelect({
 
   return (
     <div className={className}>
-      <div className="space-y-2">
-        <Label>Image style</Label>
+      <div className={compact ? "space-y-1.5" : "space-y-2"}>
+        <Label className={compact ? "text-xs" : undefined}>Image style</Label>
         <Select value={value} onValueChange={handleChange}>
-          <SelectTrigger className="w-full">
+          <SelectTrigger className="w-full" size={compact ? "sm" : undefined}>
             <SelectValue placeholder="Select image style" />
           </SelectTrigger>
           <SelectContent>
@@ -73,7 +76,9 @@ export function ImagePromptStyleSelect({
             )}
           </SelectContent>
         </Select>
-        <p className="text-xs text-muted-foreground">{style.description}</p>
+        {!compact && (
+          <p className="text-xs text-muted-foreground">{style.description}</p>
+        )}
       </div>
     </div>
   );
