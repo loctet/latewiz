@@ -10,6 +10,7 @@ import {
   getVaultStatus,
   isSecretKind,
   upsertUserSecret,
+  VaultConfigError,
 } from "@/lib/server/vault";
 import type { SecretKind } from "@/db/schema";
 
@@ -40,6 +41,9 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     if (error instanceof SessionRequiredError) {
       return NextResponse.json({ error: error.message }, { status: 401 });
+    }
+    if (error instanceof VaultConfigError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
     }
     console.error("GET /api/vault error:", error);
     return NextResponse.json({ error: "Failed to load vault" }, { status: 500 });
@@ -90,6 +94,9 @@ export async function PUT(request: NextRequest) {
     if (error instanceof SessionRequiredError) {
       return NextResponse.json({ error: error.message }, { status: 401 });
     }
+    if (error instanceof VaultConfigError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("PUT /api/vault error:", error);
     return NextResponse.json({ error: "Failed to save vault keys" }, { status: 500 });
   }
@@ -115,6 +122,9 @@ export async function DELETE(request: NextRequest) {
   } catch (error) {
     if (error instanceof SessionRequiredError) {
       return NextResponse.json({ error: error.message }, { status: 401 });
+    }
+    if (error instanceof VaultConfigError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
     }
     console.error("DELETE /api/vault error:", error);
     return NextResponse.json({ error: "Failed to delete vault key" }, { status: 500 });

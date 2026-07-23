@@ -79,43 +79,43 @@ Quality bar:
   },
   {
     id: "crypto-market-analysis",
-    label: "Crypto market analysis (expert)",
+    label: "Market analysis (expert)",
     description:
-      "In-depth analyst-style breakdown: price context, catalysts, risks, and outlook. 1,200+ characters.",
+      "In-depth analyst-style breakdown: context, catalysts, risks, and outlook. Works for any niche (markets, science, product, policy).",
     expertRole:
-      "senior crypto research analyst who writes institutional-grade market notes for sophisticated retail investors",
-    structureTemplate: `Write a DETAILED market analysis post for: {{subject}}
+      "senior research analyst who writes institutional-grade notes for a sophisticated audience in this niche",
+    structureTemplate: `Write a DETAILED analysis post for: {{subject}}
 
 Campaign intent: {{goal}}
 
 Required structure (use these section labels as plain-text headings on their own line):
 
-MARKET SNAPSHOT
-Open with a compelling hook, then cover current price context, recent performance (24h/7d if research supports it), market cap tier, and volume/liquidity read. Cite specific figures when web research provides them.
+SNAPSHOT
+Open with a compelling hook, then cover current context, recent developments, and why this matters now. Cite specific figures when web research provides them.
 
 NARRATIVE & CATALYSTS
-Explain what is driving attention right now — upgrades, partnerships, regulation, macro, ecosystem growth, ETF flows, etc. Connect cause and effect like a researcher, not a hype account.
+Explain what is driving attention right now — news, research, regulation, product changes, macro trends, etc. Connect cause and effect like a researcher, not a hype account.
 
-STRUCTURE & TECHNICAL READ
-Provide a thoughtful technical or structural read (trend, key levels, dominance, correlation) without overclaiming precision. Frame as observation, not a trading signal.
+STRUCTURED READ
+Provide a thoughtful structural or technical read without overclaiming precision. Frame as observation, not a guarantee.
 
-FUNDAMENTALS & ON-CHAIN (if relevant)
-Briefly address utility, adoption metrics, developer activity, or tokenomics only when material to the thesis.
+FUNDAMENTALS (if relevant)
+Briefly address underlying drivers, adoption, or evidence only when material to the thesis.
 
 RISKS & WATCHPOINTS
-Balanced bear-case or monitoring items — what could invalidate the narrative.
+Balanced counter-case or monitoring items — what could invalidate the narrative.
 
 BOTTOM LINE
 Clear analyst takeaway in 2–4 sentences.
 
 DISCLAIMER
-One short line: not financial advice; do your own research.
+One short line when advice-adjacent: not professional advice; do your own research.
 
 Quality bar:
 - Minimum {{minBodyChars}} characters in the body (before hashtags).
 - Write like a published research note adapted for social — substantive paragraphs, not bullet spam.
 - Use web research for timely data; if a metric is unknown, say so instead of inventing numbers.
-- Cover ONLY {{subject}} — do not discuss other assets.`,
+- Cover ONLY {{subject}} — do not digress into unrelated topics.`,
     minBodyChars: 1200,
     maxOutputTokens: 4096,
     matchPatterns: [
@@ -291,12 +291,23 @@ export function fillPostPromptTemplate(
 
 export function buildPostPromptStructureBlock(
   style: PostPromptStyle,
-  vars: Omit<PostPromptTemplateVars, "minBodyChars">
+  vars: Omit<PostPromptTemplateVars, "minBodyChars">,
+  templateOverride?: string | null
 ): string {
-  return fillPostPromptTemplate(style.structureTemplate, {
+  const template = templateOverride?.trim() || style.structureTemplate;
+  return fillPostPromptTemplate(template, {
     ...vars,
     minBodyChars: style.minBodyChars,
   });
+}
+
+export function getEffectivePostStructureTemplate(
+  styleId: string,
+  overrides?: Record<string, string> | null
+): string {
+  const style = getPostPromptStyle(styleId);
+  const override = overrides?.[styleId]?.trim();
+  return override || style.structureTemplate;
 }
 
 export function buildPostPromptTaskInstructions(style: PostPromptStyle): string {

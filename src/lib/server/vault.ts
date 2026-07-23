@@ -1,3 +1,5 @@
+import "server-only";
+
 import { createCipheriv, createDecipheriv, randomBytes, randomUUID } from "crypto";
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db";
@@ -6,14 +8,17 @@ import {
   userSecrets,
   type SecretKind,
 } from "@/db/schema";
+import { allowEnvKeyFallback } from "@/lib/env-flags";
+
+export { allowEnvKeyFallback };
 
 const ALGORITHM = "aes-256-gcm";
 
 function masterKeyBytes(): Buffer {
   const raw = process.env.VAULT_MASTER_KEY?.trim();
   if (!raw) {
-    throw new Error(
-      "VAULT_MASTER_KEY is required (32-byte key as hex or base64)."
+    throw new VaultConfigError(
+      "VAULT_MASTER_KEY is missing. Add a 64-character hex key to .env (openssl rand -hex 32)."
     );
   }
   if (/^[0-9a-fA-F]{64}$/.test(raw)) {
@@ -21,9 +26,17 @@ function masterKeyBytes(): Buffer {
   }
   const b64 = Buffer.from(raw, "base64");
   if (b64.length === 32) return b64;
-  throw new Error(
+  throw new VaultConfigError(
     "VAULT_MASTER_KEY must be 32 bytes (64 hex chars or base64)."
   );
+}
+
+export class VaultConfigError extends Error {
+  status = 503;
+  constructor(message: string) {
+    super(message);
+    this.name = "VaultConfigError";
+  }
 }
 
 export function isSecretKind(value: string): value is SecretKind {
@@ -176,8 +189,4 @@ export async function deleteUserSecret(
     .where(and(eq(userSecrets.userId, userId), eq(userSecrets.kind, kind)))
     .returning({ id: userSecrets.id });
   return result.length > 0;
-}
-
-export function allowEnvKeyFallback(): boolean {
-  return process.env.ALLOW_ENV_KEY_FALLBACK === "true";
 }

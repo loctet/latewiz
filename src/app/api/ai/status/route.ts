@@ -11,8 +11,10 @@ import {
 import { isWebSearchEnabled } from "@/lib/web-search";
 import { getSessionFromRequest } from "@/lib/server/session";
 import { getVaultStatus } from "@/lib/server/vault";
-import { resolveUserFalKey } from "@/lib/fal/resolve-key";
-import { resolveUserOpenAiKey } from "@/lib/openai/resolve-key";
+import {
+  resolveUserFalKey,
+  resolveUserOpenAiKey,
+} from "@/lib/server/resolve-user-keys";
 
 export async function GET(request: NextRequest) {
   const session = await getSessionFromRequest(request);

@@ -12,6 +12,16 @@ export type ImageWatermarkSettings = {
 };
 
 export const DEFAULT_IMAGE_WATERMARK_OPACITY = 0.28;
+export const DEFAULT_IMAGE_WATERMARK_TEXT = "LateWiz";
+
+export function defaultImageWatermarkSettings(): ImageWatermarkSettings {
+  return {
+    enabled: true,
+    text: DEFAULT_IMAGE_WATERMARK_TEXT,
+    opacity: DEFAULT_IMAGE_WATERMARK_OPACITY,
+    position: "bottom-right",
+  };
+}
 
 export const IMAGE_WATERMARK_POSITIONS: {
   value: ImageWatermarkPosition;
@@ -29,13 +39,17 @@ function clampOpacity(value: number): number {
 export function normalizeWatermarkSettings(
   partial: Partial<ImageWatermarkSettings>
 ): ImageWatermarkSettings {
+  const defaults = defaultImageWatermarkSettings();
   return {
-    enabled: partial.enabled ?? false,
-    text: partial.text ?? "",
+    enabled: partial.enabled ?? defaults.enabled,
+    text:
+      typeof partial.text === "string" && partial.text.trim()
+        ? partial.text
+        : defaults.text,
     opacity: clampOpacity(
       partial.opacity ?? DEFAULT_IMAGE_WATERMARK_OPACITY
     ),
-    position: partial.position ?? "bottom-right",
+    position: partial.position ?? defaults.position,
   };
 }
 

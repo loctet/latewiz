@@ -1,7 +1,9 @@
 import { NextRequest } from "next/server";
-import { resolveUserOpenAiKey } from "@/lib/openai/resolve-key";
-import { resolveUserFalKey } from "@/lib/fal/resolve-key";
-import { resolveUserZernioKey } from "@/lib/server/resolve-user-keys";
+import {
+  resolveUserFalKey,
+  resolveUserOpenAiKey,
+  resolveUserZernioKey,
+} from "@/lib/server/resolve-user-keys";
 import {
   SessionRequiredError,
   getSessionFromRequest,

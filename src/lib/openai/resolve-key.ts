@@ -1,7 +1,4 @@
-import {
-  allowEnvKeyFallback,
-  getUserSecret,
-} from "@/lib/server/vault";
+import { allowEnvKeyFallback } from "@/lib/env-flags";
 
 export function isPlausibleOpenAiApiKey(key: string): boolean {
   const trimmed = key.trim();
@@ -14,9 +11,8 @@ export function isPlausibleOpenAiApiKey(key: string): boolean {
 }
 
 /**
- * Resolve OpenAI key for a request.
- * Multi-user: prefer vault (via resolveUserOpenAiKey). Env fallback only when
- * ALLOW_ENV_KEY_FALLBACK=true (solo local dev).
+ * Resolve OpenAI key from request header/body (and optional env fallback).
+ * Vault lookup belongs on the server — use resolveUserOpenAiKey there.
  */
 export function resolveOpenAiApiKey(
   headerKey?: string | null,
@@ -32,22 +28,6 @@ export function resolveOpenAiApiKey(
     if (trimmed && isPlausibleOpenAiApiKey(trimmed)) {
       return trimmed;
     }
-  }
-  return null;
-}
-
-export async function resolveUserOpenAiKey(
-  userId: string,
-  headerKey?: string | null,
-  bodyKey?: string | null
-): Promise<string | null> {
-  const fromRequest = resolveOpenAiApiKey(headerKey, bodyKey);
-  if (fromRequest) return fromRequest;
-  const fromVault = await getUserSecret(userId, "openai");
-  if (fromVault && isPlausibleOpenAiApiKey(fromVault)) return fromVault;
-  if (allowEnvKeyFallback()) {
-    const env = process.env.OPENAI_API_KEY?.trim();
-    if (env && isPlausibleOpenAiApiKey(env)) return env;
   }
   return null;
 }
