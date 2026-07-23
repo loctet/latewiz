@@ -102,7 +102,7 @@ Structure: large handwritten title at top, main illustrations in center, compari
 
 Rendering: ultra sharp focus, even lighting, full notebook page visible, portrait-oriented.
 
-Final detail: tiny neat handwritten credit in bottom margin: KWEZIX.com`,
+Final detail: tiny neat handwritten credit in bottom margin: {{credit}}`,
   },
   {
     id: "minimal-quote-card",
@@ -280,11 +280,17 @@ export function getEffectiveTemplate(
 export function applyImagePromptTemplate(
   template: string,
   subject: string,
-  langNote: string
+  langNote: string,
+  credit?: string
 ): string {
+  const creditText =
+    credit?.trim() ||
+    process.env.NEXT_PUBLIC_APP_NAME?.trim() ||
+    "LateWiz";
   return template
     .replaceAll("{{langNote}}", langNote)
     .replaceAll("{{subject}}", subject.trim())
+    .replaceAll("{{credit}}", creditText)
     .slice(0, 4000);
 }
 
@@ -299,5 +305,7 @@ export function buildImagePromptFromStyle(
   const template = getEffectiveTemplate(id, templateOverrides, customStyles);
   const langNote = buildNicheImageLanguageNote(niche);
   const safeSubject = foldAccentsForImagePrompt(subject);
-  return applyImagePromptTemplate(template, safeSubject, langNote);
+  const credit =
+    niche.extraInstructions.match(/credit:\s*(.+)/i)?.[1]?.trim() || undefined;
+  return applyImagePromptTemplate(template, safeSubject, langNote, credit);
 }

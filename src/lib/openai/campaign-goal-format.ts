@@ -73,7 +73,7 @@ export function buildGoalPriorityInstructions(
         : "",
       constraints.wantsQuote
         ? "Some posts (not all) may include a short attributed quote — vary which days include one."
-        : "Do NOT write textbook definitions of blockchain/crypto — write human, uplifting messages."
+        : "Do NOT write textbook definitions — write human, uplifting messages."
     );
   }
 
@@ -116,7 +116,7 @@ export function buildSlotFormatInstructions(
       ? "- Start with a morning greeting appropriate to the post language."
       : "",
     constraints.isMotivational
-      ? "- Write motivation and hope, not blockchain/crypto lectures or definitions."
+      ? "- Write motivation and hope, not textbook lectures or definitions."
       : "",
     constraints.maxBodyChars
       ? `- Body length: maximum ${constraints.maxBodyChars} characters total.`

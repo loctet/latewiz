@@ -3,20 +3,32 @@ import {
   buildCampaignSlotTimes,
   generateCampaignBatch,
   parseNicheFromBody,
-  resolveOpenAiApiKey,
 } from "@/lib/openai";
+import { SessionRequiredError } from "@/lib/server/session";
+import { requireUserAiKeys } from "@/lib/server/ai-request-keys";
 
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as Record<string, unknown>;
-    const headerKey = request.headers.get("x-openai-api-key");
-    const apiKey = resolveOpenAiApiKey(
-      headerKey,
-      typeof body.openaiApiKey === "string" ? body.openaiApiKey : null
-    );
+    const { openaiApiKey: apiKey } = await requireUserAiKeys(request, body);
+    if (!apiKey) {
+      return NextResponse.json(
+        {
+          error:
+            "OpenAI API key required. Add yours in Settings — AI runs on your account.",
+        },
+        { status: 400 }
+      );
+    }
 
-    const postsPerDay = Math.max(1, Math.min(12, Number(body.posts_per_day ?? body.postsPerDay) || 3));
-    const planDays = Math.max(1, Math.min(31, Number(body.plan_days ?? body.planDays) || 7));
+    const postsPerDay = Math.max(
+      1,
+      Math.min(12, Number(body.posts_per_day ?? body.postsPerDay) || 3)
+    );
+    const planDays = Math.max(
+      1,
+      Math.min(31, Number(body.plan_days ?? body.planDays) || 7)
+    );
     const startDate =
       typeof body.start_date === "string"
         ? body.start_date
@@ -24,9 +36,7 @@ export async function POST(request: NextRequest) {
           ? body.startDate
           : new Date().toISOString().slice(0, 10);
     const timezone =
-      typeof body.timezone === "string"
-        ? body.timezone
-        : "UTC";
+      typeof body.timezone === "string" ? body.timezone : "UTC";
     const windowStart =
       typeof body.window_start === "string"
         ? body.window_start
@@ -52,7 +62,10 @@ export async function POST(request: NextRequest) {
     const trendSnippets = Array.isArray(trendRaw)
       ? trendRaw.map((s) => String(s))
       : typeof trendRaw === "string"
-        ? trendRaw.split("\n").map((s) => s.trim()).filter(Boolean)
+        ? trendRaw
+            .split("\n")
+            .map((s) => s.trim())
+            .filter(Boolean)
         : [];
 
     const totalPosts = postsPerDay * planDays;
@@ -96,6 +109,9 @@ export async function POST(request: NextRequest) {
       total_posts: totalPosts,
     });
   } catch (err) {
+    if (err instanceof SessionRequiredError) {
+      return NextResponse.json({ error: err.message }, { status: 401 });
+    }
     console.error("Campaign plan error:", err);
     return NextResponse.json(
       { error: "Failed to plan campaign" },

@@ -59,6 +59,8 @@ export type ScheduledCampaignSlotInput = Omit<ScheduledCampaignSlot, "id"> & {
 
 export type ScheduledCampaign = {
   id: string;
+  /** Owning LateWiz user — required for multi-user vault/cron isolation */
+  userId: string;
   name: string;
   profileId: string | null;
   status: ScheduledCampaignStatus;
@@ -93,9 +95,10 @@ export type ScheduledCampaign = {
 
 export type ScheduledCampaignInput = Omit<
   ScheduledCampaign,
-  "id" | "createdAt" | "updatedAt" | "status" | "slots"
+  "id" | "createdAt" | "updatedAt" | "status" | "slots" | "userId"
 > & {
   id?: string;
+  userId?: string;
   status?: ScheduledCampaignStatus;
   slots: ScheduledCampaignSlotInput[];
 };

@@ -5,38 +5,32 @@ import type { CampaignSlotBrief } from "@/lib/openai";
 import type { VideoProvider } from "@/lib/video-providers";
 import { generatedMediaKeys } from "./use-generated-media";
 
-function aiHeaders(
-  openaiApiKey: string | null,
-  falApiKey: string | null = null
-): HeadersInit {
-  const headers: Record<string, string> = {
+function aiHeaders(): HeadersInit {
+  return {
     "Content-Type": "application/json",
   };
-  if (openaiApiKey) {
-    headers["X-OpenAI-Api-Key"] = openaiApiKey;
-  }
-  if (falApiKey) {
-    headers["X-Fal-Api-Key"] = falApiKey;
-  }
-  return headers;
 }
 
 export function useOpenAiStatus() {
-  const openaiApiKey = useAiStore((s) => s.openaiApiKey);
-  const falApiKey = useAiStore((s) => s.falApiKey);
-
   return useQuery({
-    queryKey: ["openai-status", !!openaiApiKey, !!falApiKey],
+    queryKey: ["openai-status"],
     queryFn: async () => {
       const res = await fetch("/api/ai/status", {
-        headers: aiHeaders(openaiApiKey, falApiKey),
+        headers: aiHeaders(),
       });
       if (!res.ok) throw new Error("Failed to check OpenAI status");
       return res.json() as Promise<{
         openai_configured: boolean;
         fal_configured?: boolean;
+        vault_ready?: boolean;
+        has_zernio?: boolean;
         scheduled_campaigns_configured?: boolean;
-        scheduled_campaign_storage?: "redis" | "filesystem" | "unavailable";
+        scheduled_campaign_storage?:
+          | "sqlite"
+          | "postgres"
+          | "redis"
+          | "filesystem"
+          | "unavailable";
         default_video_provider?: VideoProvider;
         video_providers_configured?: Record<VideoProvider, boolean>;
         web_search_mode?: "openai_native" | "tavily_serper" | "disabled";
@@ -66,7 +60,6 @@ export function isVideoGenerationConfigured(
 }
 
 export function useGenerateDraft() {
-  const openaiApiKey = useAiStore((s) => s.openaiApiKey);
   const niche = useAiStore((s) => s.niche);
   const postPromptStyleId = useAiStore((s) => s.postPromptStyleId);
 
@@ -77,7 +70,7 @@ export function useGenerateDraft() {
       const hint = typeof params === "string" ? params : params?.hint;
       const res = await fetch("/api/ai/draft", {
         method: "POST",
-        headers: aiHeaders(openaiApiKey),
+        headers: aiHeaders(),
         body: JSON.stringify({
           hint,
           niche,
@@ -102,7 +95,6 @@ export function useGenerateDraft() {
 }
 
 export function useGenerateImage() {
-  const openaiApiKey = useAiStore((s) => s.openaiApiKey);
   const niche = useAiStore((s) => s.niche);
   const imagePromptStyleId = useAiStore((s) => s.imagePromptStyleId);
   const imagePromptTemplates = useAiStore((s) => s.imagePromptTemplates);
@@ -124,7 +116,7 @@ export function useGenerateImage() {
 
       const res = await fetch("/api/ai/generate-image", {
         method: "POST",
-        headers: aiHeaders(openaiApiKey),
+        headers: aiHeaders(),
         body: JSON.stringify({
           prompt: params.prompt,
           caption_context: params.captionContext,
@@ -175,8 +167,6 @@ export function useGenerateImage() {
 }
 
 export function useGenerateVideo() {
-  const openaiApiKey = useAiStore((s) => s.openaiApiKey);
-  const falApiKey = useAiStore((s) => s.falApiKey);
   const niche = useAiStore((s) => s.niche);
   const videoPromptStyleId = useAiStore((s) => s.videoPromptStyleId);
   const videoPromptTemplates = useAiStore((s) => s.videoPromptTemplates);
@@ -192,7 +182,7 @@ export function useGenerateVideo() {
     }) => {
       const res = await fetch("/api/ai/generate-video", {
         method: "POST",
-        headers: aiHeaders(openaiApiKey, falApiKey),
+        headers: aiHeaders(),
         body: JSON.stringify({
           prompt: params.prompt,
           caption_context: params.captionContext,
@@ -280,7 +270,6 @@ export interface CampaignSlot {
 }
 
 export function useGenerateCampaignSlot() {
-  const openaiApiKey = useAiStore((s) => s.openaiApiKey);
   const niche = useAiStore((s) => s.niche);
 
   return useMutation({
@@ -307,7 +296,7 @@ export function useGenerateCampaignSlot() {
     }) => {
       const res = await fetch("/api/ai/campaign-slot", {
         method: "POST",
-        headers: aiHeaders(openaiApiKey),
+        headers: aiHeaders(),
         body: JSON.stringify({
           campaign_goal: params.campaignGoal,
           slot_index: params.slotIndex,
@@ -339,7 +328,6 @@ export function useGenerateCampaignSlot() {
 }
 
 export function useGenerateCampaignOutline() {
-  const openaiApiKey = useAiStore((s) => s.openaiApiKey);
   const niche = useAiStore((s) => s.niche);
 
   return useMutation({
@@ -351,7 +339,7 @@ export function useGenerateCampaignOutline() {
     }) => {
       const res = await fetch("/api/ai/campaign-outline", {
         method: "POST",
-        headers: aiHeaders(openaiApiKey),
+        headers: aiHeaders(),
         body: JSON.stringify({
           campaign_goal: params.campaignGoal,
           total_posts: params.totalPosts,
@@ -384,7 +372,6 @@ export function useGenerateCampaignOutline() {
 }
 
 export function useCampaignPlan() {
-  const openaiApiKey = useAiStore((s) => s.openaiApiKey);
   const niche = useAiStore((s) => s.niche);
 
   return useMutation({
@@ -400,7 +387,7 @@ export function useCampaignPlan() {
     }) => {
       const res = await fetch("/api/ai/campaign-plan", {
         method: "POST",
-        headers: aiHeaders(openaiApiKey),
+        headers: aiHeaders(),
         body: JSON.stringify({
           posts_per_day: params.postsPerDay,
           plan_days: params.planDays,

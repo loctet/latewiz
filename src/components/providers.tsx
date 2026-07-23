@@ -4,23 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/sonner";
 import { useState, useEffect } from "react";
-import { useAuthStore } from "@/stores";
-
-function HydrationGate({ children }: { children: React.ReactNode }) {
-  const hasHydrated = useAuthStore((state) => state.hasHydrated);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  // Wait for both mount and hydration to prevent flash
-  if (!mounted || !hasHydrated) {
-    return null;
-  }
-
-  return <>{children}</>;
-}
+import { SessionBootstrap } from "@/components/session-bootstrap";
 
 function pruneOversizedAiStorage() {
   if (typeof window === "undefined") return;
@@ -57,12 +41,21 @@ export function Providers({ children }: { children: React.ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 60 * 1000, // 1 minute
+            staleTime: 60 * 1000,
             refetchOnWindowFocus: false,
           },
         },
       })
   );
+
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return null;
+  }
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -72,7 +65,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         enableSystem
         disableTransitionOnChange
       >
-        <HydrationGate>{children}</HydrationGate>
+        <SessionBootstrap>{children}</SessionBootstrap>
         <Toaster position="top-right" richColors closeButton />
       </ThemeProvider>
     </QueryClientProvider>

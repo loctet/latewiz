@@ -4,6 +4,8 @@ const nextConfig: NextConfig = {
   // Enable standalone output for Docker deployments
   output: "standalone",
 
+  // Native SQLite binding must run outside the Next bundler
+  serverExternalPackages: ["better-sqlite3"],
   // Image optimization
   images: {
     remotePatterns: [

@@ -129,8 +129,9 @@ export async function generateDraft(
   const maxOutputTokens = usePostTemplate ? postStyle.maxOutputTokens : undefined;
 
   const newsIntent = isNewsIntent(hintText, goal);
+  const topicForSearch = (topic || hintText || "industry").trim();
   const researchSearchHint = newsIntent
-    ? `${hintText || topic} crypto blockchain news headlines today`.slice(0, 200)
+    ? `${topicForSearch} news headlines today`.slice(0, 200)
     : undefined;
 
   try {
@@ -500,7 +501,7 @@ export async function generateCampaignSlot(
       ? [
           "You write short, warm daily social micro-posts.",
           "Return JSON only: {\"title\":\"...\",\"body\":\"...\",\"hashtags\":\"#a #b\"}.",
-          "Follow the campaign goal format exactly — NOT educational articles or blockchain definitions.",
+          "Follow the campaign goal format exactly — NOT educational articles or generic definitions.",
           "Each post must be emotionally distinct from all prior posts in the series.",
           "Title can be short (e.g. day number) or empty string.",
           SOCIAL_POST_FORMAT_INSTRUCTIONS,
@@ -527,7 +528,7 @@ export async function generateCampaignSlot(
   const researchSearchHint =
     brief.searchHint?.trim() ||
     (postStyle.id === "crypto-market-analysis"
-      ? `${brief.subtopic} cryptocurrency price market cap news analysis`
+      ? `${brief.subtopic} market price news analysis`
       : usePostTemplate
         ? `${brief.subtopic} ${goal}`
         : undefined);

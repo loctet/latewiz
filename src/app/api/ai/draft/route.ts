@@ -2,20 +2,25 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   generateDraft,
   parseNicheFromBody,
-  resolveOpenAiApiKey,
 } from "@/lib/openai";
+import { SessionRequiredError } from "@/lib/server/session";
+import { requireUserAiKeys } from "@/lib/server/ai-request-keys";
 
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as Record<string, unknown>;
-    const headerKey = request.headers.get("x-openai-api-key");
-    const apiKey = resolveOpenAiApiKey(
-      headerKey,
-      typeof body.openaiApiKey === "string" ? body.openaiApiKey : null
-    );
+    const { openaiApiKey } = await requireUserAiKeys(request, body);
+    if (!openaiApiKey) {
+      return NextResponse.json(
+        {
+          error:
+            "OpenAI API key required. Add yours in Settings — AI runs on your account.",
+        },
+        { status: 400 }
+      );
+    }
     const niche = parseNicheFromBody(body);
-    const hint =
-      typeof body.hint === "string" ? body.hint : undefined;
+    const hint = typeof body.hint === "string" ? body.hint : undefined;
     const postPromptStyleId =
       typeof body.post_prompt_style_id === "string"
         ? body.post_prompt_style_id
@@ -23,9 +28,21 @@ export async function POST(request: NextRequest) {
           ? body.postPromptStyleId
           : undefined;
 
-    const draft = await generateDraft(apiKey, niche, hint, postPromptStyleId);
-    return NextResponse.json({ draft, source: draft.source, detail: draft.detail });
+    const draft = await generateDraft(
+      openaiApiKey,
+      niche,
+      hint,
+      postPromptStyleId
+    );
+    return NextResponse.json({
+      draft,
+      source: draft.source,
+      detail: draft.detail,
+    });
   } catch (err) {
+    if (err instanceof SessionRequiredError) {
+      return NextResponse.json({ error: err.message }, { status: 401 });
+    }
     console.error("AI draft error:", err);
     return NextResponse.json(
       { error: "Failed to generate draft" },

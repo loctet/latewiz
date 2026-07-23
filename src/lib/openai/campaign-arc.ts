@@ -84,7 +84,9 @@ export function assignFallbackSlotBrief(
         ? "Short attributed quote + brief morning greeting"
         : `Original motivational morning line — theme: ${theme}`,
       keyPoint: `Unique day-${slotNum} message: ${theme}. Must differ from all prior posts.`,
-      searchHint: isQuoteDay ? "inspirational crypto blockchain quote" : "",
+      searchHint: isQuoteDay
+        ? `inspirational quote ${goal.slice(0, 60)}`.trim()
+        : "",
     };
   }
 
@@ -196,7 +198,7 @@ export function assignListItemSlotBrief(
       ? `Institutional-quality market analysis for ${item}: price context, catalysts, technical read, risks, and outlook. Cover ONLY ${item}.`
       : `Write ${goal.toLowerCase()} for ${item} only. Do not cover other assets or topics from the list.`,
     searchHint: isMarketAnalysis
-      ? `${item} cryptocurrency price market cap volume news analysis`
+      ? `${item} market price analysis news`
       : `${item} ${goal} latest developments`,
   };
 }

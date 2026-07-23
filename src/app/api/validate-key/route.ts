@@ -1,8 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import Late from "@getlatedev/node";
+import {
+  SessionRequiredError,
+  getSessionFromRequest,
+} from "@/lib/server/session";
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await getSessionFromRequest(request);
+    if (!session?.user) {
+      return NextResponse.json(
+        { error: "Authentication required" },
+        { status: 401 }
+      );
+    }
+
     const { apiKey } = await request.json();
 
     if (!apiKey || typeof apiKey !== "string") {
@@ -29,8 +41,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ data });
+    return NextResponse.json({ data, usageStats: data });
   } catch (err) {
+    if (err instanceof SessionRequiredError) {
+      return NextResponse.json({ error: err.message }, { status: 401 });
+    }
     console.error("API key validation error:", err);
     return NextResponse.json(
       { error: "Failed to validate API key" },

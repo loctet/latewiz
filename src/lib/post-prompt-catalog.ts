@@ -33,7 +33,7 @@ Keep it readable in one scroll — no filler.`,
     description:
       "Digest of the latest headlines from live web research — 5–10 distinct stories with context.",
     expertRole:
-      "senior crypto and blockchain news editor who curates today's most important headlines for a smart general audience",
+      "senior news editor who curates today's most important headlines for a smart audience in this niche",
     structureTemplate: `Write a timely news roundup post about: {{subject}}
 
 Campaign intent: {{goal}}
@@ -47,12 +47,12 @@ TOP STORIES
 Cover 5–8 DISTINCT recent headlines pulled from the web research block. For each story:
 - Start with a clear headline (paraphrase the source, do not copy verbatim)
 - 1–2 sentences summarizing what happened
-- One line on why it matters for crypto/blockchain watchers
+- One line on why it matters for people who follow this topic
 
 Use only stories supported by web research. Skip any headline you cannot verify from the research block.
 
-MARKET MOOD (optional, if research supports it)
-Brief read on overall sentiment — regulation, majors, DeFi, ETFs, etc.
+MOOD (optional, if research supports it)
+Brief read on overall sentiment in this niche.
 
 BOTTOM LINE
 2–3 sentences synthesizing the day's narrative.

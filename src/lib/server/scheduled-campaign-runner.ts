@@ -19,17 +19,40 @@ import {
 import { createLateClient } from "@/lib/late-api";
 import { saveGeneratedImageFile, saveGeneratedVideoFile } from "@/lib/server/generated-media-files";
 import { uploadMediaFromUrl } from "@/lib/server/server-media-upload";
+import { getUserSecret, allowEnvKeyFallback } from "@/lib/server/vault";
+import { isPlausibleOpenAiApiKey } from "@/lib/openai/resolve-key";
+import { isPlausibleFalApiKey } from "@/lib/fal/resolve-key";
+import { isPlausibleZernioKey } from "@/lib/server/resolve-user-keys";
 
-function serverOpenAiKey(): string | null {
-  return process.env.OPENAI_API_KEY?.trim() || null;
+async function resolveCampaignOpenAiKey(userId: string): Promise<string | null> {
+  const fromVault = await getUserSecret(userId, "openai");
+  if (fromVault && isPlausibleOpenAiApiKey(fromVault)) return fromVault;
+  if (allowEnvKeyFallback()) {
+    const env = process.env.OPENAI_API_KEY?.trim();
+    if (env && isPlausibleOpenAiApiKey(env)) return env;
+  }
+  return null;
 }
 
-function serverFalKey(): string | null {
-  return process.env.FAL_KEY?.trim() || null;
+async function resolveCampaignFalKey(userId: string): Promise<string | null> {
+  const fromVault = await getUserSecret(userId, "fal");
+  if (fromVault && isPlausibleFalApiKey(fromVault)) return fromVault;
+  if (allowEnvKeyFallback()) {
+    const env =
+      process.env.FAL_KEY?.trim() || process.env.FAL_API_KEY?.trim();
+    if (env && isPlausibleFalApiKey(env)) return env;
+  }
+  return null;
 }
 
-function serverLateKey(): string | null {
-  return process.env.LATE_API_KEY?.trim() || null;
+async function resolveCampaignZernioKey(userId: string): Promise<string | null> {
+  const fromVault = await getUserSecret(userId, "zernio");
+  if (fromVault && isPlausibleZernioKey(fromVault)) return fromVault;
+  if (allowEnvKeyFallback()) {
+    const env = process.env.LATE_API_KEY?.trim();
+    if (env && isPlausibleZernioKey(env)) return env;
+  }
+  return null;
 }
 
 function buildSlotContent(
@@ -69,7 +92,6 @@ async function persistGeneratedImageBestEffort(
   sourceUrl: string,
   captionDigest: string
 ): Promise<string> {
-  // Vercel filesystem is ephemeral/read-only for most paths — never fail the post for this.
   try {
     const saved = await saveGeneratedImageFile(sourceUrl, captionDigest);
     return saved.url;
@@ -106,7 +128,9 @@ async function persistGeneratedVideoBestEffort(
 async function maybeGenerateMedia(
   campaign: ScheduledCampaign,
   slot: ScheduledCampaignSlot,
-  lateKey: string
+  lateKey: string,
+  openaiKey: string | null,
+  falKey: string | null
 ): Promise<{
   mediaItems?: Array<{ type: "image" | "video"; url: string }>;
   slotPatch: Partial<ScheduledCampaignSlot>;
@@ -118,8 +142,14 @@ async function maybeGenerateMedia(
   const digest = captionContext.slice(0, 120);
 
   if (campaign.mediaMode === "image") {
+    if (!openaiKey) {
+      return {
+        slotPatch: {},
+        warning: "Add your OpenAI key in Settings for image generation.",
+      };
+    }
     const imageResult = await generatePostImage(
-      serverOpenAiKey(),
+      openaiKey,
       campaign.niche,
       slot.aiInstruction,
       captionContext,
@@ -162,8 +192,8 @@ async function maybeGenerateMedia(
   if (campaign.mediaMode === "video") {
     const videoResult = await generatePostVideo(
       campaign.videoProvider,
-      serverOpenAiKey(),
-      serverFalKey(),
+      openaiKey,
+      falKey,
       campaign.niche,
       slot.aiInstruction,
       captionContext,
@@ -206,12 +236,9 @@ async function maybeGenerateMedia(
 async function createScheduledPost(
   campaign: ScheduledCampaign,
   slot: ScheduledCampaignSlot,
+  lateKey: string,
   mediaItems?: Array<{ type: "image" | "video"; url: string }>
 ): Promise<string | null> {
-  const lateKey = serverLateKey();
-  if (!lateKey) {
-    throw new Error("LATE_API_KEY is required for scheduled campaigns.");
-  }
   if (!campaign.targets.length) {
     throw new Error(
       "No publishing targets on this campaign. Re-save the deferred campaign with at least one account selected."
@@ -256,9 +283,33 @@ async function processScheduledCampaignSlot(
     return { status: "skipped" };
   }
 
-  const lateKey = serverLateKey();
+  const userId = acquired.userId;
+  const lateKey = await resolveCampaignZernioKey(userId);
+  const openaiKey = await resolveCampaignOpenAiKey(userId);
+  const falKey = await resolveCampaignFalKey(userId);
+
   if (!lateKey) {
-    const message = "LATE_API_KEY is missing on the server.";
+    const message =
+      "Add your Zernio API key in Settings — scheduled posts use your vault, not the host key.";
+    await updateScheduledCampaign(campaignId, (campaign) => ({
+      ...campaign,
+      slots: campaign.slots.map((slot) =>
+        slot.id === slotId
+          ? {
+              ...slot,
+              status: "failed",
+              lastError: message,
+              processingLeaseUntil: null,
+            }
+          : slot
+      ),
+    }));
+    return { status: "failed", error: message };
+  }
+
+  if (!openaiKey) {
+    const message =
+      "Add your OpenAI API key in Settings — AI generation uses your vault, not the host key.";
     await updateScheduledCampaign(campaignId, (campaign) => ({
       ...campaign,
       slots: campaign.slots.map((slot) =>
@@ -294,7 +345,7 @@ async function processScheduledCampaignSlot(
         hashtags: item.hashtags,
       }));
 
-    const generated = await generateCampaignSlot(serverOpenAiKey(), campaign.niche, {
+    const generated = await generateCampaignSlot(openaiKey, campaign.niche, {
       campaignGoal: campaign.campaignGoal,
       slotIndex,
       totalPosts: sortedSlots.length,
@@ -338,7 +389,13 @@ async function processScheduledCampaignSlot(
       lastError: null,
     };
 
-    const media = await maybeGenerateMedia(campaign, generatedSlot, lateKey);
+    const media = await maybeGenerateMedia(
+      campaign,
+      generatedSlot,
+      lateKey,
+      openaiKey,
+      falKey
+    );
     const mediaWarning = media.warning?.trim() || "";
     const postId = await createScheduledPost(
       campaign,
@@ -346,6 +403,7 @@ async function processScheduledCampaignSlot(
         ...generatedSlot,
         ...media.slotPatch,
       },
+      lateKey,
       media.mediaItems
     );
 

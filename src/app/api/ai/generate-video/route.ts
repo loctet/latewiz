@@ -1,36 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parseNicheFromBody } from "@/lib/openai";
-import { resolveOpenAiApiKey } from "@/lib/openai/resolve-key";
-import { resolveFalApiKey } from "@/lib/fal/resolve-key";
 import {
   generatePostVideo,
   parseVideoProvider,
 } from "@/lib/video-generation";
 import { saveGeneratedVideoFile } from "@/lib/server/generated-media-files";
+import { SessionRequiredError } from "@/lib/server/session";
+import { requireUserAiKeys } from "@/lib/server/ai-request-keys";
 
 export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as Record<string, unknown>;
-    const openaiApiKey = resolveOpenAiApiKey(
-      request.headers.get("x-openai-api-key"),
-      typeof body.openaiApiKey === "string" ? body.openaiApiKey : null
-    );
-    const falApiKey = resolveFalApiKey(
-      request.headers.get("x-fal-api-key"),
-      typeof body.falApiKey === "string"
-        ? body.falApiKey
-        : typeof body.fal_api_key === "string"
-          ? body.fal_api_key
-          : null
-    );
+    const { openaiApiKey, falApiKey } = await requireUserAiKeys(request, body);
     const provider = parseVideoProvider(
       body.video_provider ?? body.videoProvider
     );
     const niche = parseNicheFromBody(body);
-    const prompt =
-      typeof body.prompt === "string" ? body.prompt : undefined;
+    const prompt = typeof body.prompt === "string" ? body.prompt : undefined;
     const captionContext =
       typeof body.caption_context === "string"
         ? body.caption_context
@@ -54,6 +42,25 @@ export async function POST(request: NextRequest) {
             !Array.isArray(body.promptTemplates)
           ? (body.promptTemplates as Record<string, string>)
           : undefined;
+
+    if (provider === "openai-sora" && !openaiApiKey) {
+      return NextResponse.json(
+        {
+          error:
+            "OpenAI API key required. Add yours in Settings — AI runs on your account.",
+        },
+        { status: 400 }
+      );
+    }
+    if (provider === "fal-pika" && !falApiKey) {
+      return NextResponse.json(
+        {
+          error:
+            "fal API key required for Pika. Add yours in Settings.",
+        },
+        { status: 400 }
+      );
+    }
 
     const result = await generatePostVideo(
       provider,
@@ -89,6 +96,9 @@ export async function POST(request: NextRequest) {
       provider: result.provider,
     });
   } catch (err) {
+    if (err instanceof SessionRequiredError) {
+      return NextResponse.json({ error: err.message }, { status: 401 });
+    }
     console.error("AI video error:", err);
     return NextResponse.json(
       { error: "Failed to generate video" },

@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  generatePostImage,
-  parseNicheFromBody,
-  resolveOpenAiApiKey,
-} from "@/lib/openai";
+import { generatePostImage, parseNicheFromBody } from "@/lib/openai";
+import { SessionRequiredError } from "@/lib/server/session";
+import { requireUserAiKeys } from "@/lib/server/ai-request-keys";
 
 function parseReferenceImageUrls(
   body: Record<string, unknown>
@@ -17,8 +15,7 @@ function parseReferenceImageUrls(
         : null;
   if (single?.trim()) urls.push(single.trim());
 
-  const multi =
-    body.reference_image_urls ?? body.referenceImageUrls;
+  const multi = body.reference_image_urls ?? body.referenceImageUrls;
   if (Array.isArray(multi)) {
     for (const item of multi) {
       if (typeof item === "string" && item.trim()) urls.push(item.trim());
@@ -30,14 +27,18 @@ function parseReferenceImageUrls(
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as Record<string, unknown>;
-    const headerKey = request.headers.get("x-openai-api-key");
-    const apiKey = resolveOpenAiApiKey(
-      headerKey,
-      typeof body.openaiApiKey === "string" ? body.openaiApiKey : null
-    );
+    const { openaiApiKey: apiKey } = await requireUserAiKeys(request, body);
+    if (!apiKey) {
+      return NextResponse.json(
+        {
+          error:
+            "OpenAI API key required. Add yours in Settings — AI runs on your account.",
+        },
+        { status: 400 }
+      );
+    }
     const niche = parseNicheFromBody(body);
-    const prompt =
-      typeof body.prompt === "string" ? body.prompt : undefined;
+    const prompt = typeof body.prompt === "string" ? body.prompt : undefined;
     const captionContext =
       typeof body.caption_context === "string"
         ? body.caption_context
@@ -89,6 +90,9 @@ export async function POST(request: NextRequest) {
       detail: result.detail,
     });
   } catch (err) {
+    if (err instanceof SessionRequiredError) {
+      return NextResponse.json({ error: err.message }, { status: 401 });
+    }
     console.error("AI image error:", err);
     return NextResponse.json(
       { error: "Failed to generate image" },

@@ -266,8 +266,7 @@ export const useAiStore = create<AiState>()(
         };
       },
       partialize: (state) => ({
-        openaiApiKey: state.openaiApiKey,
-        falApiKey: state.falApiKey,
+        // API keys live in the encrypted server vault — do not persist locally.
         niche: state.niche,
         imagePromptStyleId: state.imagePromptStyleId,
         postPromptStyleId: state.postPromptStyleId,
@@ -281,7 +280,6 @@ export const useAiStore = create<AiState>()(
         imageWatermarkText: state.imageWatermarkText,
         imageWatermarkOpacity: state.imageWatermarkOpacity,
         imageWatermarkPosition: state.imageWatermarkPosition,
-        // Never persist generatedMedia (base64 images blow localStorage quota)
       }),
       storage: createJSONStorage(() => safeLocalStorage),
     }

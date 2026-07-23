@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { SessionRequiredError } from "@/lib/server/session";
+import { requireUserZernioKey } from "@/lib/server/ai-request-keys";
 
 const ZERNIO_API_BASE =
   process.env.ZERNIO_API_URL ?? "https://zernio.com/api/v1";
@@ -21,13 +23,7 @@ export async function DELETE(request: NextRequest) {
 
 async function proxyZernio(request: NextRequest) {
   try {
-    const apiKey =
-      request.headers.get("x-zernio-api-key") ??
-      request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-
-    if (!apiKey || !apiKey.startsWith("sk_")) {
-      return NextResponse.json({ error: "API key is required" }, { status: 401 });
-    }
+    const { zernioApiKey: apiKey } = await requireUserZernioKey(request);
 
     const path = request.nextUrl.searchParams.get("path");
     if (!path || !path.startsWith("/")) {
@@ -64,6 +60,12 @@ async function proxyZernio(request: NextRequest) {
       },
     });
   } catch (err) {
+    if (err instanceof SessionRequiredError) {
+      return NextResponse.json({ error: err.message }, { status: 401 });
+    }
+    if (err instanceof Error && err.message.includes("Zernio API key")) {
+      return NextResponse.json({ error: err.message }, { status: 401 });
+    }
     console.error("Zernio proxy error:", err);
     return NextResponse.json(
       { error: "Failed to reach Zernio API" },

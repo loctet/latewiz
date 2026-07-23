@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useAuthStore } from "@/stores";
+import Link from "next/link";
+import { useSession } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
-import { ApiKeyModal } from "@/components/shared/api-key-modal";
 import { PlatformIcon } from "@/components/shared/platform-icon";
 import { Logo } from "@/components/shared/logo";
 import { PLATFORMS, PLATFORM_NAMES } from "@/lib/late-api";
@@ -38,9 +38,8 @@ import { useTheme } from "next-themes";
 
 export default function LandingPage() {
   const router = useRouter();
-  const { apiKey, hasHydrated } = useAuthStore();
+  const { data: session, isPending } = useSession();
   const { theme, setTheme } = useTheme();
-  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -48,12 +47,12 @@ export default function LandingPage() {
   }, []);
 
   useEffect(() => {
-    if (hasHydrated && apiKey) {
+    if (!isPending && session?.user) {
       router.push("/dashboard");
     }
-  }, [apiKey, hasHydrated, router]);
+  }, [session, isPending, router]);
 
-  if (!hasHydrated) {
+  if (!mounted || isPending) {
     return null;
   }
 
@@ -155,12 +154,12 @@ export default function LandingPage() {
     {
       question: "Do I need an OpenAI key?",
       answer:
-        "For AI generation, yes — add your OpenAI key in Settings (or set OPENAI_API_KEY on the server). Scheduling and publishing still work with just your Zernio API key.",
+        "For AI generation, yes — each user adds their own OpenAI key to an encrypted vault in Settings. AI and posts never use the host’s keys. Scheduling still needs your Zernio API key.",
     },
     {
       question: "Is LateWiz really free?",
       answer:
-        "Yes. LateWiz is MIT licensed and free. You need a Zernio API key (free tier available) to connect social accounts, plus provider keys for AI if you use those features.",
+        "Yes. LateWiz is MIT licensed and free. Create a LateWiz account, then bring your own Zernio and OpenAI keys so usage stays on your accounts.",
     },
     {
       question: "What platforms are supported?",
@@ -246,11 +245,8 @@ export default function LandingPage() {
                 )}
               </Button>
             )}
-            <Button
-              className="cursor-pointer"
-              onClick={() => setShowApiKeyModal(true)}
-            >
-              Get Started
+            <Button className="cursor-pointer" asChild>
+              <Link href="/signup">Get Started</Link>
             </Button>
           </div>
         </div>
@@ -283,13 +279,11 @@ export default function LandingPage() {
           </p>
 
           <div className="landing-fade-up landing-delay-3 mt-10 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
-            <Button
-              size="lg"
-              className="cursor-pointer"
-              onClick={() => setShowApiKeyModal(true)}
-            >
-              Start scheduling
-              <ArrowRight className="ml-2 h-4 w-4" />
+            <Button size="lg" className="cursor-pointer" asChild>
+              <Link href="/signup">
+                Start scheduling
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
             </Button>
             <Button size="lg" variant="outline" className="cursor-pointer" asChild>
               <a
@@ -496,12 +490,11 @@ export default function LandingPage() {
                     Read the Docs
                   </a>
                 </Button>
-                <Button
-                  className="cursor-pointer"
-                  onClick={() => setShowApiKeyModal(true)}
-                >
-                  Get Started
-                  <ArrowRight className="ml-2 h-4 w-4" />
+                <Button className="cursor-pointer" asChild>
+                  <Link href="/signup">
+                    Get Started
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
                 </Button>
               </div>
             </div>
@@ -526,8 +519,6 @@ export default function LandingPage() {
           </p>
         </div>
       </footer>
-
-      <ApiKeyModal open={showApiKeyModal} onOpenChange={setShowApiKeyModal} />
     </div>
   );
 }

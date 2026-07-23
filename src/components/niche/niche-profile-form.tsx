@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAiStore } from "@/stores";
 import { defaultNicheProfile, type NicheProfile } from "@/lib/openai/types";
 import { NICHE_LANGUAGE_OPTIONS } from "@/lib/openai/niche-prompt";
+import { NICHE_PRESETS, type NichePresetId } from "@/lib/niche-presets";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Save } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 function patchDraft(
   draft: NicheProfile,
@@ -28,8 +30,9 @@ function patchDraft(
 export function NicheProfileForm() {
   const savedNiche = useAiStore((s) => s.niche);
   const setNiche = useAiStore((s) => s.setNiche);
-  const [draft, setDraft] = useState<NicheProfile>(defaultNicheProfile);
+  const [draft, setDraft] = useState<NicheProfile>(() => defaultNicheProfile());
   const [initialized, setInitialized] = useState(false);
+  const [presetId, setPresetId] = useState<NichePresetId>("custom");
 
   useEffect(() => {
     if (!initialized) {
@@ -45,15 +48,57 @@ export function NicheProfileForm() {
 
   const update = (partial: Partial<NicheProfile>) => {
     setDraft((prev) => patchDraft(prev, partial));
+    setPresetId("custom");
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setNiche(draft);
-    toast.success("Niche profile saved");
+    try {
+      const res = await fetch("/api/me/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ niche: draft }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to sync niche");
+      }
+      toast.success("Niche profile saved");
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Saved locally; server sync failed"
+      );
+    }
   };
 
   return (
     <div className="space-y-4">
+      <div className="space-y-2">
+        <Label>Presets</Label>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {NICHE_PRESETS.map((preset) => (
+            <button
+              key={preset.id}
+              type="button"
+              onClick={() => {
+                setPresetId(preset.id);
+                setDraft({ ...preset.niche });
+              }}
+              className={cn(
+                "rounded-md border p-3 text-left text-sm transition-colors",
+                presetId === preset.id
+                  ? "border-primary bg-primary/5"
+                  : "hover:bg-muted"
+              )}
+            >
+              <div className="font-medium">{preset.label}</div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                {preset.description}
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="space-y-2">
         <Label>Content language</Label>
         <Select
@@ -80,34 +125,32 @@ export function NicheProfileForm() {
         <Input
           value={draft.topic}
           onChange={(e) => update({ topic: e.target.value })}
-          placeholder="e.g. SaaS marketing, fitness coaching"
+          placeholder="e.g. molecular biology research, B2B SaaS, fitness coaching"
         />
       </div>
       <div className="space-y-2">
-        <Label>Target audience</Label>
+        <Label>Audience</Label>
         <Input
           value={draft.audience}
           onChange={(e) => update({ audience: e.target.value })}
-          placeholder="Who are you speaking to?"
+          placeholder="Who are you writing for?"
         />
       </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label>Geography</Label>
-          <Input
-            value={draft.geography}
-            onChange={(e) => update({ geography: e.target.value })}
-            placeholder="e.g. US, EU, global"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label>Tone notes</Label>
-          <Input
-            value={draft.toneNotes}
-            onChange={(e) => update({ toneNotes: e.target.value })}
-            placeholder="e.g. friendly, expert, no slang"
-          />
-        </div>
+      <div className="space-y-2">
+        <Label>Geography</Label>
+        <Input
+          value={draft.geography}
+          onChange={(e) => update({ geography: e.target.value })}
+          placeholder="Optional region focus"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label>Tone notes</Label>
+        <Textarea
+          value={draft.toneNotes}
+          onChange={(e) => update({ toneNotes: e.target.value })}
+          rows={3}
+        />
       </div>
       <div className="space-y-2">
         <Label>Forbidden topics</Label>
@@ -115,7 +158,6 @@ export function NicheProfileForm() {
           value={draft.forbiddenTopics}
           onChange={(e) => update({ forbiddenTopics: e.target.value })}
           rows={2}
-          placeholder="Topics or brands to never mention"
         />
       </div>
       <div className="space-y-2">
@@ -124,7 +166,6 @@ export function NicheProfileForm() {
           value={draft.complianceNotes}
           onChange={(e) => update({ complianceNotes: e.target.value })}
           rows={2}
-          placeholder="Disclaimers, regulated claims, legal constraints"
         />
       </div>
       <div className="space-y-2">
@@ -133,19 +174,12 @@ export function NicheProfileForm() {
           value={draft.extraInstructions}
           onChange={(e) => update({ extraInstructions: e.target.value })}
           rows={3}
-          placeholder="CTA style, hashtag rules, brand voice details..."
         />
       </div>
-
-      <div className="flex flex-wrap items-center gap-3 pt-2">
-        <Button type="button" onClick={handleSave} disabled={!isDirty}>
-          <Save className="mr-2 h-4 w-4" />
-          Save niche profile
-        </Button>
-        {isDirty && (
-          <p className="text-xs text-muted-foreground">Unsaved changes</p>
-        )}
-      </div>
+      <Button onClick={handleSave} disabled={!isDirty} className="gap-2">
+        <Save className="h-4 w-4" />
+        Save niche
+      </Button>
     </div>
   );
 }

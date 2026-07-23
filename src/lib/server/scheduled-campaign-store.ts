@@ -1,4 +1,7 @@
 import { randomUUID } from "crypto";
+import { and, desc, eq } from "drizzle-orm";
+import { getDb } from "@/db";
+import { scheduledCampaigns } from "@/db/schema";
 import {
   type ScheduledCampaign,
   type ScheduledCampaignInput,
@@ -8,31 +11,8 @@ import {
 } from "@/lib/scheduled-campaigns";
 import { normalizeWatermarkSettings } from "@/lib/image-watermark";
 import { defaultNicheProfile } from "@/lib/openai/types";
-import {
-  readCampaignStore,
-  writeCampaignStore,
-} from "@/lib/server/scheduled-campaign-persistence";
-
-type CampaignStoreData = {
-  campaigns: ScheduledCampaign[];
-};
 
 const PROCESSING_LEASE_MS = 10 * 60 * 1000;
-
-async function readStore(): Promise<CampaignStoreData> {
-  const parsed = await readCampaignStore();
-  return {
-    campaigns: Array.isArray(parsed.campaigns)
-      ? parsed.campaigns.map((campaign) =>
-          normalizeCampaign(campaign as Partial<ScheduledCampaign>)
-        )
-      : [],
-  };
-}
-
-async function writeStore(store: CampaignStoreData): Promise<void> {
-  await writeCampaignStore(store);
-}
 
 function normalizeSlot(
   slot: Partial<ScheduledCampaignSlot>,
@@ -65,11 +45,16 @@ function normalizeSlot(
 }
 
 function normalizeCampaign(
-  campaign: Partial<ScheduledCampaign>
+  campaign: Partial<ScheduledCampaign> & { userId?: string }
 ): ScheduledCampaign {
   const now = new Date().toISOString();
+  const userId = String(campaign.userId ?? "");
+  if (!userId) {
+    throw new Error("Campaign userId is required");
+  }
   return {
     id: campaign.id ?? randomUUID(),
+    userId,
     name: String(campaign.name ?? "Untitled campaign"),
     profileId:
       typeof campaign.profileId === "string" || campaign.profileId === null
@@ -159,7 +144,8 @@ export function computeCampaignStatus(
   const activeSlots = slots.filter((slot) => slot.status !== "cancelled");
   if (activeSlots.length === 0) return "cancelled";
   const hasPending = activeSlots.some(
-    (slot) => slot.status === "pending_generation" || slot.status === "processing"
+    (slot) =>
+      slot.status === "pending_generation" || slot.status === "processing"
   );
   const hasFailed = activeSlots.some((slot) => slot.status === "failed");
   const allGenerated = activeSlots.every((slot) => slot.status === "generated");
@@ -169,30 +155,99 @@ export function computeCampaignStatus(
   return fallback;
 }
 
-export async function listScheduledCampaigns(): Promise<ScheduledCampaign[]> {
-  const store = await readStore();
-  return store.campaigns.sort(
-    (a, b) =>
-      new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+async function persistCampaign(campaign: ScheduledCampaign): Promise<void> {
+  const now = new Date();
+  const existing = await getDb()
+    .select({ id: scheduledCampaigns.id })
+    .from(scheduledCampaigns)
+    .where(eq(scheduledCampaigns.id, campaign.id))
+    .limit(1);
+
+  if (existing[0]) {
+    await getDb()
+      .update(scheduledCampaigns)
+      .set({
+        userId: campaign.userId,
+        data: campaign,
+        status: campaign.status,
+        updatedAt: now,
+      })
+      .where(eq(scheduledCampaigns.id, campaign.id));
+    return;
+  }
+
+  await getDb().insert(scheduledCampaigns).values({
+    id: campaign.id,
+    userId: campaign.userId,
+    data: campaign,
+    status: campaign.status,
+    createdAt: now,
+    updatedAt: now,
+  });
+}
+
+export async function listScheduledCampaigns(
+  userId?: string
+): Promise<ScheduledCampaign[]> {
+  const rows = userId
+    ? await getDb()
+        .select()
+        .from(scheduledCampaigns)
+        .where(eq(scheduledCampaigns.userId, userId))
+        .orderBy(desc(scheduledCampaigns.updatedAt))
+    : await getDb()
+        .select()
+        .from(scheduledCampaigns)
+        .orderBy(desc(scheduledCampaigns.updatedAt));
+
+  return rows.map((row) =>
+    normalizeCampaign({
+      ...(row.data as ScheduledCampaign),
+      id: row.id,
+      userId: row.userId,
+      status: (row.status as ScheduledCampaignStatus) || row.data.status,
+    })
   );
 }
 
 export async function getScheduledCampaign(
-  id: string
+  id: string,
+  userId?: string
 ): Promise<ScheduledCampaign | null> {
-  const store = await readStore();
-  return store.campaigns.find((campaign) => campaign.id === id) ?? null;
+  const conditions = userId
+    ? and(eq(scheduledCampaigns.id, id), eq(scheduledCampaigns.userId, userId))
+    : eq(scheduledCampaigns.id, id);
+
+  const [row] = await getDb()
+    .select()
+    .from(scheduledCampaigns)
+    .where(conditions)
+    .limit(1);
+
+  if (!row) return null;
+  return normalizeCampaign({
+    ...(row.data as ScheduledCampaign),
+    id: row.id,
+    userId: row.userId,
+    status: (row.status as ScheduledCampaignStatus) || row.data.status,
+  });
 }
 
 export async function saveScheduledCampaign(
-  input: ScheduledCampaignInput
+  input: ScheduledCampaignInput & { userId: string }
 ): Promise<ScheduledCampaign> {
-  const store = await readStore();
   const now = new Date().toISOString();
-  const existingIndex = input.id
-    ? store.campaigns.findIndex((campaign) => campaign.id === input.id)
-    : -1;
-  const existing = existingIndex >= 0 ? store.campaigns[existingIndex] : null;
+  const existing = input.id
+    ? await getScheduledCampaign(input.id, input.userId)
+    : null;
+
+  if (input.id && !existing) {
+    // Prevent cross-user overwrite by id alone
+    const anyOwner = await getScheduledCampaign(input.id);
+    if (anyOwner && anyOwner.userId !== input.userId) {
+      throw new Error("Campaign not found");
+    }
+  }
 
   const slotSeeds = input.slots.map((slot, index) =>
     normalizeSlot(slot, existing?.slots[index]?.id ?? randomUUID())
@@ -201,6 +256,7 @@ export async function saveScheduledCampaign(
   const campaign = normalizeCampaign({
     ...existing,
     ...input,
+    userId: input.userId,
     id: existing?.id ?? input.id ?? randomUUID(),
     status:
       input.status ??
@@ -210,43 +266,40 @@ export async function saveScheduledCampaign(
     updatedAt: now,
   });
 
-  if (existingIndex >= 0) {
-    store.campaigns[existingIndex] = campaign;
-  } else {
-    store.campaigns.push(campaign);
-  }
-
-  await writeStore(store);
+  await persistCampaign(campaign);
   return campaign;
 }
 
-export async function deleteScheduledCampaign(id: string): Promise<boolean> {
-  const store = await readStore();
-  const next = store.campaigns.filter((campaign) => campaign.id !== id);
-  if (next.length === store.campaigns.length) return false;
-  await writeStore({ campaigns: next });
+export async function deleteScheduledCampaign(
+  id: string,
+  userId?: string
+): Promise<boolean> {
+  const existing = await getScheduledCampaign(id, userId);
+  if (!existing) return false;
+  await getDb()
+    .delete(scheduledCampaigns)
+    .where(eq(scheduledCampaigns.id, id));
   return true;
 }
 
 export async function updateScheduledCampaign(
   id: string,
-  updater: (campaign: ScheduledCampaign) => ScheduledCampaign | null
+  updater: (campaign: ScheduledCampaign) => ScheduledCampaign | null,
+  userId?: string
 ): Promise<ScheduledCampaign | null> {
-  const store = await readStore();
-  const index = store.campaigns.findIndex((campaign) => campaign.id === id);
-  if (index < 0) return null;
-  const current = normalizeCampaign(store.campaigns[index]);
+  const current = await getScheduledCampaign(id, userId);
+  if (!current) return null;
   const next = updater(current);
   if (!next) return null;
   const normalized = normalizeCampaign({
     ...next,
     id: current.id,
+    userId: current.userId,
     createdAt: current.createdAt,
     updatedAt: new Date().toISOString(),
   });
   normalized.status = computeCampaignStatus(normalized.slots, normalized.status);
-  store.campaigns[index] = normalized;
-  await writeStore(store);
+  await persistCampaign(normalized);
   return normalized;
 }
 
@@ -261,7 +314,8 @@ export async function getDueScheduledCampaignSlots(now = Date.now()): Promise<
     if (campaign.generationMode !== "deferred") continue;
     if (campaign.status === "paused" || campaign.status === "cancelled") continue;
     for (const slot of campaign.slots) {
-      if (slot.status !== "pending_generation" && slot.status !== "failed") continue;
+      if (slot.status !== "pending_generation" && slot.status !== "failed")
+        continue;
       const dueAt =
         new Date(slot.scheduled_at).getTime() -
         campaign.generationLeadMinutes * 60_000;

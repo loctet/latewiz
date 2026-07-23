@@ -2,19 +2,25 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   generateCampaignSlot,
   parseNicheFromBody,
-  resolveOpenAiApiKey,
   type CampaignSlotBrief,
   type PreviousCampaignPost,
 } from "@/lib/openai";
+import { SessionRequiredError } from "@/lib/server/session";
+import { requireUserAiKeys } from "@/lib/server/ai-request-keys";
 
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as Record<string, unknown>;
-    const headerKey = request.headers.get("x-openai-api-key");
-    const apiKey = resolveOpenAiApiKey(
-      headerKey,
-      typeof body.openaiApiKey === "string" ? body.openaiApiKey : null
-    );
+    const { openaiApiKey: apiKey } = await requireUserAiKeys(request, body);
+    if (!apiKey) {
+      return NextResponse.json(
+        {
+          error:
+            "OpenAI API key required. Add yours in Settings — AI runs on your account.",
+        },
+        { status: 400 }
+      );
+    }
 
     const niche = parseNicheFromBody(body);
     const campaignGoal =
@@ -50,7 +56,10 @@ export async function POST(request: NextRequest) {
     const trendSnippets = Array.isArray(trendRaw)
       ? trendRaw.map((s) => String(s))
       : typeof trendRaw === "string"
-        ? trendRaw.split("\n").map((s) => s.trim()).filter(Boolean)
+        ? trendRaw
+            .split("\n")
+            .map((s) => s.trim())
+            .filter(Boolean)
         : [];
 
     const prevRaw = body.previous_posts ?? body.previousPosts;
@@ -91,9 +100,7 @@ export async function POST(request: NextRequest) {
           ? body.postPromptStyleId
           : undefined;
 
-    const isListMode =
-      body.is_list_mode === true ||
-      body.isListMode === true;
+    const isListMode = body.is_list_mode === true || body.isListMode === true;
 
     const result = await generateCampaignSlot(apiKey, niche, {
       campaignGoal,
@@ -103,19 +110,17 @@ export async function POST(request: NextRequest) {
       previousPosts,
       campaignHint,
       trendSnippets,
-      slotBrief:
-        slotBrief?.subtopic?.trim()
-          ? {
-              slotIndex: slotIndex,
-              phase:
-                (slotBrief.phase as CampaignSlotBrief["phase"]) ?? "build",
-              beat: String(slotBrief.beat ?? ""),
-              subtopic: String(slotBrief.subtopic ?? ""),
-              angle: String(slotBrief.angle ?? ""),
-              keyPoint: String(slotBrief.keyPoint ?? ""),
-              searchHint: String(slotBrief.searchHint ?? ""),
-            }
-          : undefined,
+      slotBrief: slotBrief?.subtopic?.trim()
+        ? {
+            slotIndex: slotIndex,
+            phase: (slotBrief.phase as CampaignSlotBrief["phase"]) ?? "build",
+            beat: String(slotBrief.beat ?? ""),
+            subtopic: String(slotBrief.subtopic ?? ""),
+            angle: String(slotBrief.angle ?? ""),
+            keyPoint: String(slotBrief.keyPoint ?? ""),
+            searchHint: String(slotBrief.searchHint ?? ""),
+          }
+        : undefined,
       coveredSubtopics,
       postPromptStyleId,
       isListMode,
@@ -131,6 +136,9 @@ export async function POST(request: NextRequest) {
       detail: result.detail,
     });
   } catch (err) {
+    if (err instanceof SessionRequiredError) {
+      return NextResponse.json({ error: err.message }, { status: 401 });
+    }
     console.error("Campaign slot error:", err);
     return NextResponse.json(
       { error: "Failed to generate campaign slot" },

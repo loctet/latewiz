@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore, useAppStore, useAiStore } from "@/stores";
+import { logoutLateWiz } from "@/components/session-bootstrap";
 import { isPlausibleOpenAiApiKey } from "@/lib/openai/resolve-key";
 import { isPlausibleFalApiKey } from "@/lib/fal/resolve-key";
 import { VIDEO_PROVIDERS } from "@/lib/video-providers";
@@ -11,7 +13,13 @@ import { useOpenAiStatus } from "@/hooks";
 import { Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { getTimezoneOptions } from "@/lib/timezones";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,7 +41,18 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Key, Moon, Sun, Globe, LogOut, ExternalLink, Target, ImageIcon, Film, Stamp } from "lucide-react";
+import {
+  Moon,
+  Sun,
+  Globe,
+  LogOut,
+  ExternalLink,
+  Target,
+  ImageIcon,
+  Film,
+  Stamp,
+  Shield,
+} from "lucide-react";
 import Link from "next/link";
 import {
   ImagePromptTemplatesEditor,
@@ -41,78 +60,312 @@ import {
   ImageWatermarkSettings,
 } from "@/components/settings";
 
+type VaultStatus = {
+  hasZernio: boolean;
+  hasOpenai: boolean;
+  hasFal: boolean;
+  zernioHint: string | null;
+  openaiHint: string | null;
+  falHint: string | null;
+};
+
 export default function SettingsPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { theme, setTheme } = useTheme();
-  const { apiKey, usageStats, logout } = useAuthStore();
+  const { usageStats, setApiKey } = useAuthStore();
   const { timezone, setTimezone } = useAppStore();
-  const { openaiApiKey, setOpenaiApiKey, falApiKey, setFalApiKey, videoProvider, setVideoProvider } =
-    useAiStore();
+  const { videoProvider, setVideoProvider } = useAiStore();
   const { data: openAiStatus } = useOpenAiStatus();
 
-  const [showApiKey, setShowApiKey] = useState(false);
-  const [openAiKeyInput, setOpenAiKeyInput] = useState("");
-  const [showOpenAiKey, setShowOpenAiKey] = useState(false);
-  const [falKeyInput, setFalKeyInput] = useState("");
-  const [showFalKey, setShowFalKey] = useState(false);
+  const { data: vault } = useQuery({
+    queryKey: ["vault-status"],
+    queryFn: async () => {
+      const res = await fetch("/api/vault");
+      if (!res.ok) throw new Error("Failed to load vault");
+      return res.json() as Promise<VaultStatus>;
+    },
+  });
 
-  // Compute timezone options - always includes user's browser timezone and current selection
+  const [zernioInput, setZernioInput] = useState("");
+  const [openAiKeyInput, setOpenAiKeyInput] = useState("");
+  const [falKeyInput, setFalKeyInput] = useState("");
+  const [showZernio, setShowZernio] = useState(false);
+  const [showOpenAiKey, setShowOpenAiKey] = useState(false);
+  const [showFalKey, setShowFalKey] = useState(false);
+  const [saving, setSaving] = useState(false);
+
   const timezoneOptions = useMemo(
     () => getTimezoneOptions(timezone),
     [timezone]
   );
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logoutLateWiz();
     router.push("/");
   };
 
-  const maskedApiKey = apiKey
-    ? `${apiKey.slice(0, 7)}${"•".repeat(20)}${apiKey.slice(-4)}`
-    : "";
+  async function saveVaultKeys(payload: {
+    zernio?: string;
+    openai?: string;
+    fal?: string;
+  }) {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/vault", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Failed to save");
+      await queryClient.invalidateQueries({ queryKey: ["vault-status"] });
+      await queryClient.invalidateQueries({ queryKey: ["openai-status"] });
+      if (payload.zernio) {
+        setApiKey(payload.zernio);
+      }
+      toast.success("Keys saved to encrypted vault");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save keys");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteVaultKey(kind: "zernio" | "openai" | "fal") {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/vault/${kind}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Failed to delete");
+      await queryClient.invalidateQueries({ queryKey: ["vault-status"] });
+      await queryClient.invalidateQueries({ queryKey: ["openai-status"] });
+      if (kind === "zernio") setApiKey(null);
+      toast.success("Key removed from vault");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete key");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div className="w-full space-y-4 sm:space-y-6">
-      {/* Page header */}
       <div>
         <h1 className="text-xl sm:text-2xl font-bold">Settings</h1>
         <p className="text-muted-foreground">
-          Manage your account and preferences.
+          Manage your account, encrypted API vault, and preferences.
         </p>
       </div>
 
-      {/* API Key */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <Key className="h-4 w-4" />
-            API Key
+            <Shield className="h-4 w-4" />
+            Encrypted API vault
           </CardTitle>
           <CardDescription>
-            Your Zernio API key is used to connect to your Zernio account.
+            Keys are encrypted at rest with{" "}
+            <code className="text-xs">VAULT_MASTER_KEY</code>. AI and deferred
+            campaigns use <strong>your</strong> keys — never the host&apos;s.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-6">
+          <div className="rounded-lg bg-muted p-3 text-sm space-y-1">
+            <p>
+              Zernio:{" "}
+              {vault?.hasZernio ? (
+                <span className="font-medium text-green-600 dark:text-green-400">
+                  Saved ••••{vault.zernioHint}
+                </span>
+              ) : (
+                <span className="font-medium text-amber-600 dark:text-amber-400">
+                  Missing
+                </span>
+              )}
+            </p>
+            <p>
+              OpenAI:{" "}
+              {vault?.hasOpenai || openAiStatus?.openai_configured ? (
+                <span className="font-medium text-green-600 dark:text-green-400">
+                  Saved{vault?.openaiHint ? ` ••••${vault.openaiHint}` : ""}
+                </span>
+              ) : (
+                <span className="font-medium text-amber-600 dark:text-amber-400">
+                  Missing
+                </span>
+              )}
+            </p>
+            <p>
+              fal.ai:{" "}
+              {vault?.hasFal || openAiStatus?.fal_configured ? (
+                <span className="font-medium text-green-600 dark:text-green-400">
+                  Saved{vault?.falHint ? ` ••••${vault.falHint}` : ""}
+                </span>
+              ) : (
+                <span className="text-muted-foreground">Optional</span>
+              )}
+            </p>
+          </div>
+
           <div className="space-y-2">
-            <Label>Current API Key</Label>
+            <Label>Zernio API key</Label>
             <div className="flex gap-2">
               <Input
-                type={showApiKey ? "text" : "password"}
-                value={showApiKey ? apiKey || "" : maskedApiKey}
-                readOnly
+                type={showZernio ? "text" : "password"}
+                placeholder="sk_…"
+                value={zernioInput}
+                onChange={(e) => setZernioInput(e.target.value)}
                 className="font-mono"
               />
               <Button
                 variant="outline"
-                onClick={() => setShowApiKey(!showApiKey)}
+                type="button"
+                onClick={() => setShowZernio(!showZernio)}
               >
-                {showApiKey ? "Hide" : "Show"}
+                {showZernio ? "Hide" : "Show"}
               </Button>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                disabled={saving}
+                onClick={() => {
+                  const k = zernioInput.trim();
+                  if (!k.startsWith("sk_")) {
+                    toast.error("Invalid Zernio key (must start with sk_)");
+                    return;
+                  }
+                  void saveVaultKeys({ zernio: k }).then(() =>
+                    setZernioInput("")
+                  );
+                }}
+              >
+                Save Zernio key
+              </Button>
+              {vault?.hasZernio && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={saving}
+                  onClick={() => void deleteVaultKey("zernio")}
+                >
+                  Remove
+                </Button>
+              )}
+            </div>
+            <Button variant="link" className="h-auto p-0" asChild>
+              <a
+                href="https://zernio.com/dashboard/api-keys"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Manage Zernio keys
+                <ExternalLink className="ml-1 h-3 w-3" />
+              </a>
+            </Button>
+          </div>
+
+          <div className="space-y-2 border-t pt-4">
+            <Label className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4" />
+              OpenAI API key
+            </Label>
+            <div className="flex gap-2">
+              <Input
+                type={showOpenAiKey ? "text" : "password"}
+                placeholder="sk-…"
+                value={openAiKeyInput}
+                onChange={(e) => setOpenAiKeyInput(e.target.value)}
+                className="font-mono"
+              />
+              <Button
+                variant="outline"
+                type="button"
+                onClick={() => setShowOpenAiKey(!showOpenAiKey)}
+              >
+                {showOpenAiKey ? "Hide" : "Show"}
+              </Button>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                disabled={saving}
+                onClick={() => {
+                  const k = openAiKeyInput.trim();
+                  if (!isPlausibleOpenAiApiKey(k)) {
+                    toast.error("Invalid OpenAI key format");
+                    return;
+                  }
+                  void saveVaultKeys({ openai: k }).then(() =>
+                    setOpenAiKeyInput("")
+                  );
+                }}
+              >
+                Save OpenAI key
+              </Button>
+              {vault?.hasOpenai && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={saving}
+                  onClick={() => void deleteVaultKey("openai")}
+                >
+                  Remove
+                </Button>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-2 border-t pt-4">
+            <Label>fal.ai API key (Pika video)</Label>
+            <div className="flex gap-2">
+              <Input
+                type={showFalKey ? "text" : "password"}
+                placeholder="fal key"
+                value={falKeyInput}
+                onChange={(e) => setFalKeyInput(e.target.value)}
+                className="font-mono"
+              />
+              <Button
+                variant="outline"
+                type="button"
+                onClick={() => setShowFalKey(!showFalKey)}
+              >
+                {showFalKey ? "Hide" : "Show"}
+              </Button>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={saving}
+                onClick={() => {
+                  const k = falKeyInput.trim();
+                  if (!isPlausibleFalApiKey(k)) {
+                    toast.error("Invalid fal.ai key format");
+                    return;
+                  }
+                  void saveVaultKeys({ fal: k }).then(() => setFalKeyInput(""));
+                }}
+              >
+                Save fal key
+              </Button>
+              {vault?.hasFal && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={saving}
+                  onClick={() => void deleteVaultKey("fal")}
+                >
+                  Remove
+                </Button>
+              )}
             </div>
           </div>
 
           {usageStats && (
-            <div className="rounded-lg bg-muted p-4">
+            <div className="rounded-lg bg-muted p-4 text-sm">
               <div className="flex items-center justify-between">
                 <span className="font-medium">{usageStats.planName}</span>
                 <Button variant="link" size="sm" className="h-auto p-0" asChild>
@@ -126,45 +379,11 @@ export default function SettingsPage() {
                   </a>
                 </Button>
               </div>
-              <div className="mt-2 grid gap-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Uploads</span>
-                  <span>
-                    {usageStats.limits.uploads < 0 ? (
-                      <>{usageStats.usage.uploads.toLocaleString()} / ∞</>
-                    ) : (
-                      <>{usageStats.usage.uploads.toLocaleString()} / {usageStats.limits.uploads.toLocaleString()}</>
-                    )}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Profiles</span>
-                  <span>
-                    {usageStats.limits.profiles < 0 ? (
-                      <>{usageStats.usage.profiles.toLocaleString()} / ∞</>
-                    ) : (
-                      <>{usageStats.usage.profiles.toLocaleString()} / {usageStats.limits.profiles.toLocaleString()}</>
-                    )}
-                  </span>
-                </div>
-              </div>
             </div>
           )}
-
-          <Button variant="outline" asChild>
-            <a
-              href="https://zernio.com/dashboard/api-keys"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Manage API Keys
-              <ExternalLink className="ml-2 h-4 w-4" />
-            </a>
-          </Button>
         </CardContent>
       </Card>
 
-      {/* Content niche (separate page) */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
@@ -185,227 +404,34 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* OpenAI */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <Sparkles className="h-4 w-4" />
-            OpenAI (AI writing & images)
+            <Film className="h-4 w-4" />
+            Video provider
           </CardTitle>
-          <CardDescription>
-            Powers caption drafts, campaign planning, and notebook-style
-            infographics. Stored locally on this device. Server{" "}
-            <code className="text-xs">OPENAI_API_KEY</code> is used as fallback.
-            Caption and campaign AI use OpenAI&apos;s built-in web search (Responses
-            API) when your key supports it. Optional{" "}
-            <code className="text-xs">TAVILY_API_KEY</code> /{" "}
-            <code className="text-xs">SERPER_API_KEY</code> on the server is only a
-            fallback if native search is unavailable.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="rounded-lg bg-muted p-3 text-sm space-y-1">
-            <p>
-              fal.ai (Pika):{" "}
-              {openAiStatus?.fal_configured ? (
-                <span className="text-green-600 dark:text-green-400 font-medium">
-                  Configured
-                </span>
-              ) : (
-                <span className="text-amber-600 dark:text-amber-400 font-medium">
-                  Not configured
-                </span>
-              )}
-            </p>
-            <p>
-              OpenAI:{" "}
-              {openAiStatus?.openai_configured ? (
-                <span className="text-green-600 dark:text-green-400 font-medium">
-                  Configured
-                </span>
-              ) : (
-                <span className="text-amber-600 dark:text-amber-400 font-medium">
-                  Not configured
-                </span>
-              )}
-            </p>
-            <p>
-              Live web research:{" "}
-              {openAiStatus?.web_search_mode === "openai_native" ? (
-                <span className="text-green-600 dark:text-green-400 font-medium">
-                  OpenAI web search (Responses API)
-                </span>
-              ) : openAiStatus?.web_search_mode === "tavily_serper" ? (
-                <span className="text-green-600 dark:text-green-400 font-medium">
-                  Fallback search (Tavily / Serper)
-                </span>
-              ) : openAiStatus?.openai_configured ? (
-                <span className="text-muted-foreground">
-                  OpenAI only — no web search keys on server
-                </span>
-              ) : (
-                <span className="text-muted-foreground">
-                  Configure OpenAI key first
-                </span>
-              )}
-            </p>
-          </div>
-          <div className="space-y-2">
-            <Label>OpenAI API key</Label>
-            <div className="flex gap-2">
-              <Input
-                type={showOpenAiKey ? "text" : "password"}
-                placeholder="sk-..."
-                value={openAiKeyInput}
-                onChange={(e) => setOpenAiKeyInput(e.target.value)}
-                className="font-mono"
-              />
-              <Button
-                variant="outline"
-                type="button"
-                onClick={() => setShowOpenAiKey(!showOpenAiKey)}
-              >
-                {showOpenAiKey ? "Hide" : "Show"}
-              </Button>
-            </div>
-            {openaiApiKey && (
-              <p className="text-xs text-muted-foreground">
-                Saved key: {openaiApiKey.slice(0, 7)}••••{openaiApiKey.slice(-4)}
-              </p>
-            )}
-          </div>
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              onClick={() => {
-                const k = openAiKeyInput.trim();
-                if (k && !isPlausibleOpenAiApiKey(k)) {
-                  toast.error("Invalid OpenAI key format (must start with sk-)");
-                  return;
-                }
-                setOpenaiApiKey(k || null);
-                setOpenAiKeyInput("");
-                toast.success(k ? "OpenAI key saved" : "OpenAI key cleared");
-              }}
-            >
-              Save OpenAI key
-            </Button>
-            {openaiApiKey && (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setOpenaiApiKey(null);
-                  setOpenAiKeyInput("");
-                  toast.success("OpenAI key removed");
-                }}
-              >
-                Clear OpenAI
-              </Button>
-            )}
-          </div>
-
-          <div className="space-y-2 pt-2 border-t">
-            <Label>fal.ai API key (Pika video)</Label>
-            <div className="flex gap-2">
-              <Input
-                type={showFalKey ? "text" : "password"}
-                placeholder="FAL key from fal.ai/dashboard/keys"
-                value={falKeyInput}
-                onChange={(e) => setFalKeyInput(e.target.value)}
-                className="font-mono"
-              />
-              <Button
-                variant="outline"
-                type="button"
-                onClick={() => setShowFalKey(!showFalKey)}
-              >
-                {showFalKey ? "Hide" : "Show"}
-              </Button>
-            </div>
-            {falApiKey && (
-              <p className="text-xs text-muted-foreground">
-                Saved fal key: {falApiKey.slice(0, 6)}••••{falApiKey.slice(-4)}
-              </p>
-            )}
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  const k = falKeyInput.trim();
-                  if (k && !isPlausibleFalApiKey(k)) {
-                    toast.error("Invalid fal.ai key format");
-                    return;
-                  }
-                  setFalApiKey(k || null);
-                  setFalKeyInput("");
-                  toast.success(k ? "fal.ai key saved" : "fal.ai key cleared");
-                }}
-              >
-                Save fal key
-              </Button>
-              {falApiKey && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setFalApiKey(null);
-                    setFalKeyInput("");
-                    toast.success("fal.ai key removed");
-                  }}
-                >
-                  Clear fal
-                </Button>
-              )}
-            </div>
-          </div>
-
-          <div className="space-y-2 pt-2 border-t">
-            <Label>Default video generator</Label>
-            <Select
-              value={videoProvider}
-              onValueChange={(v) =>
-                setVideoProvider(v as (typeof VIDEO_PROVIDERS)[number]["id"])
-              }
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {VIDEO_PROVIDERS.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              Used in AI Studio, Compose, and Campaign when generating video.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Image signature / filigrane */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Stamp className="h-4 w-4" />
-            Image signature
-          </CardTitle>
-          <CardDescription>
-            Overlay your signature text on generated images with adjustable
-            transparency. Applied automatically in Campaign and Compose — no
-            AI involved.
-          </CardDescription>
         </CardHeader>
         <CardContent>
-          <ImageWatermarkSettings />
+          <Select
+            value={videoProvider}
+            onValueChange={(v) =>
+              setVideoProvider(v as (typeof VIDEO_PROVIDERS)[number]["id"])
+            }
+          >
+            <SelectTrigger className="w-full sm:w-72">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {VIDEO_PROVIDERS.map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  {p.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </CardContent>
       </Card>
 
-      {/* Image prompt templates */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
@@ -413,10 +439,8 @@ export default function SettingsPage() {
             Image prompt templates
           </CardTitle>
           <CardDescription>
-            Edit built-in image styles or create your own templates. Use{" "}
-            <code className="text-xs">{"{{subject}}"}</code> and{" "}
-            <code className="text-xs">{"{{langNote}}"}</code> placeholders.
-            Saved on this device and used when you generate images.
+            Customize styles with <code className="text-xs">{"{{subject}}"}</code>{" "}
+            and <code className="text-xs">{"{{langNote}}"}</code>.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -424,27 +448,53 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Video prompt templates */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Film className="h-4 w-4" />
             Video prompt templates
           </CardTitle>
-          <CardDescription>
-            Edit AI instructions for short-form video (Sora or Pika). Use{" "}
-            <code className="text-xs">{"{{subject}}"}</code>,{" "}
-            <code className="text-xs">{"{{langNote}}"}</code>,{" "}
-            <code className="text-xs">{"{{motion}}"}</code>, and{" "}
-            <code className="text-xs">{"{{duration}}"}</code>.
-          </CardDescription>
         </CardHeader>
         <CardContent>
           <VideoPromptTemplatesEditor />
         </CardContent>
       </Card>
 
-      {/* Appearance */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Stamp className="h-4 w-4" />
+            Image watermark
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ImageWatermarkSettings />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Globe className="h-4 w-4" />
+            Timezone
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Select value={timezone} onValueChange={setTimezone}>
+            <SelectTrigger className="w-full sm:w-80">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {timezoneOptions.map((tz) => (
+                <SelectItem key={tz} value={tz}>
+                  {tz}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
@@ -455,131 +505,45 @@ export default function SettingsPage() {
             )}
             Appearance
           </CardTitle>
-          <CardDescription>
-            Customize how LateWiz looks on your device.
-          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
-            <Label>Theme</Label>
-            <Select value={theme} onValueChange={setTheme}>
-              <SelectTrigger className="w-48">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="light">Light</SelectItem>
-                <SelectItem value="dark">Dark</SelectItem>
-                <SelectItem value="system">System</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          <Button
+            variant="outline"
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          >
+            Switch to {theme === "dark" ? "light" : "dark"} mode
+          </Button>
         </CardContent>
       </Card>
 
-      {/* Timezone */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Globe className="h-4 w-4" />
-            Timezone
-          </CardTitle>
-          <CardDescription>
-            Set your default timezone for scheduling posts.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            <Label>Default Timezone</Label>
-            <Select value={timezone} onValueChange={setTimezone}>
-              <SelectTrigger className="w-64">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {timezoneOptions.map((tz) => (
-                  <SelectItem key={tz} value={tz}>
-                    {tz.replace(/_/g, " ")}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              Current timezone: {Intl.DateTimeFormat().resolvedOptions().timeZone}
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Session */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
+          <CardTitle className="flex items-center gap-2 text-base text-destructive">
             <LogOut className="h-4 w-4" />
-            Session
+            Sign out
           </CardTitle>
-          <CardDescription>
-            Manage your current session on this device.
-          </CardDescription>
         </CardHeader>
         <CardContent>
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="outline">Sign Out</Button>
+              <Button variant="destructive">Sign out</Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Sign Out</AlertDialogTitle>
+                <AlertDialogTitle>Sign out?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This will remove your API key from this device. You&apos;ll need
-                  to enter it again to use LateWiz.
+                  You will need to sign in again. Vault keys stay encrypted on the
+                  server.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                 <AlertDialogAction onClick={handleLogout}>
-                  Sign Out
+                  Sign out
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
-        </CardContent>
-      </Card>
-
-      {/* About */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="text-center text-sm text-muted-foreground">
-            <p>LateWiz - Your social media scheduling wizard</p>
-            <p className="mt-1">
-              Powered by{" "}
-              <a
-                href="https://zernio.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline underline-offset-4 hover:text-foreground"
-              >
-                Zernio
-              </a>
-            </p>
-            <p className="mt-2">
-              <a
-                href="https://github.com/zernio-dev/latewiz"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline underline-offset-4 hover:text-foreground"
-              >
-                View on GitHub
-              </a>
-              {" · "}
-              <a
-                href="https://github.com/zernio-dev/latewiz/issues"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline underline-offset-4 hover:text-foreground"
-              >
-                Report Issue
-              </a>
-            </p>
-          </div>
         </CardContent>
       </Card>
     </div>

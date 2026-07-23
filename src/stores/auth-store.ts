@@ -13,10 +13,6 @@ interface UsageStats {
   };
 }
 
-// Normalize usage stats at the boundary (API responses + localStorage rehydration).
-// Guarantees the full shape so render code can trust .toLocaleString() on every field.
-// Without this, a stale persisted shape or a partial API response crashes the dashboard
-// during hydration with "Cannot read properties of undefined (reading 'toLocaleString')".
 function normalizeUsageStats(stats: unknown): UsageStats | null {
   if (!stats || typeof stats !== "object") return null;
   const s = stats as Partial<UsageStats> & {
@@ -26,7 +22,10 @@ function normalizeUsageStats(stats: unknown): UsageStats | null {
   const num = (v: unknown, fallback = 0): number =>
     typeof v === "number" && Number.isFinite(v) ? v : fallback;
   return {
-    planName: typeof s.planName === "string" && s.planName.length > 0 ? s.planName : "Free",
+    planName:
+      typeof s.planName === "string" && s.planName.length > 0
+        ? s.planName
+        : "Free",
     limits: {
       uploads: num(s.limits?.uploads),
       profiles: num(s.limits?.profiles),
@@ -74,16 +73,14 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: "latewiz-auth",
+      // Secrets live in the server vault. Persist only non-secret usage cache.
       partialize: (state) => ({
-        apiKey: state.apiKey,
         usageStats: state.usageStats,
       }),
-      // Sanitize the rehydrated shape before the dashboard mounts. Old persisted
-      // shapes (pre-normalize) or any localStorage corruption get coerced to a
-      // safe default instead of crashing the layout on first paint.
       onRehydrateStorage: () => (state) => {
         if (state) {
           state.usageStats = normalizeUsageStats(state.usageStats);
+          state.apiKey = null;
           state.setHasHydrated(true);
         }
       },

@@ -1,158 +1,103 @@
 # LateWiz
 
-**Your social media scheduling wizard.** Schedule posts across 13 platforms with a single, beautiful interface.
+**Your social media scheduling wizard.** Multi-user accounts with encrypted per-user API vaults. Schedule posts across 13 platforms — AI and publishing always use **each user’s** Zernio and OpenAI keys.
 
 **Live site:** [latewiz.com](https://latewiz.com)
 
-<a href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fzernio-dev%2Flatewiz&env=LATE_API_KEY&envDescription=Your%20Zernio%20API%20key%20from%20zernio.com&envLink=https%3A%2F%2Fzernio.com%2Fdashboard%2Fapi-keys&project-name=latewiz&repository-name=latewiz"><img src="https://vercel.com/button" alt="Deploy with Vercel" height="32"></a>
-<a href="https://railway.app/template/latewiz?referralCode=late"><img src="https://railway.app/button.svg" alt="Deploy on Railway" height="32"></a>
+## Multi-user model
 
-![LateWiz Screenshot](./docs/screenshot.png?v=2)
+1. Create a LateWiz account (email/password or Google).
+2. Onboarding: set your **niche** (Biology, SaaS, Fitness, Crypto, or custom) and paste **your** Zernio + OpenAI keys.
+3. Keys are stored in an AES-256-GCM vault on the server (`VAULT_MASTER_KEY`).
+4. Compose, campaigns, and cron decrypt **that user’s** keys only — never the host’s `.env` API keys.
 
-## Features
-
-- **13 Platforms** - Instagram, TikTok, YouTube, LinkedIn, Pinterest, X/Twitter, Facebook, Threads, Bluesky, Snapchat, Google Business, Reddit, Telegram
-- **Visual Calendar** - See all your scheduled content at a glance
-- **Smart Queue** - Set up posting times and let LateWiz handle the rest
-- **Media Uploads** - Support for images and videos up to 5GB
-- **Platform-Specific Settings** - TikTok privacy, YouTube titles, Pinterest boards, and more
-- **Dark Mode** - Easy on the eyes, day or night
-- **Open Source** - MIT licensed, self-host anywhere
+> Hosted multi-user no longer relies on a shared `LATE_API_KEY` / `OPENAI_API_KEY`. Those are optional for solo local dev via `ALLOW_ENV_KEY_FALLBACK=true`.
 
 ## Quick Start
 
-### Option 1: One-Click Deploy (Recommended)
-
-Click the "Deploy with Vercel" button above, enter your [Zernio API key](https://zernio.com/dashboard/api-keys), and you're done.
-
-### Option 2: Local Development
+### Local development
 
 ```bash
-# Clone the repository
 git clone https://github.com/zernio-dev/latewiz.git
 cd latewiz
-
-# Install dependencies
 npm install
-
-# Copy environment variables
 cp .env.example .env.local
+```
 
-# Add your Zernio API key to .env.local
-# LATE_API_KEY=sk_...
+Fill in at least:
 
-# Start the development server
+| Variable | Description |
+|----------|-------------|
+| `BETTER_AUTH_SECRET` | `openssl rand -hex 32` |
+| `BETTER_AUTH_URL` | e.g. `http://localhost:3000` |
+| `VAULT_MASTER_KEY` | `openssl rand -hex 32` (64 hex chars) |
+| `NEXT_PUBLIC_APP_URL` | Same as Better Auth URL |
+
+SQLite is automatic: the app creates `data/latewiz.db` on first request (override with `SQLITE_PATH`).
+
+```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open [http://localhost:3000](http://localhost:3000), sign up, complete onboarding.
 
-### Option 3: Docker
+### Deploy
 
-```bash
-# Using Docker Compose
-docker-compose up -d
+**Recommended for SQLite:** Docker, Railway, a VPS, or any host with a **persistent disk**. Point cron at `/api/cron/campaigns` with `Authorization: Bearer $CRON_SECRET`.
 
-# Or build and run manually
-docker build -t latewiz .
-docker run -p 3000:3000 -e LATE_API_KEY=sk_... latewiz
+**Vercel note:** serverless disks are ephemeral. Without a mounted volume the DB resets between deploys (falls back to `/tmp/latewiz.db`). Prefer Docker/Railway if you need durable multi-user data with a simple SQLite file.
+
+Optional Google OAuth:
+
 ```
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+NEXT_PUBLIC_GOOGLE_AUTH_ENABLED=true
+```
+
+### Vault key rotation
+
+1. Generate a new `VAULT_MASTER_KEY`.
+2. Decrypt each `user_secrets` row with the old key and re-encrypt with the new key (run a one-off script).
+3. Update the env var and redeploy. Users do not need to re-enter keys if re-encryption succeeds.
+
+## Features
+
+- **Multi-user accounts** — Better Auth sessions; isolated campaigns per user
+- **Encrypted vault** — Zernio, OpenAI, fal keys per user
+- **SQLite** — single local file, no Postgres required
+- **Niche-first AI** — Biology, SaaS, Fitness, Crypto presets (or custom)
+- **13 Platforms** — Instagram, TikTok, YouTube, LinkedIn, and more via Zernio
+- **Campaign planner** — Deferred slots run with the campaign owner’s vault keys
+- **Open Source** — MIT licensed
 
 ## Configuration
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `LATE_API_KEY` | Yes* | Your Zernio API key. Get one at [zernio.com](https://zernio.com/dashboard/api-keys) |
-| `OPENAI_API_KEY` | No | Server fallback for AI captions and images (users can also add a key in Settings) |
-| `OPENAI_TEXT_MODEL` | No | Model for Responses API text + web search (default: `gpt-4o-mini`; `gpt-4.1-mini` or `gpt-5.5` recommended for best search) |
-| `OPENAI_NATIVE_WEB_SEARCH` | No | Set to `false` to skip OpenAI built-in web search and use fallback only |
-| `OPENAI_WEB_SEARCH_REQUIRED` | No | Set to `true` to force the model to run web search on every generation |
-| `OPENAI_WEB_SEARCH_CONTEXT_SIZE` | No | `low`, `medium`, or `high` — how much search context the model sees |
-| `WEB_SEARCH_ALLOWED_DOMAINS` | No | Comma-separated allowlist (e.g. `sec.gov,coindesk.com`) for trusted sources only |
-| `OPENAI_WEB_SEARCH_RECENCY_DAYS` | No | Prompt hint for how recent sources should be (default: `14`) |
-| `TAVILY_API_KEY` | No | Fallback web search if OpenAI Responses web search fails ([tavily.com](https://tavily.com)) |
-| `SERPER_API_KEY` | No | Second fallback search provider ([serper.dev](https://serper.dev)) |
-| `WEB_SEARCH_ENABLED` | No | Set to `false` to disable Tavily/Serper fallback |
-| `WEB_SEARCH_MAX_RESULTS` | No | Max fallback sources injected into prompts (default: `5`, max `10`) |
-| `NEXT_PUBLIC_APP_URL` | No | Your app's public URL (for OAuth callbacks) |
-| `NEXT_PUBLIC_APP_NAME` | No | Custom app name (default: LateWiz) |
+| `BETTER_AUTH_SECRET` | Yes | Session signing secret (≥32 chars) |
+| `BETTER_AUTH_URL` | Yes | Public origin for auth callbacks |
+| `VAULT_MASTER_KEY` | Yes | 32-byte key as 64 hex chars or base64 |
+| `NEXT_PUBLIC_APP_URL` | Yes | Public app URL |
+| `SQLITE_PATH` | No | SQLite file path (default `./data/latewiz.db`) |
+| `CRON_SECRET` | Recommended | Protects deferred campaign cron |
+| `ALLOW_ENV_KEY_FALLBACK` | No | `true` allows `LATE_API_KEY` / `OPENAI_API_KEY` for solo local only |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | No | Google sign-in |
+| `OPENAI_TEXT_MODEL` | No | Text model (default `gpt-4o-mini`) |
+| `TAVILY_API_KEY` / `SERPER_API_KEY` | No | Web-search fallbacks (server-wide) |
 
-*If not set, users will be prompted to enter their own API key.
+## Getting API keys
 
-## Getting a Zernio API Key
-
-1. Sign up at [zernio.com](https://zernio.com)
-2. Go to [API Keys](https://zernio.com/dashboard/api-keys)
-3. Create a new API key
-4. Copy the key (starts with `sk_`)
+1. **Zernio** — [zernio.com/dashboard/api-keys](https://zernio.com/dashboard/api-keys) (`sk_…`)
+2. **OpenAI** — [platform.openai.com/api-keys](https://platform.openai.com/api-keys) (`sk-…`)
+3. Add both in LateWiz **Settings → Encrypted API vault** (or during onboarding)
 
 ## Tech Stack
 
-- [Next.js 16](https://nextjs.org/) - React framework
-- [Tailwind CSS](https://tailwindcss.com/) - Styling
-- [shadcn/ui](https://ui.shadcn.com/) - UI components
-- [TanStack Query](https://tanstack.com/query) - Data fetching
-- [Zustand](https://zustand-demo.pmnd.rs/) - State management
-- [Zernio Node SDK](https://github.com/zernio-dev/late-node) - API client
-
-## Project Structure
-
-```
-latewiz/
-├── src/
-│   ├── app/                    # Next.js App Router
-│   │   ├── dashboard/          # Dashboard routes
-│   │   │   ├── compose/        # Post composer
-│   │   │   ├── calendar/       # Calendar view
-│   │   │   ├── accounts/       # Connected accounts
-│   │   │   ├── queue/          # Queue management
-│   │   │   └── settings/       # User settings
-│   │   ├── callback/           # OAuth callbacks
-│   │   └── api/                # API routes
-│   ├── components/
-│   │   ├── ui/                 # shadcn/ui components
-│   │   ├── accounts/           # Account components
-│   │   ├── posts/              # Post components
-│   │   └── shared/             # Shared components
-│   ├── hooks/                  # React hooks
-│   ├── lib/
-│   │   └── late-api/           # Zernio API utilities
-│   └── stores/                 # Zustand stores
-├── docs/                       # Documentation
-└── docker/                     # Docker configuration
-```
-
-## Contributing
-
-We welcome contributions! Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
-
-### Development
-
-```bash
-# Install dependencies
-npm install
-
-# Run development server
-npm run dev
-
-# Run linting
-npm run lint
-
-# Type check
-npx tsc --noEmit
-```
-
-## Support
-
-- [LateWiz Live Site](https://latewiz.com)
-- [Zernio Documentation](https://docs.zernio.com)
-- [GitHub Issues](https://github.com/zernio-dev/latewiz/issues)
-- [Telegram Community](https://t.me/latewiz)
+- [Next.js 16](https://nextjs.org/) · [Better Auth](https://www.better-auth.com/) · [Drizzle](https://orm.drizzle.team/) · SQLite (`better-sqlite3`)
+- [Tailwind CSS](https://tailwindcss.com/) · [shadcn/ui](https://ui.shadcn.com/) · [TanStack Query](https://tanstack.com/query) · [Zustand](https://zustand-demo.pmnd.rs/)
+- [Zernio Node SDK](https://github.com/zernio-dev/late-node)
 
 ## License
 
-MIT License - see [LICENSE](./LICENSE) for details.
-
----
-
-Built with [Zernio](https://zernio.com) - The Social Media Scheduling API
+MIT
