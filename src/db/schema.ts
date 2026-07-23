@@ -111,6 +111,9 @@ export const userProfiles = sqliteTable("user_profiles", {
     .primaryKey()
     .references(() => user.id, { onDelete: "cascade" }),
   niche: text("niche", { mode: "json" }).$type<NicheProfile>().notNull(),
+  contentPrefs: text("content_prefs", { mode: "json" }).$type<
+    import("@/lib/content-prefs").ContentPrefs
+  >(),
   onboardingCompleted: integer("onboarding_completed", { mode: "boolean" })
     .notNull()
     .default(false),

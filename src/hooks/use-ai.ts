@@ -62,6 +62,7 @@ export function isVideoGenerationConfigured(
 export function useGenerateDraft() {
   const niche = useAiStore((s) => s.niche);
   const postPromptStyleId = useAiStore((s) => s.postPromptStyleId);
+  const postPromptTemplates = useAiStore((s) => s.postPromptTemplates);
 
   return useMutation({
     mutationFn: async (
@@ -77,6 +78,7 @@ export function useGenerateDraft() {
           post_prompt_style_id:
             (typeof params === "object" ? params?.postPromptStyleId : undefined) ??
             postPromptStyleId,
+          post_prompt_templates: postPromptTemplates,
         }),
       });
       if (!res.ok) {
@@ -271,6 +273,7 @@ export interface CampaignSlot {
 
 export function useGenerateCampaignSlot() {
   const niche = useAiStore((s) => s.niche);
+  const postPromptTemplates = useAiStore((s) => s.postPromptTemplates);
 
   return useMutation({
     mutationFn: async (params: {
@@ -308,6 +311,7 @@ export function useGenerateCampaignSlot() {
           slot_brief: params.slotBrief,
           covered_subtopics: params.coveredSubtopics,
           post_prompt_style_id: params.postPromptStyleId,
+          post_prompt_templates: postPromptTemplates,
           is_list_mode: params.isListMode,
           niche,
         }),

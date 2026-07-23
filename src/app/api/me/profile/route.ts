@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { defaultNicheProfile, type NicheProfile } from "@/lib/openai/types";
 import {
+  normalizeContentPrefs,
+  type ContentPrefs,
+} from "@/lib/content-prefs";
+import {
   SessionRequiredError,
   requireSessionUserId,
 } from "@/lib/server/session";
@@ -15,6 +19,7 @@ export async function GET(request: NextRequest) {
     const profile = await getUserProfile(userId);
     return NextResponse.json({
       niche: profile?.niche ?? defaultNicheProfile(),
+      contentPrefs: profile?.contentPrefs ?? normalizeContentPrefs(null),
       onboardingCompleted: profile?.onboardingCompleted ?? false,
     });
   } catch (error) {
@@ -30,6 +35,7 @@ export async function PUT(request: NextRequest) {
     const userId = await requireSessionUserId(request);
     const body = (await request.json()) as {
       niche?: Partial<NicheProfile>;
+      contentPrefs?: Partial<ContentPrefs>;
       onboardingCompleted?: boolean;
     };
 
@@ -42,11 +48,13 @@ export async function PUT(request: NextRequest) {
 
     const profile = await upsertUserProfile(userId, {
       niche,
+      contentPrefs: body.contentPrefs,
       onboardingCompleted: body.onboardingCompleted,
     });
 
     return NextResponse.json({
       niche: profile.niche,
+      contentPrefs: profile.contentPrefs,
       onboardingCompleted: profile.onboardingCompleted,
     });
   } catch (error) {

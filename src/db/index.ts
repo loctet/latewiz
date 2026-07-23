@@ -93,6 +93,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS "user_secrets_user_kind_idx"
 CREATE TABLE IF NOT EXISTS "user_profiles" (
   "user_id" text PRIMARY KEY NOT NULL REFERENCES "user"("id") ON DELETE cascade,
   "niche" text NOT NULL,
+  "content_prefs" text,
   "onboarding_completed" integer DEFAULT false NOT NULL,
   "created_at" integer NOT NULL,
   "updated_at" integer NOT NULL
@@ -123,6 +124,17 @@ export function getDb(): Db {
 
   const sqlite = new Database(dbPath);
   ensureSchema(sqlite);
+  // Migrate older local DBs that lack content_prefs
+  try {
+    const cols = sqlite.pragma("table_info(user_profiles)") as Array<{
+      name: string;
+    }>;
+    if (!cols.some((c) => c.name === "content_prefs")) {
+      sqlite.exec(`ALTER TABLE user_profiles ADD COLUMN content_prefs text`);
+    }
+  } catch {
+    /* table may not exist yet */
+  }
   _sqlite = sqlite;
   _db = drizzle(sqlite, { schema });
   return _db;

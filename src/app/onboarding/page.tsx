@@ -1,25 +1,49 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
 import { useAiStore, useAuthStore } from "@/stores";
 import { NICHE_PRESETS, type NichePresetId } from "@/lib/niche-presets";
 import { defaultNicheProfile, type NicheProfile } from "@/lib/openai/types";
+import {
+  DEFAULT_POST_PROMPT_STYLE_ID,
+  POST_PROMPT_STYLES,
+  getPostPromptStyle,
+} from "@/lib/post-prompt-catalog";
+import {
+  DEFAULT_IMAGE_PROMPT_STYLE_ID,
+  IMAGE_PROMPT_STYLES,
+  getEffectiveTemplate,
+} from "@/lib/image-prompt-catalog";
+import {
+  DEFAULT_IMAGE_WATERMARK_TEXT,
+  IMAGE_WATERMARK_POSITIONS,
+  type ImageWatermarkPosition,
+} from "@/lib/image-watermark";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Logo } from "@/components/shared/logo";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-type Step = "niche" | "keys" | "import";
+type Step = "niche" | "content" | "keys" | "import";
 
 export default function OnboardingPage() {
   const router = useRouter();
   const { data: session, isPending } = useSession();
   const setApiKey = useAuthStore((s) => s.setApiKey);
+  const aiStore = useAiStore();
   const localOpenai = useAiStore((s) => s.openaiApiKey);
   const localFal = useAiStore((s) => s.falApiKey);
   const localNiche = useAiStore((s) => s.niche);
@@ -30,11 +54,28 @@ export default function OnboardingPage() {
   const [step, setStep] = useState<Step>("niche");
   const [presetId, setPresetId] = useState<NichePresetId>("biology");
   const [niche, setNiche] = useState<NicheProfile>(NICHE_PRESETS[0].niche);
+  const [postStyleId, setPostStyleId] = useState(DEFAULT_POST_PROMPT_STYLE_ID);
+  const [imageStyleId, setImageStyleId] = useState(DEFAULT_IMAGE_PROMPT_STYLE_ID);
+  const [postTemplate, setPostTemplate] = useState(
+    getPostPromptStyle(DEFAULT_POST_PROMPT_STYLE_ID).structureTemplate
+  );
+  const [imageTemplate, setImageTemplate] = useState(
+    getEffectiveTemplate(DEFAULT_IMAGE_PROMPT_STYLE_ID)
+  );
+  const [watermarkEnabled, setWatermarkEnabled] = useState(true);
+  const [watermarkText, setWatermarkText] = useState(DEFAULT_IMAGE_WATERMARK_TEXT);
+  const [watermarkPosition, setWatermarkPosition] =
+    useState<ImageWatermarkPosition>("bottom-right");
   const [zernioKey, setZernioKey] = useState("");
   const [openaiKey, setOpenaiKey] = useState("");
   const [falKey, setFalKey] = useState("");
   const [saving, setSaving] = useState(false);
   const [hasLegacyKeys, setHasLegacyKeys] = useState(false);
+
+  const stepIndex = useMemo(() => {
+    const order: Step[] = ["niche", "content", "keys"];
+    return Math.max(0, order.indexOf(step === "import" ? "keys" : step)) + 1;
+  }, [step]);
 
   useEffect(() => {
     if (!isPending && !session) {
@@ -53,13 +94,28 @@ export default function OnboardingPage() {
       setNiche({ ...defaultNicheProfile(), ...localNiche });
       setPresetId("custom");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-time legacy import seed
+    if (aiStore.imageWatermarkText?.trim()) {
+      setWatermarkText(aiStore.imageWatermarkText);
+      setWatermarkEnabled(aiStore.imageWatermarkEnabled);
+      setWatermarkPosition(aiStore.imageWatermarkPosition);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-time seed
   }, []);
 
   function selectPreset(id: NichePresetId) {
     setPresetId(id);
     const preset = NICHE_PRESETS.find((p) => p.id === id);
     if (preset) setNiche({ ...preset.niche });
+  }
+
+  function onPostStyleChange(id: string) {
+    setPostStyleId(id);
+    setPostTemplate(getPostPromptStyle(id).structureTemplate);
+  }
+
+  function onImageStyleChange(id: string) {
+    setImageStyleId(id);
+    setImageTemplate(getEffectiveTemplate(id));
   }
 
   async function saveNicheAndContinue(e: FormEvent) {
@@ -80,9 +136,53 @@ export default function OnboardingPage() {
         throw new Error(data.error || "Failed to save niche");
       }
       useAiStore.getState().setNiche(niche);
-      setStep(hasLegacyKeys ? "import" : "keys");
+      setStep("content");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save niche");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveContentAndContinue(e: FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const contentPrefs = {
+        postPromptStyleId: postStyleId,
+        imagePromptStyleId: imageStyleId,
+        postPromptTemplates: {
+          [postStyleId]: postTemplate,
+        },
+        imagePromptTemplates: {
+          [imageStyleId]: imageTemplate,
+        },
+        imageWatermarkEnabled: watermarkEnabled,
+        imageWatermarkText: watermarkText.trim() || DEFAULT_IMAGE_WATERMARK_TEXT,
+        imageWatermarkOpacity: aiStore.imageWatermarkOpacity,
+        imageWatermarkPosition: watermarkPosition,
+      };
+
+      const res = await fetch("/api/me/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          niche,
+          contentPrefs,
+          onboardingCompleted: false,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to save content settings");
+      }
+
+      useAiStore.getState().hydrateContentPrefs(contentPrefs);
+      setStep(hasLegacyKeys ? "import" : "keys");
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to save content settings"
+      );
     } finally {
       setSaving(false);
     }
@@ -117,7 +217,11 @@ export default function OnboardingPage() {
       const profileRes = await fetch("/api/me/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ niche, onboardingCompleted: true }),
+        body: JSON.stringify({
+          niche,
+          contentPrefs: useAiStore.getState().getContentPrefs(),
+          onboardingCompleted: true,
+        }),
       });
       if (!profileRes.ok) {
         const data = await profileRes.json().catch(() => ({}));
@@ -133,7 +237,7 @@ export default function OnboardingPage() {
         /* ignore */
       }
 
-      toast.success("Vault ready — welcome to LateWiz");
+      toast.success("Workspace ready — welcome to LateWiz");
       router.push("/dashboard");
       router.refresh();
     } catch (err) {
@@ -154,12 +258,15 @@ export default function OnboardingPage() {
           <Logo size="md" />
           <h1 className="text-2xl font-bold">Set up your workspace</h1>
           <p className="text-sm text-muted-foreground">
-            Niche + your own API keys. Nothing posts or bills to someone else.
+            Niche, content style, and your own API keys — step {stepIndex} of 3
           </p>
         </div>
 
         {step === "niche" && (
-          <form onSubmit={saveNicheAndContinue} className="space-y-4 rounded-lg border bg-card p-6">
+          <form
+            onSubmit={saveNicheAndContinue}
+            className="space-y-4 rounded-lg border bg-card p-6"
+          >
             <div className="grid gap-2 sm:grid-cols-2">
               {NICHE_PRESETS.map((preset) => (
                 <button
@@ -195,7 +302,9 @@ export default function OnboardingPage() {
               <Input
                 id="audience"
                 value={niche.audience}
-                onChange={(e) => setNiche((n) => ({ ...n, audience: e.target.value }))}
+                onChange={(e) =>
+                  setNiche((n) => ({ ...n, audience: e.target.value }))
+                }
                 placeholder="Who are you writing for?"
               />
             </div>
@@ -204,13 +313,145 @@ export default function OnboardingPage() {
               <Textarea
                 id="tone"
                 value={niche.toneNotes}
-                onChange={(e) => setNiche((n) => ({ ...n, toneNotes: e.target.value }))}
+                onChange={(e) =>
+                  setNiche((n) => ({ ...n, toneNotes: e.target.value }))
+                }
                 rows={3}
               />
             </div>
             <Button type="submit" className="w-full" disabled={saving}>
-              Continue
+              Continue to content style
             </Button>
+          </form>
+        )}
+
+        {step === "content" && (
+          <form
+            onSubmit={saveContentAndContinue}
+            className="space-y-5 rounded-lg border bg-card p-6"
+          >
+            <div className="space-y-2">
+              <Label>Default post style</Label>
+              <Select value={postStyleId} onValueChange={onPostStyleChange}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {POST_PROMPT_STYLES.map((style) => (
+                    <SelectItem key={style.id} value={style.id}>
+                      {style.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {POST_PROMPT_STYLES.find((s) => s.id === postStyleId)?.description}
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="post-template">Customize post prompt</Label>
+              <Textarea
+                id="post-template"
+                value={postTemplate}
+                onChange={(e) => setPostTemplate(e.target.value)}
+                rows={8}
+                className="font-mono text-xs"
+              />
+              <p className="text-xs text-muted-foreground">
+                Placeholders: {"{{subject}}"}, {"{{goal}}"}, {"{{minBodyChars}}"}
+              </p>
+            </div>
+
+            <div className="space-y-2 border-t pt-4">
+              <Label>Default image style</Label>
+              <Select value={imageStyleId} onValueChange={onImageStyleChange}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {IMAGE_PROMPT_STYLES.map((style) => (
+                    <SelectItem key={style.id} value={style.id}>
+                      {style.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {IMAGE_PROMPT_STYLES.find((s) => s.id === imageStyleId)?.description}
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="image-template">Customize image prompt</Label>
+              <Textarea
+                id="image-template"
+                value={imageTemplate}
+                onChange={(e) => setImageTemplate(e.target.value)}
+                rows={8}
+                className="font-mono text-xs"
+              />
+              <p className="text-xs text-muted-foreground">
+                Placeholders: {"{{subject}}"}, {"{{langNote}}"}, {"{{credit}}"}
+              </p>
+            </div>
+
+            <div className="space-y-3 border-t pt-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <Label htmlFor="wm-enabled">Image watermark</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Default signature on generated images
+                  </p>
+                </div>
+                <Switch
+                  id="wm-enabled"
+                  checked={watermarkEnabled}
+                  onCheckedChange={setWatermarkEnabled}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="wm-text">Watermark text</Label>
+                <Input
+                  id="wm-text"
+                  value={watermarkText}
+                  onChange={(e) => setWatermarkText(e.target.value)}
+                  placeholder={DEFAULT_IMAGE_WATERMARK_TEXT}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Position</Label>
+                <Select
+                  value={watermarkPosition}
+                  onValueChange={(v) =>
+                    setWatermarkPosition(v as ImageWatermarkPosition)
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {IMAGE_WATERMARK_POSITIONS.map((pos) => (
+                      <SelectItem key={pos.value} value={pos.value}>
+                        {pos.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                onClick={() => setStep("niche")}
+              >
+                Back
+              </Button>
+              <Button type="submit" className="flex-1" disabled={saving}>
+                Continue to API keys
+              </Button>
+            </div>
           </form>
         )}
 
@@ -218,14 +459,11 @@ export default function OnboardingPage() {
           <div className="space-y-4 rounded-lg border bg-card p-6">
             <h2 className="font-semibold">Import keys from this browser?</h2>
             <p className="text-sm text-muted-foreground">
-              We found API keys saved locally from the old single-user mode. Import them into your
-              encrypted vault, or enter new keys.
+              We found API keys saved locally from the old single-user mode. Import
+              them into your encrypted vault, or enter new keys.
             </p>
             <div className="flex flex-col gap-2 sm:flex-row">
-              <Button
-                className="flex-1"
-                onClick={() => setStep("keys")}
-              >
+              <Button className="flex-1" onClick={() => setStep("keys")}>
                 Review & import
               </Button>
               <Button
@@ -245,7 +483,10 @@ export default function OnboardingPage() {
         )}
 
         {step === "keys" && (
-          <form onSubmit={saveKeys} className="space-y-4 rounded-lg border bg-card p-6">
+          <form
+            onSubmit={saveKeys}
+            className="space-y-4 rounded-lg border bg-card p-6"
+          >
             <div className="space-y-2">
               <Label htmlFor="zernio">Zernio API key</Label>
               <Input
@@ -257,18 +498,6 @@ export default function OnboardingPage() {
                 required
                 className="font-mono"
               />
-              <p className="text-xs text-muted-foreground">
-                From{" "}
-                <a
-                  href="https://zernio.com/dashboard/api-keys"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="underline"
-                >
-                  zernio.com
-                </a>
-                . Posts go to accounts on this key.
-              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="openai">OpenAI API key</Label>
@@ -282,7 +511,7 @@ export default function OnboardingPage() {
                 className="font-mono"
               />
               <p className="text-xs text-muted-foreground">
-                AI captions, images, and video use your OpenAI billing — not the host&apos;s.
+                AI captions and images use your OpenAI billing — not the host&apos;s.
               </p>
             </div>
             <div className="space-y-2">
@@ -296,9 +525,19 @@ export default function OnboardingPage() {
                 className="font-mono"
               />
             </div>
-            <Button type="submit" className="w-full" disabled={saving}>
-              {saving ? "Saving…" : "Save vault & open dashboard"}
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                onClick={() => setStep("content")}
+              >
+                Back
+              </Button>
+              <Button type="submit" className="flex-1" disabled={saving}>
+                {saving ? "Saving…" : "Finish setup"}
+              </Button>
+            </div>
           </form>
         )}
       </div>

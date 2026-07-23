@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useSession, signOut } from "@/lib/auth-client";
 import { useAuthStore, useAiStore } from "@/stores";
 import type { NicheProfile } from "@/lib/openai/types";
+import type { ContentPrefs } from "@/lib/content-prefs";
 
 /**
  * Hydrates in-memory Zernio key from the vault and redirects to onboarding when needed.
@@ -17,6 +18,7 @@ export function SessionBootstrap({ children }: { children: React.ReactNode }) {
   const setUsageStats = useAuthStore((s) => s.setUsageStats);
   const setHasHydrated = useAuthStore((s) => s.setHasHydrated);
   const setNiche = useAiStore((s) => s.setNiche);
+  const hydrateContentPrefs = useAiStore((s) => s.hydrateContentPrefs);
   const unlockedFor = useRef<string | null>(null);
 
   useEffect(() => {
@@ -49,9 +51,11 @@ export function SessionBootstrap({ children }: { children: React.ReactNode }) {
         const me = (await meRes.json()) as {
           needsOnboarding?: boolean;
           niche?: NicheProfile | null;
+          contentPrefs?: ContentPrefs | null;
         };
 
         if (me.niche) setNiche(me.niche);
+        if (me.contentPrefs) hydrateContentPrefs(me.contentPrefs);
 
         if (
           me.needsOnboarding &&
@@ -106,6 +110,7 @@ export function SessionBootstrap({ children }: { children: React.ReactNode }) {
     setApiKey,
     setUsageStats,
     setNiche,
+    hydrateContentPrefs,
   ]);
 
   return <>{children}</>;

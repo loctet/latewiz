@@ -15,9 +15,11 @@ import {
 import {
   applyImageWatermark,
   DEFAULT_IMAGE_WATERMARK_OPACITY,
+  DEFAULT_IMAGE_WATERMARK_TEXT,
   IMAGE_WATERMARK_POSITIONS,
   type ImageWatermarkSettings,
 } from "@/lib/image-watermark";
+import { persistContentPrefsToProfile } from "@/lib/persist-content-prefs";
 
 function buildPreviewDataUrl(): string {
   const canvas = document.createElement("canvas");
@@ -56,6 +58,7 @@ export function ImageWatermarkSettings() {
 
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const previewBaseRef = useRef<string | null>(null);
+  const skipPersistOnceRef = useRef(true);
 
   useEffect(() => {
     if (!previewBaseRef.current) {
@@ -94,6 +97,19 @@ export function ImageWatermarkSettings() {
     };
   }, [enabled, text, opacity, position]);
 
+  useEffect(() => {
+    if (skipPersistOnceRef.current) {
+      skipPersistOnceRef.current = false;
+      return;
+    }
+    const timer = setTimeout(() => {
+      void persistContentPrefsToProfile().catch(() => {
+        /* local store still holds the latest values */
+      });
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [enabled, text, opacity, position]);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
@@ -117,7 +133,7 @@ export function ImageWatermarkSettings() {
           id="watermark-text"
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="e.g. @YourBrand · yoursite.com"
+          placeholder={DEFAULT_IMAGE_WATERMARK_TEXT}
           disabled={!enabled}
         />
       </div>

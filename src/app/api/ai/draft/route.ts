@@ -32,7 +32,16 @@ export async function POST(request: NextRequest) {
       openaiApiKey,
       niche,
       hint,
-      postPromptStyleId
+      postPromptStyleId,
+      typeof body.post_prompt_templates === "object" &&
+        body.post_prompt_templates &&
+        !Array.isArray(body.post_prompt_templates)
+        ? (body.post_prompt_templates as Record<string, string>)
+        : typeof body.postPromptTemplates === "object" &&
+            body.postPromptTemplates &&
+            !Array.isArray(body.postPromptTemplates)
+          ? (body.postPromptTemplates as Record<string, string>)
+          : undefined
     );
     return NextResponse.json({
       draft,

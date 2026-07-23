@@ -127,6 +127,8 @@ Quality bar:
       /token\s*research/i,
       /detailed?\s+(?:market|crypto)/i,
       /detailled?\s+(?:market|crypto)/i,
+      /expert\s+(?:market|analysis)/i,
+      /institutional[- ]?grade/i,
     ],
   },
   {
@@ -244,20 +246,10 @@ export function resolvePostPromptStyle(
   }
 
   const goal = params.campaignGoal.trim();
-  const goalLower = goal.toLowerCase();
-  const isCryptoContext =
-    params.isListMode ||
-    /crypto|bitcoin|ethereum|token|coin|blockchain|defi|altcoin/i.test(goalLower) ||
-    (params.listSubject
-      ? /^(?:\$?[A-Z]{2,10}|[A-Za-z]+(?:\s+[A-Za-z]+)?)$/.test(
-          params.listSubject.trim()
-        )
-      : false);
 
   for (const style of POST_PROMPT_STYLES) {
     if (style.id === DEFAULT_POST_PROMPT_STYLE_ID) continue;
     if (style.matchPatterns.some((re) => re.test(goal))) {
-      if (style.id === "crypto-market-analysis" && !isCryptoContext) continue;
       return style;
     }
   }
@@ -320,8 +312,8 @@ export function buildPostPromptTaskInstructions(style: PostPromptStyle): string 
     `You are ${style.expertRole}.`,
     'Return JSON only: {"title":"...","body":"...","hashtags":"#a #b"}.',
     depthNote,
-    "Use current web research when the brief requires facts, prices, or recent events.",
-    "Title: clear and specific (asset/topic name + angle).",
+    "Use current web research when the brief requires facts, figures, or recent events.",
+    "Title: clear and specific (topic + angle).",
     "Hashtags: 3–6 relevant tags, or fewer for professional analysis posts.",
     SOCIAL_POST_FORMAT_INSTRUCTIONS,
   ].join(" ");

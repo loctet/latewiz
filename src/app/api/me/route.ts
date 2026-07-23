@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
       },
       vault,
       niche: profile?.niche ?? null,
+      contentPrefs: profile?.contentPrefs ?? null,
       onboardingCompleted: onboardingComplete,
       needsOnboarding: !onboardingComplete,
     });

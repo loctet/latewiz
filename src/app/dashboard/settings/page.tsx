@@ -52,10 +52,12 @@ import {
   Film,
   Stamp,
   Shield,
+  FileText,
 } from "lucide-react";
 import Link from "next/link";
 import {
   ImagePromptTemplatesEditor,
+  PostPromptTemplatesEditor,
   VideoPromptTemplatesEditor,
   ImageWatermarkSettings,
 } from "@/components/settings";
@@ -429,6 +431,23 @@ export default function SettingsPage() {
               ))}
             </SelectContent>
           </Select>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <FileText className="h-4 w-4" />
+            Post prompt templates
+          </CardTitle>
+          <CardDescription>
+            Customize caption structure with{" "}
+            <code className="text-xs">{"{{subject}}"}</code> and{" "}
+            <code className="text-xs">{"{{goal}}"}</code>.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <PostPromptTemplatesEditor />
         </CardContent>
       </Card>
 

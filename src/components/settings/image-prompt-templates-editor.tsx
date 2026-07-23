@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Plus, RotateCcw, Save, Trash2 } from "lucide-react";
+import { persistContentPrefsToProfile } from "@/lib/persist-content-prefs";
 
 export function ImagePromptTemplatesEditor() {
   const savedTemplates = useAiStore((s) => s.imagePromptTemplates);
@@ -103,7 +104,19 @@ export function ImagePromptTemplatesEditor() {
     }
   };
 
-  const handleSave = () => {
+  const syncProfile = async () => {
+    try {
+      await persistContentPrefsToProfile();
+    } catch (err) {
+      toast.message(
+        err instanceof Error
+          ? `Saved locally — ${err.message}`
+          : "Saved locally; server sync failed"
+      );
+    }
+  };
+
+  const handleSave = async () => {
     if (!draft.trim()) {
       toast.error("Template cannot be empty");
       return;
@@ -121,32 +134,37 @@ export function ImagePromptTemplatesEditor() {
       });
       setImagePromptTemplate(selectedId, draft);
       toast.success("Custom template saved");
+      await syncProfile();
       return;
     }
 
     if (draft.trim() === defaultTemplate.trim()) {
       resetImagePromptTemplate(selectedId);
       toast.success("Using built-in default for this style");
+      await syncProfile();
       return;
     }
     setImagePromptTemplate(selectedId, draft);
     toast.success("Prompt template saved");
+    await syncProfile();
   };
 
-  const handleResetStyle = () => {
+  const handleResetStyle = async () => {
     if (isCustomSelected) return;
     resetImagePromptTemplate(selectedId);
     setDraft(defaultTemplate);
     toast.success("Restored default template for this style");
+    await syncProfile();
   };
 
-  const handleResetAll = () => {
+  const handleResetAll = async () => {
     resetAllImagePromptTemplates();
     setDraft(defaultTemplate);
     toast.success("All built-in prompt templates restored to defaults");
+    await syncProfile();
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     const label = newLabel.trim();
     if (!label) {
       toast.error("Template name is required");
@@ -179,14 +197,16 @@ export function ImagePromptTemplatesEditor() {
     setNewDescription("");
     setNewTemplate(CUSTOM_IMAGE_PROMPT_TEMPLATE_STARTER);
     toast.success("Custom template created");
+    await syncProfile();
   };
 
-  const handleDeleteCustom = () => {
+  const handleDeleteCustom = async () => {
     if (!isCustomSelected) return;
     const label = selectedStyle.label;
     removeCustomImagePromptStyle(selectedId);
     setSelectedId(IMAGE_PROMPT_STYLES[0].id);
     toast.success(`Deleted "${label}"`);
+    await syncProfile();
   };
 
   return (

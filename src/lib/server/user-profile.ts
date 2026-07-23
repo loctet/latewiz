@@ -5,10 +5,16 @@ import {
   defaultNicheProfile,
   type NicheProfile,
 } from "@/lib/openai/types";
+import {
+  defaultContentPrefs,
+  normalizeContentPrefs,
+  type ContentPrefs,
+} from "@/lib/content-prefs";
 
 export type UserProfileRecord = {
   userId: string;
   niche: NicheProfile;
+  contentPrefs: ContentPrefs;
   onboardingCompleted: boolean;
 };
 
@@ -24,6 +30,7 @@ export async function getUserProfile(
   return {
     userId: row.userId,
     niche: { ...defaultNicheProfile(), ...(row.niche ?? {}) },
+    contentPrefs: normalizeContentPrefs(row.contentPrefs),
     onboardingCompleted: row.onboardingCompleted,
   };
 }
@@ -32,6 +39,7 @@ export async function upsertUserProfile(
   userId: string,
   patch: {
     niche?: NicheProfile;
+    contentPrefs?: Partial<ContentPrefs>;
     onboardingCompleted?: boolean;
   }
 ): Promise<UserProfileRecord> {
@@ -40,6 +48,10 @@ export async function upsertUserProfile(
   const niche = patch.niche
     ? { ...defaultNicheProfile(), ...patch.niche }
     : existing?.niche ?? defaultNicheProfile();
+  const contentPrefs = normalizeContentPrefs({
+    ...(existing?.contentPrefs ?? defaultContentPrefs()),
+    ...(patch.contentPrefs ?? {}),
+  });
   const onboardingCompleted =
     patch.onboardingCompleted ?? existing?.onboardingCompleted ?? false;
 
@@ -48,6 +60,7 @@ export async function upsertUserProfile(
       .update(userProfiles)
       .set({
         niche,
+        contentPrefs,
         onboardingCompleted,
         updatedAt: now,
       })
@@ -56,13 +69,14 @@ export async function upsertUserProfile(
     await getDb().insert(userProfiles).values({
       userId,
       niche,
+      contentPrefs,
       onboardingCompleted,
       createdAt: now,
       updatedAt: now,
     });
   }
 
-  return { userId, niche, onboardingCompleted };
+  return { userId, niche, contentPrefs, onboardingCompleted };
 }
 
 export function isNicheConfigured(niche: NicheProfile): boolean {

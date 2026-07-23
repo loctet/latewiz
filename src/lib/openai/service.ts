@@ -68,7 +68,8 @@ export async function generateDraft(
   apiKey: string | null,
   niche: NicheProfile,
   hint?: string,
-  postPromptStyleId?: string
+  postPromptStyleId?: string,
+  postPromptTemplates?: Record<string, string> | null
 ): Promise<DraftResult> {
   if (!apiKey) {
     const topic = niche.topic || "your niche";
@@ -96,12 +97,16 @@ export async function generateDraft(
   });
   const usePostTemplate = postStyle.minBodyChars > 0;
   const structureBlock = usePostTemplate
-    ? buildPostPromptStructureBlock(postStyle, {
-        subject,
-        goal,
-        slotNum: 1,
-        totalPosts: 1,
-      })
+    ? buildPostPromptStructureBlock(
+        postStyle,
+        {
+          subject,
+          goal,
+          slotNum: 1,
+          totalPosts: 1,
+        },
+        postPromptTemplates?.[postStyle.id]
+      )
     : "";
 
   const userInput = [
@@ -403,6 +408,7 @@ export async function generateCampaignSlot(
     slotBrief?: CampaignSlotBrief;
     coveredSubtopics?: string[];
     postPromptStyleId?: string;
+    postPromptTemplates?: Record<string, string> | null;
     isListMode?: boolean;
   }
 ): Promise<{
@@ -451,12 +457,16 @@ export async function generateCampaignSlot(
   const usePostTemplate =
     constraints.format !== "micro" && postStyle.minBodyChars > 0;
   const structureBlock = usePostTemplate
-    ? buildPostPromptStructureBlock(postStyle, {
-        subject: brief.subtopic,
-        goal,
-        slotNum,
-        totalPosts: params.totalPosts,
-      })
+    ? buildPostPromptStructureBlock(
+        postStyle,
+        {
+          subject: brief.subtopic,
+          goal,
+          slotNum,
+          totalPosts: params.totalPosts,
+        },
+        params.postPromptTemplates?.[postStyle.id]
+      )
     : "";
 
   const priorBlock = formatPriorPostsBlock(params.previousPosts);
@@ -527,11 +537,7 @@ export async function generateCampaignSlot(
 
   const researchSearchHint =
     brief.searchHint?.trim() ||
-    (postStyle.id === "crypto-market-analysis"
-      ? `${brief.subtopic} market price news analysis`
-      : usePostTemplate
-        ? `${brief.subtopic} ${goal}`
-        : undefined);
+    (usePostTemplate ? `${brief.subtopic} ${goal}` : undefined);
 
   const researchParams = constraints.skipWebSearch
     ? undefined

@@ -14,6 +14,7 @@ import {
 import { DEFAULT_VIDEO_PROMPT_STYLE_ID } from "@/lib/video-prompt-catalog";
 import {
   AUTO_POST_PROMPT_STYLE_ID,
+  DEFAULT_POST_PROMPT_STYLE_ID,
 } from "@/lib/post-prompt-catalog";
 import type { AiMediaKind } from "@/lib/campaign-media";
 import {
@@ -23,9 +24,13 @@ import {
 import { isPlausibleFalApiKey } from "@/lib/fal/resolve-key";
 import {
   DEFAULT_IMAGE_WATERMARK_OPACITY,
+  DEFAULT_IMAGE_WATERMARK_TEXT,
   type ImageWatermarkPosition,
 } from "@/lib/image-watermark";
+import type { ContentPrefs } from "@/lib/content-prefs";
+import { normalizeContentPrefs } from "@/lib/content-prefs";
 import { safeLocalStorage } from "@/lib/safe-storage";
+
 
 interface AiState {
   openaiApiKey: string | null;
@@ -38,6 +43,8 @@ interface AiState {
   aiMediaKind: AiMediaKind;
   /** Custom template overrides per style id (use {{subject}} and {{langNote}}) */
   imagePromptTemplates: Record<string, string>;
+  /** Custom post structure overrides per style id ({{subject}}, {{goal}}, …) */
+  postPromptTemplates: Record<string, string>;
   /** User-created image prompt styles (template text in imagePromptTemplates) */
   customImagePromptStyles: CustomImagePromptStyle[];
   videoPromptTemplates: Record<string, string>;
@@ -58,6 +65,11 @@ interface AiState {
   setImagePromptTemplate: (styleId: string, template: string) => void;
   resetImagePromptTemplate: (styleId: string) => void;
   resetAllImagePromptTemplates: () => void;
+  setPostPromptTemplate: (styleId: string, template: string) => void;
+  resetPostPromptTemplate: (styleId: string) => void;
+  resetAllPostPromptTemplates: () => void;
+  hydrateContentPrefs: (prefs: Partial<ContentPrefs>) => void;
+  getContentPrefs: () => ContentPrefs;
   addCustomImagePromptStyle: (
     style: CustomImagePromptStyle,
     template: string
@@ -86,15 +98,16 @@ export const useAiStore = create<AiState>()(
       falApiKey: null,
       niche: defaultNicheProfile(),
       imagePromptStyleId: DEFAULT_IMAGE_PROMPT_STYLE_ID,
-      postPromptStyleId: AUTO_POST_PROMPT_STYLE_ID,
+      postPromptStyleId: DEFAULT_POST_PROMPT_STYLE_ID,
       videoPromptStyleId: DEFAULT_VIDEO_PROMPT_STYLE_ID,
       videoProvider: DEFAULT_VIDEO_PROVIDER,
       aiMediaKind: "image",
       imagePromptTemplates: {},
+      postPromptTemplates: {},
       customImagePromptStyles: [],
       videoPromptTemplates: {},
-      imageWatermarkEnabled: false,
-      imageWatermarkText: "",
+      imageWatermarkEnabled: true,
+      imageWatermarkText: DEFAULT_IMAGE_WATERMARK_TEXT,
       imageWatermarkOpacity: DEFAULT_IMAGE_WATERMARK_OPACITY,
       imageWatermarkPosition: "bottom-right",
       generatedMedia: [],
@@ -155,6 +168,51 @@ export const useAiStore = create<AiState>()(
         }
         set({ imagePromptTemplates: kept });
       },
+
+      setPostPromptTemplate: (styleId, template) =>
+        set({
+          postPromptTemplates: {
+            ...get().postPromptTemplates,
+            [styleId]: template,
+          },
+        }),
+
+      resetPostPromptTemplate: (styleId) => {
+        const next = { ...get().postPromptTemplates };
+        delete next[styleId];
+        set({ postPromptTemplates: next });
+      },
+
+      resetAllPostPromptTemplates: () => set({ postPromptTemplates: {} }),
+
+      hydrateContentPrefs: (prefs) => {
+        const normalized = normalizeContentPrefs(prefs);
+        set({
+          postPromptStyleId: normalized.postPromptStyleId,
+          imagePromptStyleId: normalized.imagePromptStyleId,
+          postPromptTemplates: normalized.postPromptTemplates,
+          imagePromptTemplates: {
+            ...get().imagePromptTemplates,
+            ...normalized.imagePromptTemplates,
+          },
+          imageWatermarkEnabled: normalized.imageWatermarkEnabled,
+          imageWatermarkText: normalized.imageWatermarkText,
+          imageWatermarkOpacity: normalized.imageWatermarkOpacity,
+          imageWatermarkPosition: normalized.imageWatermarkPosition,
+        });
+      },
+
+      getContentPrefs: () =>
+        normalizeContentPrefs({
+          postPromptStyleId: get().postPromptStyleId,
+          imagePromptStyleId: get().imagePromptStyleId,
+          postPromptTemplates: get().postPromptTemplates,
+          imagePromptTemplates: get().imagePromptTemplates,
+          imageWatermarkEnabled: get().imageWatermarkEnabled,
+          imageWatermarkText: get().imageWatermarkText,
+          imageWatermarkOpacity: get().imageWatermarkOpacity,
+          imageWatermarkPosition: get().imageWatermarkPosition,
+        }),
 
       addCustomImagePromptStyle: (style, template) =>
         set({
@@ -243,7 +301,7 @@ export const useAiStore = create<AiState>()(
           imagePromptStyleId:
             p?.imagePromptStyleId ?? DEFAULT_IMAGE_PROMPT_STYLE_ID,
           postPromptStyleId:
-            p?.postPromptStyleId ?? AUTO_POST_PROMPT_STYLE_ID,
+            p?.postPromptStyleId ?? DEFAULT_POST_PROMPT_STYLE_ID,
           videoPromptStyleId:
             p?.videoPromptStyleId ?? DEFAULT_VIDEO_PROMPT_STYLE_ID,
           videoProvider:
@@ -251,10 +309,21 @@ export const useAiStore = create<AiState>()(
           falApiKey: p?.falApiKey ?? null,
           aiMediaKind: p?.aiMediaKind === "video" ? "video" : "image",
           imagePromptTemplates: p?.imagePromptTemplates ?? {},
+          postPromptTemplates: p?.postPromptTemplates ?? {},
           customImagePromptStyles: p?.customImagePromptStyles ?? [],
           videoPromptTemplates: p?.videoPromptTemplates ?? {},
-          imageWatermarkEnabled: p?.imageWatermarkEnabled ?? false,
-          imageWatermarkText: p?.imageWatermarkText ?? "",
+          imageWatermarkEnabled: p?.imageWatermarkEnabled ?? true,
+          imageWatermarkText: (() => {
+            const raw =
+              typeof p?.imageWatermarkText === "string"
+                ? p.imageWatermarkText.trim()
+                : "";
+            // Migrate old single-operator default away from a personal name.
+            if (!raw || /^elvis\s*konjoh$/i.test(raw)) {
+              return DEFAULT_IMAGE_WATERMARK_TEXT;
+            }
+            return raw;
+          })(),
           imageWatermarkOpacity:
             p?.imageWatermarkOpacity ?? DEFAULT_IMAGE_WATERMARK_OPACITY,
           imageWatermarkPosition:
@@ -274,6 +343,7 @@ export const useAiStore = create<AiState>()(
         videoProvider: state.videoProvider,
         aiMediaKind: state.aiMediaKind,
         imagePromptTemplates: state.imagePromptTemplates,
+        postPromptTemplates: state.postPromptTemplates,
         customImagePromptStyles: state.customImagePromptStyles,
         videoPromptTemplates: state.videoPromptTemplates,
         imageWatermarkEnabled: state.imageWatermarkEnabled,

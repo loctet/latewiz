@@ -100,6 +100,17 @@ export async function POST(request: NextRequest) {
           ? body.postPromptStyleId
           : undefined;
 
+    const postPromptTemplates =
+      body.post_prompt_templates &&
+      typeof body.post_prompt_templates === "object" &&
+      !Array.isArray(body.post_prompt_templates)
+        ? (body.post_prompt_templates as Record<string, string>)
+        : body.postPromptTemplates &&
+            typeof body.postPromptTemplates === "object" &&
+            !Array.isArray(body.postPromptTemplates)
+          ? (body.postPromptTemplates as Record<string, string>)
+          : undefined;
+
     const isListMode = body.is_list_mode === true || body.isListMode === true;
 
     const result = await generateCampaignSlot(apiKey, niche, {
@@ -123,6 +134,7 @@ export async function POST(request: NextRequest) {
         : undefined,
       coveredSubtopics,
       postPromptStyleId,
+      postPromptTemplates,
       isListMode,
     });
 
