@@ -25,6 +25,8 @@ interface SchedulePickerProps {
   onScheduleTypeChange: (type: ScheduleType) => void;
   onDateChange: (date: Date | undefined) => void;
   onTimeChange: (time: string) => void;
+  /** Hide queue option (e.g. when editing an existing post) */
+  allowQueue?: boolean;
 }
 
 export function SchedulePicker({
@@ -34,6 +36,7 @@ export function SchedulePicker({
   onScheduleTypeChange,
   onDateChange,
   onTimeChange,
+  allowQueue = true,
 }: SchedulePickerProps) {
   const { timezone } = useAppStore();
   const { data: nextSlotData } = useNextQueueSlot();
@@ -51,20 +54,29 @@ export function SchedulePicker({
       icon: CalendarIcon,
       description: "Pick a specific date and time",
     },
-    {
-      value: "queue" as const,
-      label: "Add to Queue",
-      icon: Clock,
-      description: nextSlotData?.nextSlot
-        ? `Next slot: ${formatTz(toZonedTime(new Date(nextSlotData.nextSlot), timezone), "MMM d, h:mm a", { timeZone: timezone })}`
-        : "Uses your queue schedule",
-    },
+    ...(allowQueue
+      ? [
+          {
+            value: "queue" as const,
+            label: "Add to Queue",
+            icon: Clock,
+            description: nextSlotData?.nextSlot
+              ? `Next slot: ${formatTz(toZonedTime(new Date(nextSlotData.nextSlot), timezone), "MMM d, h:mm a", { timeZone: timezone })}`
+              : "Uses your queue schedule",
+          },
+        ]
+      : []),
   ];
 
   return (
     <div className="space-y-4">
       {/* Schedule type selection */}
-      <div className="grid grid-cols-3 gap-2">
+      <div
+        className={cn(
+          "grid gap-2",
+          allowQueue ? "grid-cols-3" : "grid-cols-2"
+        )}
+      >
         {scheduleOptions.map((option) => (
           <button
             key={option.value}

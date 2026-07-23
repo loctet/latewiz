@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { format } from "date-fns/format";
 import { addMonths } from "date-fns/addMonths";
 import { subMonths } from "date-fns/subMonths";
@@ -44,6 +45,7 @@ import { toast } from "sonner";
 type ViewMode = "list" | "grid";
 
 export default function CalendarPage() {
+  const router = useRouter();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [postToDelete, setPostToDelete] = useState<string | null>(null);
@@ -72,6 +74,11 @@ export default function CalendarPage() {
   const handlePrevMonth = () => setCurrentDate((d) => subMonths(d, 1));
   const handleNextMonth = () => setCurrentDate((d) => addMonths(d, 1));
   const handleToday = () => setCurrentDate(new Date());
+
+  const handleEdit = (postId: string) => {
+    setSelectedPostId(null);
+    router.push(`/dashboard/compose?edit=${encodeURIComponent(postId)}`);
+  };
 
   const handleDelete = async () => {
     if (!postToDelete) return;
@@ -225,9 +232,7 @@ export default function CalendarPage() {
           {selectedPost && (
             <PostCard
               post={selectedPost}
-              onEdit={(_id) => {
-                setSelectedPostId(null);
-              }}
+              onEdit={handleEdit}
               onDelete={(id) => {
                 setPostToDelete(id);
               }}
