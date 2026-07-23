@@ -204,54 +204,49 @@ export default function ComposePage() {
         </CardContent>
       </Card>
 
-      {/* Platforms */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Users className="h-4 w-4" />
-            Select Accounts
-            {selectedAccountIds.length > 0 && (
-              <span className="text-muted-foreground font-normal">
-                ({selectedAccountIds.length} selected)
-              </span>
-            )}
-          </CardTitle>
-          <CardDescription>
-            Choose which accounts to publish to.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <PlatformSelector
-            selectedAccountIds={selectedAccountIds}
-            onSelectionChange={setSelectedAccountIds}
-            hasVideo={hasVideo}
-            hasImages={hasImages}
-          />
-        </CardContent>
-      </Card>
+      {/* Accounts + schedule */}
+      <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Users className="h-4 w-4" />
+              Accounts
+              {selectedAccountIds.length > 0 && (
+                <span className="text-muted-foreground font-normal">
+                  ({selectedAccountIds.length})
+                </span>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <PlatformSelector
+              selectedAccountIds={selectedAccountIds}
+              onSelectionChange={setSelectedAccountIds}
+              hasVideo={hasVideo}
+              hasImages={hasImages}
+            />
+          </CardContent>
+        </Card>
 
-      {/* Schedule */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Calendar className="h-4 w-4" />
-            When to Post
-          </CardTitle>
-          <CardDescription>
-            Publish now, schedule for later, or add to queue.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <SchedulePicker
-            scheduleType={scheduleType}
-            scheduledDate={scheduledDate}
-            scheduledTime={scheduledTime}
-            onScheduleTypeChange={setScheduleType}
-            onDateChange={setScheduledDate}
-            onTimeChange={setScheduledTime}
-          />
-        </CardContent>
-      </Card>
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Calendar className="h-4 w-4" />
+              When to Post
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <SchedulePicker
+              scheduleType={scheduleType}
+              scheduledDate={scheduledDate}
+              scheduledTime={scheduledTime}
+              onScheduleTypeChange={setScheduleType}
+              onDateChange={setScheduledDate}
+              onTimeChange={setScheduledTime}
+            />
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Submit */}
       <Card>
