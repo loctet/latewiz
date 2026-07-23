@@ -34,6 +34,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Logo } from "@/components/shared/logo";
+import { BRAND } from "@/lib/brand";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -237,7 +238,7 @@ export default function OnboardingPage() {
         /* ignore */
       }
 
-      toast.success("Workspace ready — welcome to LateWiz");
+      toast.success(`Workspace ready — welcome to ${BRAND.name}`);
       router.push("/dashboard");
       router.refresh();
     } catch (err) {

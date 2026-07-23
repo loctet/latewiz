@@ -114,8 +114,8 @@ export default function DashboardPage() {
                 </div>
                 <div className="text-center">
                   <div className="flex items-center justify-center gap-1">
-                    <Clock className="h-4 w-4 text-blue-500" />
-                    <span className="text-2xl font-semibold text-blue-600 dark:text-blue-400">
+                    <Clock className="h-4 w-4 text-primary" />
+                    <span className="text-2xl font-semibold text-primary">
                       {scheduledPosts.length}
                     </span>
                   </div>

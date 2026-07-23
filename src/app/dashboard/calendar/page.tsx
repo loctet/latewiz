@@ -194,7 +194,7 @@ export default function CalendarPage() {
               </div>
 
               {/* Stats badges - hidden on mobile */}
-              <Badge variant="outline" className="hidden text-xs bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 sm:inline-flex">
+              <Badge variant="outline" className="hidden text-xs bg-primary/5 dark:bg-primary/10 text-primary border-primary/20 sm:inline-flex">
                 {scheduledCount} scheduled
               </Badge>
               <Badge variant="outline" className="hidden text-xs bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800 sm:inline-flex">

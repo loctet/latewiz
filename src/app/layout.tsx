@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Space_Grotesk, DM_Sans } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
+import { BRAND } from "@/lib/brand";
 
 const spaceGrotesk = Space_Grotesk({
   variable: "--font-space-grotesk",
@@ -22,9 +23,8 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "LateWiz - AI Social Media Scheduling",
-  description:
-    "Generate captions, images, and videos with AI, then schedule across 13 platforms. Open source and powered by Zernio.",
+  title: `${BRAND.name} - AI Social Media Scheduling`,
+  description: BRAND.description,
   keywords: [
     "social media scheduler",
     "AI content generation",
@@ -48,29 +48,29 @@ export const metadata: Metadata = {
   },
   manifest: "/site.webmanifest",
   openGraph: {
-    title: "LateWiz - AI Social Media Scheduling",
+    title: `${BRAND.name} - AI Social Media Scheduling`,
     description:
       "Generate captions, images, and videos with AI, then schedule across 13 platforms.",
-    url: "https://latewiz.com",
-    siteName: "LateWiz",
+    url: BRAND.url,
+    siteName: BRAND.name,
     type: "website",
     images: [
       {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "LateWiz - AI Social Media Scheduling",
+        alt: `${BRAND.name} - AI Social Media Scheduling`,
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "LateWiz - AI Social Media Scheduling",
+    title: `${BRAND.name} - AI Social Media Scheduling`,
     description:
       "Generate captions, images, and videos with AI, then schedule across 13 platforms.",
     images: ["/og-image.png"],
   },
-  metadataBase: new URL("https://latewiz.com"),
+  metadataBase: new URL(BRAND.url),
 };
 
 export default function RootLayout({

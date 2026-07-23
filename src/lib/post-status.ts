@@ -27,7 +27,7 @@ const POST_STATUS_BADGE: Record<PostStatus, PostStatusBadgeConfig> = {
     variant: "secondary",
     label: "Scheduled",
     className:
-      "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
+      "bg-primary/10 text-primary dark:bg-primary/15 dark:text-primary",
   },
   publishing: {
     variant: "secondary",
@@ -64,7 +64,7 @@ export function getPostStatusBadgeConfig(status: string): PostStatusBadgeConfig 
 export function getPostStatusCalendarClass(status: string): string {
   switch (status) {
     case "scheduled":
-      return "bg-blue-50 dark:bg-blue-950/30 border-l-2 border-l-blue-500 hover:bg-blue-100 dark:hover:bg-blue-950/50";
+      return "bg-primary/5 dark:bg-primary/10 border-l-2 border-l-primary hover:bg-primary/10 dark:hover:bg-primary/15";
     case "published":
       return "bg-green-50 dark:bg-green-950/30 border-l-2 border-l-green-500 hover:bg-green-100 dark:hover:bg-green-950/50";
     case "failed":

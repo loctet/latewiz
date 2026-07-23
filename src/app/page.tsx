@@ -7,6 +7,7 @@ import { useSession } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { PlatformIcon } from "@/components/shared/platform-icon";
 import { Logo } from "@/components/shared/logo";
+import { BRAND } from "@/lib/brand";
 import { PLATFORMS, PLATFORM_NAMES } from "@/lib/late-api";
 import {
   Accordion,
@@ -116,7 +117,7 @@ export default function LandingPage() {
     {
       icon: Clock,
       title: "Smart Queue",
-      description: "Set posting windows once — LateWiz fills the rest.",
+      description: `Set posting windows once — ${BRAND.name} fills the rest.`,
     },
     {
       icon: ImageIcon,
@@ -142,9 +143,9 @@ export default function LandingPage() {
 
   const faqs = [
     {
-      question: "What is LateWiz?",
+      question: `What is ${BRAND.name}?`,
       answer:
-        "LateWiz is a free, open-source social media tool that combines AI content generation with scheduling across 13 platforms via the Zernio API.",
+        `${BRAND.name} is a free, open-source social media tool that combines AI content generation with scheduling across 13 platforms via the Zernio API.`,
     },
     {
       question: "What AI features are included?",
@@ -157,9 +158,9 @@ export default function LandingPage() {
         "For AI generation, yes — each user adds their own OpenAI key to an encrypted vault in Settings. AI and posts never use the host’s keys. Scheduling still needs your Zernio API key.",
     },
     {
-      question: "Is LateWiz really free?",
+      question: `Is ${BRAND.name} really free?`,
       answer:
-        "Yes. LateWiz is MIT licensed and free. Create a LateWiz account, then bring your own Zernio and OpenAI keys so usage stays on your accounts.",
+        `Yes. ${BRAND.name} is MIT licensed and free. Create a ${BRAND.name} account, then bring your own Zernio and OpenAI keys so usage stays on your accounts.`,
     },
     {
       question: "What platforms are supported?",
@@ -167,7 +168,7 @@ export default function LandingPage() {
         "Instagram, TikTok, YouTube, X (Twitter), LinkedIn, Facebook, Pinterest, Threads, Bluesky, Snapchat, Telegram, Discord, and Slack.",
     },
     {
-      question: "Can I self-host LateWiz?",
+      question: `Can I self-host ${BRAND.name}?`,
       answer:
         "Absolutely. Clone the repo, add your keys, and deploy anywhere — Vercel, Railway, Docker, or your own server.",
     },
@@ -177,11 +178,11 @@ export default function LandingPage() {
     <div className="relative min-h-screen overflow-hidden bg-background">
       {/* Full-bleed atmosphere */}
       <div className="pointer-events-none absolute inset-0 z-0" aria-hidden>
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_color-mix(in_oklab,var(--primary)_18%,transparent),_transparent_55%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_color-mix(in_oklab,var(--primary)_12%,transparent),_transparent_50%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_color-mix(in_oklab,var(--brand-teal)_35%,transparent),_transparent_55%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_color-mix(in_oklab,var(--brand-indigo)_40%,transparent),_transparent_50%)]" />
         <div className="landing-grid absolute inset-0 opacity-40 dark:opacity-25" />
-        <div className="landing-orb absolute -top-32 right-[-10%] h-[420px] w-[420px] rounded-full bg-primary/25 blur-3xl md:h-[560px] md:w-[560px]" />
-        <div className="landing-orb absolute bottom-[-10%] left-[-8%] h-[360px] w-[360px] rounded-full bg-primary/15 blur-3xl [animation-delay:2s] md:h-[480px] md:w-[480px]" />
+        <div className="landing-orb absolute -top-32 right-[-10%] h-[420px] w-[420px] rounded-full bg-brand-teal/40 blur-3xl md:h-[560px] md:w-[560px]" />
+        <div className="landing-orb absolute -bottom-40 left-[-15%] h-[380px] w-[380px] rounded-full bg-brand-purple/35 blur-3xl [animation-delay:2s] md:h-[480px] md:w-[480px]" />
       </div>
 
       {/* Floating header */}
@@ -222,7 +223,7 @@ export default function LandingPage() {
 
           <div className="flex items-center gap-2 sm:gap-3">
             <a
-              href="https://github.com/zernio-dev/latewiz"
+              href={BRAND.github}
               target="_blank"
               rel="noopener noreferrer"
               className="cursor-pointer text-muted-foreground transition-colors duration-200 hover:text-foreground"
@@ -262,7 +263,7 @@ export default function LandingPage() {
             <div className="mb-8 flex items-center gap-3">
               <Logo size="lg" showText={false} />
               <span className="font-heading text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl">
-                LateWiz
+                {BRAND.name}
               </span>
             </div>
           </div>
@@ -287,7 +288,7 @@ export default function LandingPage() {
             </Button>
             <Button size="lg" variant="outline" className="cursor-pointer" asChild>
               <a
-                href="https://github.com/zernio-dev/latewiz"
+                href={BRAND.github}
                 target="_blank"
                 rel="noopener noreferrer"
               >
@@ -347,7 +348,7 @@ export default function LandingPage() {
               Create the post. Then schedule it.
             </h2>
             <p className="mt-4 text-muted-foreground">
-              From a single topic to a full campaign — LateWiz generates the
+              From a single topic to a full campaign — {BRAND.name} generates the
               words and visuals your niche expects.
             </p>
           </div>
@@ -469,7 +470,7 @@ export default function LandingPage() {
                 Open source. Yours to run.
               </h2>
               <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
-                MIT licensed. Self-host, contribute, or fork — LateWiz stays
+                MIT licensed. Self-host, contribute, or fork — {BRAND.name} stays
                 under your control.
               </p>
               <div className="mt-8 flex flex-col items-center justify-center gap-4 sm:flex-row">

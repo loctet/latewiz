@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/shared/logo";
+import { BRAND } from "@/lib/brand";
 import { toast } from "sonner";
 
 export default function LoginPage() {
@@ -58,9 +59,12 @@ export default function LoginPage() {
       <div className="w-full max-w-md space-y-8">
         <div className="flex flex-col items-center gap-3 text-center">
           <Logo size="lg" />
-          <h1 className="text-2xl font-bold tracking-tight">Sign in to LateWiz</h1>
+          <h1 className="text-2xl font-bold tracking-tight">
+            Sign in to {BRAND.name}
+          </h1>
           <p className="text-sm text-muted-foreground">
-            Use your LateWiz account. Your Zernio and OpenAI keys stay in your vault.
+            Use your {BRAND.name} account. Your Zernio and OpenAI keys stay in
+            your vault.
           </p>
         </div>
 

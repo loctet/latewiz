@@ -1,11 +1,11 @@
 {
-  "name": "LateWiz",
-  "short_name": "LateWiz",
-  "description": "Your social media scheduling wizard",
+  "name": "Postline",
+  "short_name": "Postline",
+  "description": "AI social scheduling — captions, media, and publish windows",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#E53935",
+  "background_color": "#000000",
+  "theme_color": "#0E4B62",
   "icons": [
     {
       "src": "/android-chrome-192x192.png",

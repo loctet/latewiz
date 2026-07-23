@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/shared/logo";
+import { BRAND } from "@/lib/brand";
 import { toast } from "sonner";
 
 export default function SignupPage() {
@@ -57,7 +58,9 @@ export default function SignupPage() {
       <div className="w-full max-w-md space-y-8">
         <div className="flex flex-col items-center gap-3 text-center">
           <Logo size="lg" />
-          <h1 className="text-2xl font-bold tracking-tight">Create your LateWiz account</h1>
+          <h1 className="text-2xl font-bold tracking-tight">
+            Create your {BRAND.name} account
+          </h1>
           <p className="text-sm text-muted-foreground">
             Bring your own Zernio and OpenAI keys — posts and AI usage stay on your accounts.
           </p>
