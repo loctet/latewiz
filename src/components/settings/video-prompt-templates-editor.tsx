@@ -119,7 +119,7 @@ export function VideoPromptTemplatesEditor() {
         <Textarea
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          rows={16}
+          rows={10}
           className="font-mono text-xs leading-relaxed"
           spellCheck={false}
         />

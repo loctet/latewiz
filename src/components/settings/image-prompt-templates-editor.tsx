@@ -281,7 +281,7 @@ export function ImagePromptTemplatesEditor() {
               id="new-template-body"
               value={newTemplate}
               onChange={(e) => setNewTemplate(e.target.value)}
-              rows={12}
+              rows={8}
               className="font-mono text-xs leading-relaxed"
               spellCheck={false}
             />
@@ -329,7 +329,7 @@ export function ImagePromptTemplatesEditor() {
         <Textarea
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          rows={16}
+          rows={10}
           className="font-mono text-xs leading-relaxed"
           spellCheck={false}
         />
