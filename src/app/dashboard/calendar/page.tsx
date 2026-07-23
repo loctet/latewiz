@@ -8,6 +8,8 @@ import { addMonths } from "date-fns/addMonths";
 import { subMonths } from "date-fns/subMonths";
 import { startOfMonth } from "date-fns/startOfMonth";
 import { endOfMonth } from "date-fns/endOfMonth";
+import { parseISO } from "date-fns/parseISO";
+import { isSameDay } from "date-fns/isSameDay";
 import { useCalendarPosts, useDeletePost } from "@/hooks";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,6 +18,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -28,7 +31,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { PostCard } from "@/components/posts";
+import { PostCard, PostListItem } from "@/components/posts";
 import { CalendarGrid } from "./_components/calendar-grid";
 import { CalendarList } from "./_components/calendar-list";
 import {
@@ -48,6 +51,7 @@ export default function CalendarPage() {
   const router = useRouter();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+  const [selectedDay, setSelectedDay] = useState<Date | null>(null);
   const [postToDelete, setPostToDelete] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
 
@@ -71,13 +75,40 @@ export default function CalendarPage() {
     [posts, selectedPostId]
   );
 
+  const selectedDayPosts = useMemo(() => {
+    if (!selectedDay) return [];
+    return posts
+      .filter((p: any) => p.scheduledFor && isSameDay(parseISO(p.scheduledFor), selectedDay))
+      .sort(
+        (a: any, b: any) =>
+          new Date(a.scheduledFor).getTime() - new Date(b.scheduledFor).getTime()
+      );
+  }, [posts, selectedDay]);
+
   const handlePrevMonth = () => setCurrentDate((d) => subMonths(d, 1));
   const handleNextMonth = () => setCurrentDate((d) => addMonths(d, 1));
   const handleToday = () => setCurrentDate(new Date());
 
   const handleEdit = (postId: string) => {
     setSelectedPostId(null);
+    setSelectedDay(null);
     router.push(`/dashboard/compose?edit=${encodeURIComponent(postId)}`);
+  };
+
+  const handleDayClick = (date: Date) => {
+    const dayPosts = posts.filter(
+      (p: any) => p.scheduledFor && isSameDay(parseISO(p.scheduledFor), date)
+    );
+    if (dayPosts.length > 0) {
+      setSelectedDay(date);
+      return;
+    }
+    router.push("/dashboard/compose");
+  };
+
+  const openPostFromDay = (postId: string) => {
+    setSelectedDay(null);
+    setSelectedPostId(postId);
   };
 
   const handleDelete = async () => {
@@ -194,7 +225,7 @@ export default function CalendarPage() {
           </CardTitle>
           <CardDescription>
             {viewMode === "grid"
-              ? "Click on a post to view details or a day to create a new post."
+              ? "Click a post for details, or +more / a day to see all posts."
               : "Tap a post to view details."}
           </CardDescription>
         </CardHeader>
@@ -206,9 +237,7 @@ export default function CalendarPage() {
               currentDate={currentDate}
               posts={posts}
               onPostClick={setSelectedPostId}
-              onDayClick={(date) => {
-                console.log("Day clicked:", date);
-              }}
+              onDayClick={handleDayClick}
             />
           ) : (
             <CalendarList
@@ -219,6 +248,50 @@ export default function CalendarPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Day posts dialog */}
+      <Dialog
+        open={!!selectedDay}
+        onOpenChange={(open) => {
+          if (!open) setSelectedDay(null);
+        }}
+      >
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedDay ? format(selectedDay, "EEEE, MMM d") : "Day"}
+            </DialogTitle>
+            <DialogDescription>
+              {selectedDayPosts.length} post
+              {selectedDayPosts.length === 1 ? "" : "s"} scheduled
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 overflow-y-auto pr-1">
+            {selectedDayPosts.map((post: any) => (
+              <div
+                key={post._id}
+                className="rounded-lg border border-border p-2 transition-colors hover:bg-accent/50"
+              >
+                <PostListItem
+                  post={post}
+                  onClick={() => openPostFromDay(post._id)}
+                />
+              </div>
+            ))}
+          </div>
+          <Button
+            variant="outline"
+            className="mt-2 w-full"
+            onClick={() => {
+              setSelectedDay(null);
+              router.push("/dashboard/compose");
+            }}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            New post
+          </Button>
+        </DialogContent>
+      </Dialog>
 
       {/* Post detail dialog */}
       <Dialog

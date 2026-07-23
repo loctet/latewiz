@@ -119,6 +119,7 @@ export function CalendarGrid({
                   {dayPosts.slice(0, 2).map((post) => (
                     <button
                       key={post._id}
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         onPostClick(post._id);
@@ -139,9 +140,16 @@ export function CalendarGrid({
                     </button>
                   ))}
                   {dayPosts.length > 2 && (
-                    <p className="px-1 text-[10px] text-muted-foreground sm:text-xs">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDayClick(day);
+                      }}
+                      className="w-full rounded px-1 py-0.5 text-left text-[10px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:text-xs"
+                    >
                       +{dayPosts.length - 2} more
-                    </p>
+                    </button>
                   )}
                 </div>
               </div>
