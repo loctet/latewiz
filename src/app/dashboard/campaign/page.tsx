@@ -50,12 +50,11 @@ import {
 } from "@/lib/saved-campaigns-storage";
 import { SavedCampaignsPanel } from "./_components/saved-campaigns-panel";
 import { ScheduledCampaignsPanel } from "./_components/scheduled-campaigns-panel";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PlatformSelector } from "../compose/_components/platform-selector";
 import {
   CampaignMediaModeSelect,
@@ -75,8 +74,12 @@ import {
   Sparkles,
   Send,
   Save,
+  ChevronDown,
+  FolderOpen,
+  Check,
 } from "lucide-react";
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 import type { Platform } from "@/lib/late-api";
 import type {
   CampaignGenerationMode,
@@ -152,6 +155,9 @@ export default function CampaignPlannerPage() {
   const [runningCampaignId, setRunningCampaignId] = useState<string | null>(null);
   const [saveName, setSaveName] = useState("");
   const [savedCampaigns, setSavedCampaigns] = useState<SavedCampaign[]>([]);
+  const [studioPhase, setStudioPhase] = useState<"plan" | "review">("plan");
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const minStartDate = minScheduleDateInput();
   const listItems = parseCampaignListItems(listItemsBlock);
@@ -189,6 +195,7 @@ export default function CampaignPlannerPage() {
     setMediaMode(migrateCampaignMediaMode(draft));
     setSlots(draft.slots);
     setDraftRestored(true);
+    setStudioPhase(draft.slots.length > 0 ? "review" : "plan");
     if (savedId !== undefined) setActiveSavedId(savedId);
     setActiveScheduledId(null);
   }, []);
@@ -217,6 +224,7 @@ export default function CampaignPlannerPage() {
     setActiveScheduledId(campaign.id);
     setActiveSavedId(null);
     setSaveName(campaign.name);
+    setStudioPhase(campaign.slots.length > 0 ? "review" : "plan");
   }, []);
 
   const refreshSavedList = useCallback(() => {
@@ -481,6 +489,7 @@ export default function CampaignPlannerPage() {
     setTrendBlock("");
     setDraftRestored(false);
     setStartDate(minScheduleDateInput());
+    setStudioPhase("plan");
     toast.message("New campaign started");
   };
 
@@ -695,6 +704,7 @@ export default function CampaignPlannerPage() {
             ? `Planned ${total} deferred slot${total === 1 ? "" : "s"} from your list`
             : `Planned ${total} deferred campaign slot${total === 1 ? "" : "s"}`
         );
+        setStudioPhase("review");
         return;
       }
 
@@ -760,6 +770,7 @@ export default function CampaignPlannerPage() {
           ? `Generated ${total} post${total === 1 ? "" : "s"} (one per list item)`
           : `Generated ${total} posts toward your campaign goal`
       );
+      setStudioPhase("review");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Planning failed");
     } finally {
@@ -1110,263 +1121,373 @@ export default function CampaignPlannerPage() {
   };
 
   return (
-    <PageContainer className="pb-8">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+    <PageContainer className="max-w-6xl pb-24">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
-            <CalendarClock className="h-6 w-6 text-primary" />
-            Campaign Planner
+          <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <CalendarClock className="h-4 w-4" />
+            </span>
+            Campaign Studio
           </h1>
-          <p className="text-muted-foreground mt-1 max-w-3xl">
-            Plan posts now, or save a deferred cron campaign that generates fresh research, copy, and media near publish time via{" "}
-            <a
-              href="https://docs.zernio.com/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline"
-            >
-              Zernio
-            </a>
-            . All slots must be after the current date and time.
+          <p className="mt-1 text-sm text-muted-foreground">
+            Plan an arc, review slots, then publish to Zernio.
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={handleSaveForLater}>
-          <Save className="mr-2 h-4 w-4" />
-          {isDeferredMode ? "Save scheduled campaign" : "Save for later"}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 cursor-pointer"
+            onClick={() => setLibraryOpen((o) => !o)}
+            aria-expanded={libraryOpen}
+          >
+            <FolderOpen className="mr-1.5 h-3.5 w-3.5" />
+            Library
+            <ChevronDown
+              className={cn(
+                "ml-1 h-3.5 w-3.5 transition-transform duration-200",
+                libraryOpen && "rotate-180"
+              )}
+            />
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 cursor-pointer"
+            onClick={handleSaveForLater}
+          >
+            <Save className="mr-1.5 h-3.5 w-3.5" />
+            {isDeferredMode ? "Save scheduled" : "Save"}
+          </Button>
+        </div>
       </div>
 
-      {isDeferredMode ? (
-        <ScheduledCampaignsPanel
-          campaigns={scheduledCampaigns}
-          activeId={activeScheduledId}
-          saveName={saveName}
-          saving={saveScheduledCampaignMutation.isPending}
-          runningId={runningCampaignId}
-          onSaveNameChange={setSaveName}
-          onSave={() => {
-            void handleSaveForLater();
-          }}
-          onLoad={handleLoadScheduled}
-          onDelete={(id) => {
-            void handleDeleteSaved(id);
-          }}
-          onRun={(id) => {
-            void handleRunScheduled(id);
-          }}
-        />
-      ) : (
-        <SavedCampaignsPanel
-          saved={savedCampaigns}
-          activeSavedId={activeSavedId}
-          saveName={saveName}
-          onSaveNameChange={setSaveName}
-          onSave={() => {
-            void handleSaveForLater();
-          }}
-          onLoad={handleLoadSaved}
-          onDelete={(id) => {
-            void handleDeleteSaved(id);
-          }}
-          onNew={handleNewCampaign}
-        />
+      {libraryOpen && (
+        <div className="rounded-xl border border-border bg-card p-3 shadow-sm animate-in fade-in-0 slide-in-from-top-1 duration-200 sm:p-4">
+          <p className="mb-3 text-xs font-medium text-muted-foreground">
+            {isDeferredMode
+              ? "Server cron campaigns (generate near publish)"
+              : "Browser-saved drafts for this profile"}
+          </p>
+          {isDeferredMode ? (
+            <ScheduledCampaignsPanel
+              campaigns={scheduledCampaigns}
+              activeId={activeScheduledId}
+              saveName={saveName}
+              saving={saveScheduledCampaignMutation.isPending}
+              runningId={runningCampaignId}
+              onSaveNameChange={setSaveName}
+              onSave={() => {
+                void handleSaveForLater();
+              }}
+              onLoad={handleLoadScheduled}
+              onDelete={(id) => {
+                void handleDeleteSaved(id);
+              }}
+              onRun={(id) => {
+                void handleRunScheduled(id);
+              }}
+            />
+          ) : (
+            <SavedCampaignsPanel
+              saved={savedCampaigns}
+              activeSavedId={activeSavedId}
+              saveName={saveName}
+              onSaveNameChange={setSaveName}
+              onSave={() => {
+                void handleSaveForLater();
+              }}
+              onLoad={handleLoadSaved}
+              onDelete={(id) => {
+                void handleDeleteSaved(id);
+              }}
+              onNew={handleNewCampaign}
+            />
+          )}
+        </div>
       )}
 
       {draftRestored && slots.length > 0 && !activeSavedId && !activeScheduledId && (
-        <p className="text-xs text-muted-foreground rounded-md bg-muted px-3 py-2">
+        <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
           Restored in-progress draft from this browser session.
         </p>
       )}
 
-      <Card className="w-full">
-          <CardHeader>
-            <CardTitle className="text-base">Schedule window</CardTitle>
-            <CardDescription>
-              {isListMode
-                ? listItems.length > 0
-                  ? `${listItems.length} post${listItems.length === 1 ? "" : "s"} (one per list item) · ~${effectivePlanDays} day${effectivePlanDays === 1 ? "" : "s"} at ${postsPerDay}/day`
-                  : "Add list items below — one post per line"
-                : `${postsPerDay} posts/day × ${planDays} days = ${postsPerDay * planDays} total slots`}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>Generation timing</Label>
-              <Tabs
-                value={generationMode}
-                onValueChange={(value) => {
-                  const nextMode =
-                    value === "deferred" ? "deferred" : "immediate";
-                  setGenerationMode(nextMode);
-                  if (nextMode === "deferred") {
-                    setActiveSavedId(null);
-                  } else {
-                    setActiveScheduledId(null);
-                  }
-                }}
-              >
-                <TabsList>
-                  <TabsTrigger value="immediate">Generate now</TabsTrigger>
-                  <TabsTrigger value="deferred">
-                    Generate 1 hour before publish
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
+      {/* Step progress */}
+      <div className="flex flex-wrap gap-2">
+        {(
+          [
+            { id: "plan" as const, label: "1 · Plan", enabled: true },
+            {
+              id: "review" as const,
+              label: "2 · Review & publish",
+              enabled: slots.length > 0,
+            },
+          ] as const
+        ).map((step) => (
+          <button
+            key={step.id}
+            type="button"
+            disabled={!step.enabled}
+            onClick={() => step.enabled && setStudioPhase(step.id)}
+            className={cn(
+              "inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors duration-200",
+              studioPhase === step.id
+                ? "border-primary bg-primary text-primary-foreground"
+                : step.enabled
+                  ? "border-border bg-background text-muted-foreground hover:bg-accent hover:text-foreground"
+                  : "cursor-not-allowed border-border bg-muted text-muted-foreground/50"
+            )}
+          >
+            {studioPhase === step.id || (step.id === "review" && slots.length > 0) ? (
+              <Check className="h-3 w-3" />
+            ) : null}
+            {step.label}
+            {step.id === "review" && slots.length > 0 ? ` (${slots.length})` : ""}
+          </button>
+        ))}
+      </div>
+
+      {studioPhase === "plan" && (
+        <div className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5">
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-semibold">Campaign brief</h2>
               <p className="text-xs text-muted-foreground">
-                {isDeferredMode
-                  ? "Use this for time-sensitive news or market analysis so AI and web research run near publish time on the server."
-                  : "Use this when you want to generate copy and media immediately, then schedule finished posts yourself."}
+                {isListMode
+                  ? listItems.length > 0
+                    ? `${listItems.length} posts · ~${effectivePlanDays} days at ${postsPerDay}/day`
+                    : "Add list items — one post per line"
+                  : `${postsPerDay}/day × ${planDays} days = ${postsPerDay * planDays} slots`}
               </p>
-              {isDeferredMode && !status?.scheduled_campaigns_configured ? (
-                <p className="text-xs text-destructive">
-                  Deferred campaigns need your Zernio + OpenAI keys in the encrypted vault (Settings). Campaigns are stored in the local SQLite database.
-                </p>
-              ) : null}
             </div>
-            <Tabs
-              value={campaignMode}
-              onValueChange={(v) =>
-                setCampaignMode(v === "list" ? "list" : "arc")
-              }
+            <Link
+              href="/dashboard/niche"
+              className="text-xs text-primary underline-offset-2 hover:underline"
             >
-              <TabsList>
-                <TabsTrigger value="arc">Content arc</TabsTrigger>
-                <TabsTrigger value="list">One post per list item</TabsTrigger>
-              </TabsList>
-              <TabsContent value="arc" className="mt-4 space-y-4">
-                <p className="text-xs text-muted-foreground">
-                  AI plans a multi-post series that builds toward your campaign
-                  goal.
-                </p>
-              </TabsContent>
-              <TabsContent value="list" className="mt-4 space-y-4">
-                <div className="space-y-2">
-                  <Label>List items (one per line)</Label>
-                  <Textarea
-                    value={listItemsBlock}
-                    onChange={(e) => setListItemsBlock(e.target.value)}
-                    rows={6}
-                    placeholder={`Bitcoin\nEthereum\nSolana\nCardano`}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Each line becomes one post. Use the campaign goal below to
-                    describe what to write about every item (e.g. detailed
-                    market analysis).
+              Niche settings
+            </Link>
+          </div>
+
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Generation timing</Label>
+                <Tabs
+                  value={generationMode}
+                  onValueChange={(value) => {
+                    const nextMode =
+                      value === "deferred" ? "deferred" : "immediate";
+                    setGenerationMode(nextMode);
+                    if (nextMode === "deferred") {
+                      setActiveSavedId(null);
+                    } else {
+                      setActiveScheduledId(null);
+                    }
+                  }}
+                >
+                  <TabsList className="h-8 w-full">
+                    <TabsTrigger value="immediate" className="text-xs">
+                      Generate now
+                    </TabsTrigger>
+                    <TabsTrigger value="deferred" className="text-xs">
+                      Near publish
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+                {isDeferredMode && !status?.scheduled_campaigns_configured ? (
+                  <p className="text-[11px] text-destructive">
+                    Needs Zernio + OpenAI keys in Settings vault.
                   </p>
-                </div>
-              </TabsContent>
-            </Tabs>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Posts per day</Label>
+                ) : null}
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">Structure</Label>
+                <Tabs
+                  value={campaignMode}
+                  onValueChange={(v) =>
+                    setCampaignMode(v === "list" ? "list" : "arc")
+                  }
+                >
+                  <TabsList className="h-8 w-full">
+                    <TabsTrigger value="arc" className="text-xs">
+                      Content arc
+                    </TabsTrigger>
+                    <TabsTrigger value="list" className="text-xs">
+                      List items
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
+            </div>
+
+            {isListMode && (
+              <div className="space-y-1.5">
+                <Label htmlFor="campaign-list" className="text-xs">
+                  List items (one per line)
+                </Label>
+                <Textarea
+                  id="campaign-list"
+                  value={listItemsBlock}
+                  onChange={(e) => setListItemsBlock(e.target.value)}
+                  rows={4}
+                  placeholder={"Bitcoin\nEthereum\nSolana"}
+                  className="resize-none text-sm"
+                />
+              </div>
+            )}
+
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="posts-per-day" className="text-xs">
+                  Posts / day
+                </Label>
                 <Input
+                  id="posts-per-day"
                   type="number"
                   min={1}
                   max={12}
                   value={postsPerDay}
-                  onChange={(e) =>
-                    setPostsPerDay(Number(e.target.value) || 1)
-                  }
+                  onChange={(e) => setPostsPerDay(Number(e.target.value) || 1)}
+                  className="h-8"
                 />
               </div>
               {!isListMode ? (
-                <div className="space-y-2">
-                  <Label>Days</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="plan-days" className="text-xs">
+                    Days
+                  </Label>
                   <Input
+                    id="plan-days"
                     type="number"
                     min={1}
                     max={31}
                     value={planDays}
                     onChange={(e) => setPlanDays(Number(e.target.value) || 1)}
+                    className="h-8"
                   />
                 </div>
               ) : (
-                <div className="space-y-2">
-                  <Label>Days (auto)</Label>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Days (auto)</Label>
                   <Input
                     type="text"
                     readOnly
-                    value={
-                      listItems.length > 0
-                        ? String(effectivePlanDays)
-                        : "—"
-                    }
-                    className="bg-muted"
+                    value={listItems.length > 0 ? String(effectivePlanDays) : "—"}
+                    className="h-8 bg-muted"
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Calculated from list length ÷ posts per day.
-                  </p>
                 </div>
               )}
-              <div className="space-y-2">
-                <Label>Start date</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="start-date" className="text-xs">
+                  Start date
+                </Label>
                 <Input
+                  id="start-date"
                   type="date"
                   min={minStartDate}
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
+                  className="h-8"
                 />
               </div>
-              <div className="space-y-2">
-                <Label>Posting window</Label>
-                <div className="flex gap-2 items-center">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Window</Label>
+                <div className="flex items-center gap-1.5">
                   <Input
                     type="time"
                     value={windowStart}
                     onChange={(e) => setWindowStart(e.target.value)}
+                    className="h-8"
+                    aria-label="Window start"
                   />
-                  <span className="text-muted-foreground">to</span>
+                  <span className="text-xs text-muted-foreground">–</span>
                   <Input
                     type="time"
                     value={windowEnd}
                     onChange={(e) => setWindowEnd(e.target.value)}
+                    className="h-8"
+                    aria-label="Window end"
                   />
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Times vary by day (different minutes and offsets) so the
-                  schedule looks natural, not like a fixed bot interval.
-                </p>
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>Campaign goal</Label>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="campaign-goal" className="text-xs">
+                Campaign goal
+              </Label>
               <Textarea
+                id="campaign-goal"
                 value={campaignGoal}
                 onChange={(e) => setCampaignGoal(e.target.value)}
-                rows={3}
+                rows={2}
                 placeholder={
                   isListMode
-                    ? "e.g. Detailed market analysis with price action, catalysts, and outlook"
-                    : "e.g. Launch our new course and get 50 sign-ups in 2 weeks"
+                    ? "e.g. Detailed market analysis with catalysts and outlook"
+                    : "e.g. Launch our course and get 50 sign-ups"
                 }
+                className="resize-none text-sm"
               />
-              <p className="text-xs text-muted-foreground">
-                {isListMode
-                  ? "This goal applies to every list item — each post focuses on one item only."
-                  : "AI generates each post one at a time, building toward this goal."}
-              </p>
             </div>
+
             <PostPromptStyleSelect
+              compact
               campaignGoal={campaignGoal}
               isListMode={isListMode}
             />
-            <div className="space-y-2">
-              <Label>Supporting theme (optional)</Label>
-              <Input
-                value={campaignHint}
-                onChange={(e) => setCampaignHint(e.target.value)}
-                placeholder="e.g. Product launch week"
-              />
+
+            <div>
+              <button
+                type="button"
+                onClick={() => setAdvancedOpen((o) => !o)}
+                className="flex w-full cursor-pointer items-center justify-between rounded-md py-1 text-left text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                aria-expanded={advancedOpen}
+              >
+                Optional theme & trends
+                <ChevronDown
+                  className={cn(
+                    "h-3.5 w-3.5 transition-transform duration-200",
+                    advancedOpen && "rotate-180"
+                  )}
+                />
+              </button>
+              {advancedOpen && (
+                <div className="mt-2 grid gap-3 sm:grid-cols-2 animate-in fade-in-0 slide-in-from-top-1 duration-200">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="campaign-hint" className="text-xs">
+                      Supporting theme
+                    </Label>
+                    <Input
+                      id="campaign-hint"
+                      value={campaignHint}
+                      onChange={(e) => setCampaignHint(e.target.value)}
+                      placeholder="e.g. Product launch week"
+                      className="h-8"
+                    />
+                  </div>
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label htmlFor="trend-hooks" className="text-xs">
+                      Trend hooks (one per line)
+                    </Label>
+                    <Textarea
+                      id="trend-hooks"
+                      value={trendBlock}
+                      onChange={(e) => setTrendBlock(e.target.value)}
+                      rows={2}
+                      className="resize-none text-sm"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
-            <div className="space-y-2">
-              <Label>Trend hooks (one per line)</Label>
-              <Textarea
-                value={trendBlock}
-                onChange={(e) => setTrendBlock(e.target.value)}
-                rows={3}
-              />
-            </div>
+
             <Button
+              className="w-full cursor-pointer sm:w-auto"
               onClick={handlePlan}
               disabled={
                 generatingProgress !== null ||
@@ -1385,195 +1506,203 @@ export default function CampaignPlannerPage() {
                   : `Generating ${generatingProgress.current} / ${generatingProgress.total}…`
                 : isListMode
                   ? isDeferredMode
-                    ? `Plan ${plannedSlotCount || ""} deferred slot${plannedSlotCount === 1 ? "" : "s"} from list`
-                    : `Generate ${plannedSlotCount || ""} post${plannedSlotCount === 1 ? "" : "s"} from list`
+                    ? `Plan ${plannedSlotCount || ""} deferred slots`
+                    : `Generate ${plannedSlotCount || ""} posts from list`
                   : isDeferredMode
-                    ? "Plan deferred campaign slots"
-                    : "Generate campaign incrementally"}
+                    ? "Plan deferred slots"
+                    : "Generate campaign"}
             </Button>
-            <p className="text-xs text-muted-foreground">
-              Niche & language:{" "}
-              <Link href="/dashboard/niche" className="underline">
-                Content Niche
-              </Link>
-            </p>
-          </CardContent>
-        </Card>
-
-      {slots.length > 0 && (
-        <Card className="w-full">
-            <CardHeader>
-              <CardTitle className="text-base">Accounts</CardTitle>
-              <CardDescription>
-                All posts publish to these accounts.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <PlatformSelector
-                selectedAccountIds={selectedAccountIds}
-                onSelectionChange={setSelectedAccountIds}
-                hasVideo={
-                  mediaMode === "video" ||
-                  slots.some((s) => s.video_url)
-                }
-                hasImages={
-                  mediaMode === "image" ||
-                  slots.some((s) => s.image_url)
-                }
-              />
-            </CardContent>
-          </Card>
+          </div>
+        </div>
       )}
 
-      {slots.length > 0 && (
-        <>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">
-                Planned slots ({slots.length})
-              </CardTitle>
-              <CardDescription>
-                {isDeferredMode
-                  ? "Each slot stays pending until cron generates its final content near publish time."
-                  : "Each slot must be after now. Edit date and time, then schedule when ready."} Goal: {campaignGoal.trim() || "—"}
-                {isListMode && listItems.length > 0
-                  ? ` · ${listItems.length} list item${listItems.length === 1 ? "" : "s"}`
-                  : ""}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex flex-wrap items-end gap-4 rounded-lg border p-4">
-                <div className="min-w-[200px] flex-1 space-y-4">
-                  <CampaignMediaModeSelect
-                    value={mediaMode}
-                    onValueChange={setMediaMode}
-                    disabled={
-                      !status?.openai_configured && !status?.fal_configured
-                    }
-                  />
-                  <ImageWatermarkControls
-                    existingImageCount={existingImageCount}
-                    applyingToExisting={applyingWatermark}
-                    onApplyToExisting={applyWatermarkToExistingImages}
-                  />
-                  {mediaMode === "image" && (
-                    <>
-                      <ImagePromptStyleSelect
-                        onValueChange={(id) => {
-                          setImagePromptStyleId(id);
-                          setSlots((prev) =>
-                            prev.map((s) => ({ ...s, imagePromptStyleId: id }))
-                          );
-                        }}
-                      />
-                      {!isDeferredMode ? (
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => generateAllSlotImages(false)}
-                            disabled={
-                              generatingImagesProgress !== null ||
-                              regeneratingImageIndices.length > 0 ||
-                              !status?.openai_configured
-                            }
-                          >
-                            {generatingImagesProgress ? (
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            ) : (
-                              <ImageIcon className="mr-2 h-4 w-4" />
-                            )}
-                            {generatingImagesProgress
-                              ? `Generating ${generatingImagesProgress.current} / ${generatingImagesProgress.total}…`
-                              : "Generate images for all slots"}
-                          </Button>
-                          {slots.some((s) => s.image_url) && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => generateAllSlotImages(true)}
-                              disabled={
-                                generatingImagesProgress !== null ||
-                                regeneratingImageIndices.length > 0 ||
-                                !status?.openai_configured
-                              }
-                            >
-                              Regenerate all images
-                            </Button>
-                          )}
-                        </div>
-                      ) : null}
-                    </>
-                  )}
-                  {mediaMode === "video" && (
-                    <>
-                      <VideoProviderSelect />
-                      <VideoPromptStyleSelect />
-                    </>
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground w-full">
-                  {isDeferredMode
-                    ? mediaMode === "image"
-                      ? "Images will be generated and uploaded by cron near publish time. Browser-only watermark stamping is skipped in deferred mode."
-                      : mediaMode === "video"
-                        ? "Videos will be generated by cron near publish time. If media generation fails, the slot falls back to text-only posting."
-                        : "Deferred mode keeps content fresh by generating text near publish time."
-                    : mediaMode === "image"
-                    ? "Generate images first, then use Apply signature to stamp existing images before scheduling."
-                    : mediaMode === "video"
-                      ? "On schedule, videos are generated for slots that do not already have media."
-                      : "Choose Image as media type to generate images with your signature."}
+      {studioPhase === "review" && slots.length > 0 && (
+        <div className="space-y-4">
+          <div className="rounded-xl border border-border bg-card p-3 shadow-sm sm:p-4">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 className="text-sm font-semibold">
+                  Slots ({slots.length})
+                </h2>
+                <p className="text-xs text-muted-foreground line-clamp-1">
+                  {campaignGoal.trim() || "No goal set"}
                 </p>
               </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 cursor-pointer"
+                onClick={() => setStudioPhase("plan")}
+              >
+                Edit plan
+              </Button>
+            </div>
 
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {slots.map((slot, i) => (
-                  <CampaignSlotCard
-                    key={`slot-${i}-${slot.scheduled_at}`}
-                    slot={slot}
-                    index={i}
-                    onUpdate={(patch) => updateSlot(i, patch)}
-                    onRemove={() => removeSlot(i)}
-                    onRegenerateCopy={() => regenerateSlotCopy(i)}
-                    mediaMode={mediaMode}
-                    onRegenerateImage={() => regenerateSlotImage(i)}
-                    onRegenerateVideo={() => regenerateSlotVideo(i)}
-                    copyLoading={regeneratingCopyIndex === i}
-                    imageLoading={regeneratingImageIndices.includes(i)}
-                    videoLoading={regeneratingVideoIndex === i}
-                    timezone={timezone}
-                    deferredMode={isDeferredMode}
+            <div className="mb-4 space-y-3 rounded-lg border border-border/80 bg-muted/30 p-3">
+              <CampaignMediaModeSelect
+                compact
+                value={mediaMode}
+                onValueChange={setMediaMode}
+                disabled={
+                  !status?.openai_configured && !status?.fal_configured
+                }
+              />
+              <ImageWatermarkControls
+                existingImageCount={existingImageCount}
+                applyingToExisting={applyingWatermark}
+                onApplyToExisting={applyWatermarkToExistingImages}
+              />
+              {mediaMode === "image" && (
+                <div className="space-y-2">
+                  <ImagePromptStyleSelect
+                    compact
+                    onValueChange={(id) => {
+                      setImagePromptStyleId(id);
+                      setSlots((prev) =>
+                        prev.map((s) => ({ ...s, imagePromptStyleId: id }))
+                      );
+                    }}
                   />
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+                  {!isDeferredMode ? (
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        className="h-8 cursor-pointer"
+                        onClick={() => generateAllSlotImages(false)}
+                        disabled={
+                          generatingImagesProgress !== null ||
+                          regeneratingImageIndices.length > 0 ||
+                          !status?.openai_configured
+                        }
+                      >
+                        {generatingImagesProgress ? (
+                          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <ImageIcon className="mr-1.5 h-3.5 w-3.5" />
+                        )}
+                        {generatingImagesProgress
+                          ? `${generatingImagesProgress.current}/${generatingImagesProgress.total}`
+                          : "Generate all images"}
+                      </Button>
+                      {slots.some((s) => s.image_url) && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-8 cursor-pointer"
+                          onClick={() => generateAllSlotImages(true)}
+                          disabled={
+                            generatingImagesProgress !== null ||
+                            regeneratingImageIndices.length > 0 ||
+                            !status?.openai_configured
+                          }
+                        >
+                          Regenerate all
+                        </Button>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+              )}
+              {mediaMode === "video" && (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <VideoProviderSelect compact />
+                  <VideoPromptStyleSelect compact />
+                </div>
+              )}
+            </div>
 
-          <Button
-            size="lg"
-            className="w-full sm:w-auto"
-            onClick={commitCampaign}
-            disabled={
-              committing ||
-              createPostMutation.isPending ||
-              saveScheduledCampaignMutation.isPending
-            }
-          >
-            {committing ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Send className="mr-2 h-4 w-4" />
+            <div className="space-y-2">
+              {slots.map((slot, i) => (
+                <CampaignSlotCard
+                  key={`slot-${i}-${slot.scheduled_at}`}
+                  slot={slot}
+                  index={i}
+                  onUpdate={(patch) => updateSlot(i, patch)}
+                  onRemove={() => removeSlot(i)}
+                  onRegenerateCopy={() => regenerateSlotCopy(i)}
+                  mediaMode={mediaMode}
+                  onRegenerateImage={() => regenerateSlotImage(i)}
+                  onRegenerateVideo={() => regenerateSlotVideo(i)}
+                  copyLoading={regeneratingCopyIndex === i}
+                  imageLoading={regeneratingImageIndices.includes(i)}
+                  videoLoading={regeneratingVideoIndex === i}
+                  timezone={timezone}
+                  deferredMode={isDeferredMode}
+                  defaultExpanded={i === 0}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-border bg-card p-3 shadow-sm sm:p-4">
+            <h2 className="mb-2 text-sm font-semibold">Publish accounts</h2>
+            <PlatformSelector
+              selectedAccountIds={selectedAccountIds}
+              onSelectionChange={setSelectedAccountIds}
+              hasVideo={
+                mediaMode === "video" || slots.some((s) => s.video_url)
+              }
+              hasImages={
+                mediaMode === "image" || slots.some((s) => s.image_url)
+              }
+            />
+            {selectedAccountIds.length === 0 && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Select at least one account before scheduling.
+              </p>
             )}
-            {isDeferredMode
-              ? activeScheduledId
-                ? "Update scheduled campaign"
-                : "Save scheduled campaign for cron"
-              : `Schedule ${slots.length} post${slots.length === 1 ? "" : "s"} to Zernio`}
-          </Button>
-        </>
+          </div>
+        </div>
+      )}
+
+      {studioPhase === "review" && slots.length > 0 && (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 p-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+          <div className="mx-auto flex max-w-6xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs text-muted-foreground">
+              {slots.length} slot{slots.length === 1 ? "" : "s"}
+              {selectedAccountIds.length > 0
+                ? ` · ${selectedAccountIds.length} account${selectedAccountIds.length === 1 ? "" : "s"}`
+                : " · no accounts selected"}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="cursor-pointer"
+                onClick={handleSaveForLater}
+              >
+                <Save className="mr-1.5 h-3.5 w-3.5" />
+                Save
+              </Button>
+              <Button
+                size="sm"
+                className="cursor-pointer"
+                onClick={commitCampaign}
+                disabled={
+                  committing ||
+                  createPostMutation.isPending ||
+                  saveScheduledCampaignMutation.isPending
+                }
+              >
+                {committing ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Send className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                {isDeferredMode
+                  ? activeScheduledId
+                    ? "Update scheduled"
+                    : "Save for cron"
+                  : `Schedule ${slots.length}`}
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </PageContainer>
   );
