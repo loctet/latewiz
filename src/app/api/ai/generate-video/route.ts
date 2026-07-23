@@ -13,7 +13,10 @@ export const maxDuration = 300;
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as Record<string, unknown>;
-    const { openaiApiKey, falApiKey } = await requireUserAiKeys(request, body);
+    const { openaiApiKey, falApiKey, userId } = await requireUserAiKeys(
+      request,
+      body
+    );
     const provider = parseVideoProvider(
       body.video_provider ?? body.videoProvider
     );
@@ -80,6 +83,7 @@ export async function POST(request: NextRequest) {
     ) {
       const digest = (captionContext ?? prompt ?? "").slice(0, 120);
       const entry = await saveGeneratedVideoFile(
+        userId,
         videoUrl,
         digest,
         result.duration_seconds

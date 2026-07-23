@@ -61,11 +61,7 @@ export default function GeneratedMediaPage() {
           </h1>
           <p className="text-muted-foreground mt-1 flex items-center gap-1.5">
             <FolderOpen className="h-3.5 w-3.5 shrink-0" />
-            Saved to{" "}
-            <code className="text-xs bg-muted px-1 rounded">
-              public/uploads/generated/
-            </code>
-            . Generate more in{" "}
+            Private to your LateWiz account. Generate more in{" "}
             <Link href="/dashboard/ai-studio" className="underline">
               AI Studio
             </Link>

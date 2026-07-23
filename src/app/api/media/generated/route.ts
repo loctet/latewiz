@@ -5,17 +5,30 @@ import {
   saveGeneratedImageFile,
   saveGeneratedVideoFile,
 } from "@/lib/server/generated-media-files";
+import {
+  SessionRequiredError,
+  requireSessionUserId,
+} from "@/lib/server/session";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const items = await listGeneratedMediaFiles();
+    const userId = await requireSessionUserId(request);
+    const items = await listGeneratedMediaFiles(userId);
     return NextResponse.json({
       items: items.map((item) => ({
-        ...item,
+        id: item.id,
+        url: item.url,
         type: item.type ?? "image",
+        captionDigest: item.captionDigest,
+        createdAt: item.createdAt,
+        filename: item.filename,
+        durationSeconds: item.durationSeconds,
       })),
     });
   } catch (err) {
+    if (err instanceof SessionRequiredError) {
+      return NextResponse.json({ error: err.message }, { status: 401 });
+    }
     console.error("List generated media error:", err);
     return NextResponse.json(
       { error: "Failed to list media" },
@@ -26,6 +39,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const userId = await requireSessionUserId(request);
     const body = (await request.json()) as Record<string, unknown>;
     const videoUrl =
       typeof body.video_url === "string"
@@ -55,6 +69,7 @@ export async function POST(request: NextRequest) {
 
     if (videoUrl) {
       const entry = await saveGeneratedVideoFile(
+        userId,
         videoUrl,
         captionDigest,
         durationSeconds
@@ -69,9 +84,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const entry = await saveGeneratedImageFile(imageUrl, captionDigest);
+    const entry = await saveGeneratedImageFile(userId, imageUrl, captionDigest);
     return NextResponse.json({ item: entry });
   } catch (err) {
+    if (err instanceof SessionRequiredError) {
+      return NextResponse.json({ error: err.message }, { status: 401 });
+    }
     console.error("Save generated media error:", err);
     return NextResponse.json(
       { error: "Failed to save media" },
@@ -82,16 +100,20 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    const userId = await requireSessionUserId(request);
     const id = request.nextUrl.searchParams.get("id");
     if (!id) {
       return NextResponse.json({ error: "id is required" }, { status: 400 });
     }
-    const ok = await deleteGeneratedMediaFile(id);
+    const ok = await deleteGeneratedMediaFile(userId, id);
     if (!ok) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
     return NextResponse.json({ ok: true });
   } catch (err) {
+    if (err instanceof SessionRequiredError) {
+      return NextResponse.json({ error: err.message }, { status: 401 });
+    }
     console.error("Delete generated media error:", err);
     return NextResponse.json(
       { error: "Failed to delete" },

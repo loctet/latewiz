@@ -89,11 +89,12 @@ function errorMessage(error: unknown): string {
 }
 
 async function persistGeneratedImageBestEffort(
+  userId: string,
   sourceUrl: string,
   captionDigest: string
 ): Promise<string> {
   try {
-    const saved = await saveGeneratedImageFile(sourceUrl, captionDigest);
+    const saved = await saveGeneratedImageFile(userId, sourceUrl, captionDigest);
     return saved.url;
   } catch (error) {
     console.warn(
@@ -105,12 +106,14 @@ async function persistGeneratedImageBestEffort(
 }
 
 async function persistGeneratedVideoBestEffort(
+  userId: string,
   sourceUrl: string,
   captionDigest: string,
   durationSeconds?: string
 ): Promise<string> {
   try {
     const saved = await saveGeneratedVideoFile(
+      userId,
       sourceUrl,
       captionDigest,
       durationSeconds
@@ -130,7 +133,8 @@ async function maybeGenerateMedia(
   slot: ScheduledCampaignSlot,
   lateKey: string,
   openaiKey: string | null,
-  falKey: string | null
+  falKey: string | null,
+  userId: string
 ): Promise<{
   mediaItems?: Array<{ type: "image" | "video"; url: string }>;
   slotPatch: Partial<ScheduledCampaignSlot>;
@@ -167,7 +171,11 @@ async function maybeGenerateMedia(
     }
 
     const imageUrl = imageResult.url ?? `data:image/png;base64,${imageResult.b64_json}`;
-    const previewUrl = await persistGeneratedImageBestEffort(imageUrl, digest);
+    const previewUrl = await persistGeneratedImageBestEffort(
+      userId,
+      imageUrl,
+      digest
+    );
     const uploaded = await uploadMediaFromUrl(
       lateKey,
       imageUrl,
@@ -210,6 +218,7 @@ async function maybeGenerateMedia(
     }
 
     const previewUrl = await persistGeneratedVideoBestEffort(
+      userId,
       videoResult.url,
       digest,
       videoResult.duration_seconds
@@ -394,7 +403,8 @@ async function processScheduledCampaignSlot(
       generatedSlot,
       lateKey,
       openaiKey,
-      falKey
+      falKey,
+      userId
     );
     const mediaWarning = media.warning?.trim() || "";
     const postId = await createScheduledPost(
