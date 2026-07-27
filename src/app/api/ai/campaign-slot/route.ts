@@ -15,7 +15,7 @@ export const maxDuration = 800;
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as Record<string, unknown>;
-    const { openaiApiKey: apiKey } = await requireUserAiKeys(request, body);
+    const { openaiApiKey: apiKey, userId } = await requireUserAiKeys(request, body);
     if (!apiKey) {
       return NextResponse.json(
         {
@@ -153,6 +153,7 @@ export async function POST(request: NextRequest) {
       customPostPromptStyles,
       isListMode,
       researchDepthId,
+      userId,
     });
 
     const content = [result.post.body, result.post.hashtags]
@@ -163,6 +164,7 @@ export async function POST(request: NextRequest) {
       post: { ...result.post, content },
       source: result.source,
       detail: result.detail,
+      pdfUrl: result.post.pdfUrl ?? null,
     });
   } catch (err) {
     if (err instanceof SessionRequiredError) {

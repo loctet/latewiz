@@ -13,7 +13,7 @@ export const maxDuration = 800;
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as Record<string, unknown>;
-    const { openaiApiKey } = await requireUserAiKeys(request, body);
+    const { openaiApiKey, userId } = await requireUserAiKeys(request, body);
     if (!openaiApiKey) {
       return NextResponse.json(
         {
@@ -58,7 +58,8 @@ export async function POST(request: NextRequest) {
           ? (body.postPromptTemplates as Record<string, string>)
           : undefined,
       researchDepthId,
-      customPostPromptStyles
+      customPostPromptStyles,
+      userId
     );
     return NextResponse.json({
       draft,

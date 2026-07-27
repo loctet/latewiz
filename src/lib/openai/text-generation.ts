@@ -17,7 +17,9 @@ import { buildTimelinessSystemInstructions } from "@/lib/web-search/content-rese
 import { appendWebResearchToUserMessage } from "@/lib/web-search/content-research";
 import type { ContentResearchParams } from "@/lib/web-search/build-query";
 import {
+  appendFullReportLink,
   buildDeepResearchTaskInstructions,
+  buildDeepResearchTeaserTaskInstructions,
   getResearchDepth,
   parseResearchDepthId,
   type ResearchDepthId,
@@ -31,6 +33,7 @@ export type TextGenerationResult<T> = {
     | "openai"
     | "openai+fallback-search"
     | "openai+deep-research";
+  pdfUrl?: string | null;
 };
 
 function summarizeOpenAiError(status: number, bodyRaw: string): string {
@@ -91,11 +94,14 @@ async function formatStructuredFromResearch<T>(params: {
   researchReport: string;
   researchParams?: ContentResearchParams;
   maxOutputTokens?: number;
+  teaserMode?: boolean;
 }): Promise<TextGenerationResult<T>> {
   const formatModel = resolveTextModel();
   const objective = Boolean(params.researchParams?.ignoreNicheBias);
   const instructions = [
-    params.taskInstructions,
+    params.teaserMode
+      ? buildDeepResearchTeaserTaskInstructions()
+      : params.taskInstructions,
     buildDeepResearchTaskInstructions(),
     SOCIAL_POST_FORMAT_INSTRUCTIONS,
     buildTimelinessSystemInstructions(),
@@ -108,6 +114,9 @@ async function formatStructuredFromResearch<T>(params: {
     objective
       ? "Do not reshape the report to fit a personal niche, audience persona, or brand voice."
       : "",
+    params.teaserMode
+      ? "Return JSON with title, body (~900–1100 chars), hashtags. Body is a teaser only."
+      : "",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -119,7 +128,9 @@ async function formatStructuredFromResearch<T>(params: {
     params.researchReport.slice(0, 48_000),
     "=== END REPORT ===",
     "",
-    "Write the social post JSON now, following the structure and quality bar in the instructions.",
+    params.teaserMode
+      ? "Write the short social teaser JSON now (not the full report)."
+      : "Write the social post JSON now, following the structure and quality bar in the instructions.",
   ].join("\n");
 
   // Deep research models lack structured outputs — format with the standard text model.
@@ -127,7 +138,7 @@ async function formatStructuredFromResearch<T>(params: {
     apiKey: params.apiKey,
     system: instructions,
     user: userInput,
-    maxTokens: params.maxOutputTokens,
+    maxTokens: params.maxOutputTokens ?? 2048,
     model: formatModel,
   });
 
@@ -159,9 +170,11 @@ export async function generateStructuredContent<T>(params: {
   researchParams?: ContentResearchParams;
   maxOutputTokens?: number;
   researchDepthId?: ResearchDepthId | string | null;
+  /** Required to persist public PDF links for deep research */
+  userId?: string | null;
+  titleHint?: string;
 }): Promise<TextGenerationResult<T>> {
   const depthId = parseResearchDepthId(params.researchDepthId);
-  const depth = getResearchDepth(depthId);
 
   // Deep research is always objective — never bias toward workspace niche/audience
   if (depthId === "deep") {
@@ -181,14 +194,52 @@ export async function generateStructuredContent<T>(params: {
     });
 
     if (research.ok && research.outputText.trim()) {
-      return formatStructuredFromResearch<T>({
+      let pdfUrl: string | null = null;
+      let pdfDetail: string | null = null;
+
+      if (params.userId?.trim()) {
+        const { buildAndPersistResearchPdf } = await import(
+          "@/lib/pdf/build-research-pdf"
+        );
+        const pdf = await buildAndPersistResearchPdf({
+          apiKey: params.apiKey,
+          userId: params.userId.trim(),
+          researchReport: research.outputText,
+          titleHint: params.titleHint,
+        });
+        if (pdf) {
+          pdfUrl = pdf.absoluteUrl;
+        } else {
+          pdfDetail = "Deep research PDF generation failed; teaser returned without link";
+        }
+      } else {
+        pdfDetail =
+          "Deep research PDF skipped (no user id); teaser returned without link";
+      }
+
+      const formatted = await formatStructuredFromResearch<T>({
         apiKey: params.apiKey,
         taskInstructions: params.taskInstructions,
         userInput: params.userInput,
         researchReport: research.outputText,
         researchParams,
-        maxOutputTokens: params.maxOutputTokens,
+        maxOutputTokens: Math.min(params.maxOutputTokens ?? 2048, 2048),
+        teaserMode: true,
       });
+
+      if (formatted.data && pdfUrl) {
+        const row = formatted.data as { body?: unknown };
+        if (typeof row.body === "string") {
+          row.body = appendFullReportLink(row.body, pdfUrl);
+        }
+      }
+
+      const detailParts = [formatted.detail, pdfDetail].filter(Boolean);
+      return {
+        ...formatted,
+        pdfUrl,
+        detail: detailParts.length ? detailParts.join(" | ") : null,
+      };
     }
 
     // Fall through to standard generation if deep research fails

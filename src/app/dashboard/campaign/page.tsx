@@ -23,7 +23,7 @@ import {
   useImageWatermarkSettings,
   watermarkImageIfEnabled,
 } from "@/hooks";
-import { buildCampaignSlotTimes } from "@/lib/openai";
+import { buildCampaignSlotTimes } from "@/lib/openai/campaign-slots";
 import { sanitizeSocialPostText } from "@/lib/openai/sanitize-post-text";
 import {
   assignListItemSlotBrief,
@@ -752,6 +752,7 @@ export default function CampaignPlannerPage() {
                   body: post.body,
                   hashtags: post.hashtags,
                   content: post.content,
+                  pdfUrl: post.pdfUrl ?? null,
                   aiInstruction: brief
                     ? slotBriefToAiInstruction({
                         ...brief,
@@ -831,9 +832,12 @@ export default function CampaignPlannerPage() {
         body,
         hashtags,
         content: [body, hashtags].filter(Boolean).join("\n\n"),
+        pdfUrl: r.draft.pdfUrl ?? null,
       });
       if (r.source === "fallback" && r.detail) {
         toast.error(r.detail);
+      } else if (r.source === "openai+deep-research" && r.draft.pdfUrl) {
+        toast.success("Copy regenerated with full PDF report");
       } else {
         toast.success("Copy regenerated");
       }

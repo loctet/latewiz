@@ -46,6 +46,8 @@ export type ScheduledCampaignSlot = {
   brief?: CampaignSlotBrief;
   source?: string | null;
   detail?: string | null;
+  /** Public deep-research PDF URL when Deep mode generated a report */
+  pdfUrl?: string | null;
   generatedAt?: string | null;
   postedAt?: string | null;
   postId?: string | null;

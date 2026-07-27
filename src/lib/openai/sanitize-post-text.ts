@@ -41,7 +41,7 @@ export const SOCIAL_POST_FORMAT_INSTRUCTIONS = [
   "Write plain text suitable for social platforms (LinkedIn, X, Instagram, etc.).",
   "Never use Markdown bold (**text** or __text__).",
   "Never use Markdown links ([label](url)); if a source matters, name it in words without a URL.",
-  "Do not include raw URLs in title, body, or hashtags unless the brief explicitly requires one.",
+  "Do not invent raw URLs in title, body, or hashtags — the system may append an official Full report link after generation.",
 ].join(" ");
 
 /**

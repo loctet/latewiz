@@ -3,7 +3,8 @@ export * from "./types";
 export * from "./resolve-key";
 export * from "./niche-prompt";
 export * from "./responses";
-export * from "./text-generation";
+// text-generation stays server-path only (deep research PDF). Import from
+// "@/lib/openai/text-generation" or via service on the server — not the barrel.
 export * from "./schemas";
 export * from "./sanitize-post-text";
 export * from "./service";

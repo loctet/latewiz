@@ -27,12 +27,15 @@ export interface DraftResult {
   hashtags: string;
   source: "openai" | "openai+web" | "openai+fallback-search" | "openai+deep-research" | "stub" | "fallback";
   detail: string | null;
+  /** Public URL to the full deep-research PDF when Deep mode succeeds */
+  pdfUrl?: string | null;
 }
 
 export interface CampaignPostDraft {
   title: string;
   body: string;
   hashtags: string;
+  pdfUrl?: string | null;
 }
 
 export type PreviousCampaignPost = {

@@ -43,12 +43,13 @@ export const RESEARCH_DEPTHS: ResearchDepth[] = [
     id: "deep",
     label: "Deep research",
     description:
-      "OpenAI Deep Research (o4-mini-deep-research) — multi-step web research. May take several minutes.",
+      "OpenAI Deep Research — full PDF report + ~1000-char social teaser with link. May take several minutes.",
     advancedSearch: true,
     maxSearchResults: 10,
     searchContextSize: "high",
-    minBodyCharsFloor: 1200,
-    maxOutputTokensFloor: 4096,
+    /** Social teaser length floor (full analysis lives in the PDF) */
+    minBodyCharsFloor: 800,
+    maxOutputTokensFloor: 2048,
   },
 ];
 
@@ -76,15 +77,32 @@ export function resolveTextModelForDepth(depthId?: string | null): string {
 export function buildDeepResearchTaskInstructions(): string {
   return [
     "This post is grounded in an OpenAI Deep Research report included below.",
-    "Produce institutional-grade analysis for social — not a thin news blurb.",
-    "Synthesize the report into the required structure; never paraphrase a single article into numbered 'key facts'.",
+    "Write a SHORT professional social TEASER (~900–1100 characters) — the full report is delivered as a separate PDF.",
+    "2–3 dense paragraphs: thesis, key data, main catalyst or risk. No multi-section institutional blueprint.",
     "Do not append parenthetical source domains like (kucoin.com) in the body.",
     "Do not end with a rhetorical question to the reader.",
     "Prefer specific levels, percentages, catalysts, and risks from the report; if evidence is thin, say so.",
-    "Write substantive paragraphs under clear section headings — not bullet spam.",
-    "Do not paste long URLs; weave findings naturally for social.",
+    "Do not invent or paste a PDF URL — the system appends the Full report link after generation.",
     "Stay objective — do not reshape findings for a personal niche, target audience, or brand marketing angle.",
   ].join(" ");
+}
+
+export function buildDeepResearchTeaserTaskInstructions(): string {
+  return [
+    "DEEP RESEARCH TEASER MODE: Write a short professional social teaser for the feed — NOT the full institutional report.",
+    "Target body length: 900–1100 characters (before hashtags). Hard max ~1100 characters.",
+    "Structure: a punchy title, then 2–3 dense paragraphs covering the thesis, 1–2 specific data points, and the main risk or catalyst.",
+    "Do NOT include long section headings like CORE ARCHITECTURE, TOKENOMICS tables, or multi-section blueprints — those belong in the PDF.",
+    "Do not invent a URL or write 'Full report:' — the system appends the PDF link after generation.",
+    "Do not end with a rhetorical question. Stay objective and factual from the research report only.",
+  ].join(" ");
+}
+
+export function appendFullReportLink(body: string, pdfUrl: string): string {
+  const trimmed = body.trim();
+  if (!pdfUrl) return trimmed;
+  if (trimmed.includes(pdfUrl)) return trimmed;
+  return `${trimmed}\n\nFull report: ${pdfUrl}`;
 }
 
 /**
@@ -110,9 +128,10 @@ export function applyResearchDepthToPostStyle(
         : getPostPromptStyle("expert-research-brief");
   }
 
+  // Deep mode: short social teaser; full structured analysis goes in the PDF.
   return {
     ...base,
-    minBodyChars: Math.max(base.minBodyChars, depth.minBodyCharsFloor),
-    maxOutputTokens: Math.max(base.maxOutputTokens, depth.maxOutputTokensFloor),
+    minBodyChars: depth.minBodyCharsFloor,
+    maxOutputTokens: Math.max(2048, depth.maxOutputTokensFloor),
   };
 }

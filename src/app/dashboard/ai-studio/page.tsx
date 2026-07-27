@@ -43,6 +43,8 @@ import {
   SlidersHorizontal,
   Target,
   ArrowRight,
+  FileText,
+  ExternalLink,
 } from "lucide-react";
 import {
   AiImageReferencePicker,
@@ -78,6 +80,7 @@ export default function AiStudioPage() {
   const [generatedTitle, setGeneratedTitle] = useState("");
   const [generatedBody, setGeneratedBody] = useState("");
   const [generatedHashtags, setGeneratedHashtags] = useState("");
+  const [pdfUrl, setPdfUrl] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
   const [referenceImageUrl, setReferenceImageUrl] = useState<
@@ -125,8 +128,15 @@ export default function AiStudioPage() {
       setGeneratedTitle(r.draft.title);
       setGeneratedBody(r.draft.body);
       setGeneratedHashtags(r.draft.hashtags);
+      setPdfUrl(r.draft.pdfUrl?.trim() || "");
       if (r.source === "stub") {
         toast.message("Using placeholder — add OpenAI key in Settings.");
+      } else if (r.source === "openai+deep-research") {
+        toast.success(
+          r.draft.pdfUrl
+            ? "Deep research ready — teaser + full PDF report."
+            : "Deep research teaser ready."
+        );
       } else if (
         r.source === "openai+web" ||
         r.source === "openai+fallback-search"
@@ -555,6 +565,15 @@ export default function AiStudioPage() {
               </div>
 
               <div className="flex flex-wrap gap-2 border-t border-border pt-3">
+                {pdfUrl ? (
+                  <Button variant="outline" asChild>
+                    <a href={pdfUrl} target="_blank" rel="noopener noreferrer">
+                      <FileText className="mr-2 h-4 w-4" />
+                      Full report (PDF)
+                      <ExternalLink className="ml-1.5 h-3.5 w-3.5 opacity-70" />
+                    </a>
+                  </Button>
+                ) : null}
                 <Button onClick={openInComposer} className="sm:ml-auto">
                   <PenLine className="mr-2 h-4 w-4" />
                   Open in composer

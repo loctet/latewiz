@@ -281,6 +281,8 @@ export interface CampaignSlot {
   generatedAt?: string | null;
   postId?: string | null;
   lastError?: string | null;
+  /** Public deep-research PDF URL */
+  pdfUrl?: string | null;
 }
 
 export function useGenerateCampaignSlot() {
@@ -340,9 +342,10 @@ export function useGenerateCampaignSlot() {
         );
       }
       return res.json() as Promise<{
-        post: CampaignSlot;
+        post: CampaignSlot & { pdfUrl?: string | null };
         source: string;
         detail?: string | null;
+        pdfUrl?: string | null;
       }>;
     },
   });

@@ -35,6 +35,8 @@ import {
   Calendar,
   AlertCircle,
   ChevronDown,
+  FileText,
+  ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -312,6 +314,21 @@ export function CampaignSlotCard({
               )}
               Regenerate copy
             </Button>
+            {slot.pdfUrl ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 cursor-pointer"
+                asChild
+              >
+                <a href={slot.pdfUrl} target="_blank" rel="noopener noreferrer">
+                  <FileText className="mr-1.5 h-3 w-3" />
+                  Full report (PDF)
+                  <ExternalLink className="ml-1 h-3 w-3 opacity-70" />
+                </a>
+              </Button>
+            ) : null}
           </div>
 
           {showImageMedia && (

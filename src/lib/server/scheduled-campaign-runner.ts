@@ -374,6 +374,7 @@ async function processScheduledCampaignSlot(
       customPostPromptStyles: campaign.customPostPromptStyles,
       researchDepthId: campaign.researchDepthId,
       isListMode: campaign.campaignMode === "list",
+      userId: campaign.userId,
     });
 
     if (!generated.post.body.trim()) {
@@ -396,6 +397,7 @@ async function processScheduledCampaignSlot(
         .join("\n\n"),
       source: generated.source,
       detail: generated.detail,
+      pdfUrl: generated.post.pdfUrl ?? null,
       generatedAt: new Date().toISOString(),
       lastError: null,
     };
