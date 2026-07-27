@@ -196,49 +196,76 @@ Quality bar:
     id: "crypto-market-analysis",
     label: "Market analysis (expert)",
     description:
-      "In-depth analyst-style breakdown: context, catalysts, risks, and outlook. Works for any niche (markets, science, product, policy).",
+      "Institutional crypto deep dive: architecture, on-chain metrics, tokenomics, risks, and investment case.",
     expertRole:
-      "senior research analyst who writes institutional-grade notes for a sophisticated audience in this niche",
-    structureTemplate: `Write a DETAILED institutional-grade analysis post for: {{subject}}
+      "Senior Web3 Quantitative Analyst and Cryptoeconomic Researcher writing institutional-grade research notes",
+    structureTemplate: `Act as a Senior Web3 Quantitative Analyst and Cryptoeconomic Researcher. Produce an institutional-grade, deeply technical research report and investment case for: {{subject}}
 
 Campaign intent: {{goal}}
+
+Your analysis must be objective, data-driven, highly granular, and structured according to the exact blueprint below. Use web research for timely figures; if a metric is unknown, say so instead of inventing numbers. Cover ONLY {{subject}} unless the goal requires otherwise.
 
 Required structure (use these section labels as plain-text headings on their own line):
 
 SNAPSHOT
 2–4 dense sentences: where {{subject}} stands now (level, % move over the relevant window when research supports it), what changed, and why it matters. Lead with analysis — not a press-release paraphrase.
 
-NARRATIVE & CATALYSTS
-Explain what is driving the move — flows, news, macro, regulation, product, or sentiment. Connect cause and effect. Synthesize across sources; do not invent catalysts.
+TITLE & EXECUTIVE SUMMARY
+- Title line: Investment Case: {{subject}} and the [KEY ARCHITECTURAL PARADIGM / VALUE PROPOSITION]
+- Executive Thesis: Synthesize the macro market context, the problem the project solves, its core technological breakthrough, key supported ecosystems, and a summary of its competitive edge.
 
-STRUCTURED READ
-Levels, momentum, or relative strength as observation only — no fake precision or guaranteed outcomes.
+CORE ARCHITECTURE AND TECHNICAL MECHANICS
+- Deep Technical Explanation: Explain the protocol’s core design, consensus/validation mechanism, execution layer, and operational workflows.
+- Developer & Integration Infrastructure: Detail developer tools (e.g., SDKs, APIs, custom hooks, cross-chain messaging, AI/agentic integration parameters).
+- Architecture Comparison Table: Include a Markdown table comparing the project's architectural paradigm against legacy/traditional models across parameters such as:
 
-FUNDAMENTALS (if relevant)
-Underlying drivers only when material to the thesis.
+| Architectural Parameter | Traditional Model | {{subject}} Model |
+(Include parameters like: Custody Model, Execution Engine, Attack Surface Exposure, Settlement Speed, Slippage/Execution Impact, Capital Efficiency).
 
-RISKS & WATCHPOINTS
-What would invalidate the narrative; key levels or events to watch next.
+COMPARATIVE MARKET PERFORMANCE & ON-CHAIN METRICS
+- Quantitative Performance: Detail trading/transaction volume, daily active addresses, transaction fees generated, user retention, and performance under stress/congestion.
+- Competitive Landscape Table: Include a Markdown table comparing the protocol against 3–4 direct market competitors across key metrics:
 
-BOTTOM LINE
-Clear analyst takeaway in 2–4 sentences. No rhetorical question to the reader.
+| Metric | {{subject}} | Competitor 1 | Competitor 2 | Competitor 3 |
+(Include parameters like: Messaging/Execution Engine, Order Matching Algorithm, Median Finality/Speed, Median Transaction Size, Protocol Fees, Profitability/Revenue, Cumulative Volume, Security Track Record).
+
+TOKENOMICS, GOVERNANCE, & VALUE ACCRUAL MECHANISM
+- Supply Structure & Distribution: Outline maximum supply, circulating supply, allocation percentages across stakeholders, vesting schedules, and upcoming token unlock overhangs.
+- Value Capture Model: Detail fee distribution mechanisms, buyback-and-burn protocols, dynamic yield generation, validator collateral requirements, and staking/slashing parameters.
+- Tokenomic Parameters Table: Include a Markdown table summarizing core token metrics:
+
+| Tokenomic Parameter | Value / Specification |
+
+TECHNICAL RISKS, VULNERABILITIES, & COUNTERMEASURES
+- Structural Bottlenecks: Identify concentration risks (e.g., validator/solver dominance), MEV risks, liquidity drain vectors, or oracle dependencies.
+- Token Overhang: Analyze supply inflation risks stemming from vesting cliffs.
+- Risk Assessment Matrix: Include a Markdown table categorizing key protocol risks:
+
+| Risk Vector | Underlying Technical Cause | Protocol-Level Impact | Potential Countermeasures |
+
+STRATEGIC OUTLOOK & INVESTMENT CONCLUSION
+- Summarize the top three investment thesis pillars driving long-term value capture.
+- Provide a balanced final assessment weighing growth catalysts against systemic operational risks.
+- No rhetorical question to the reader.
 
 DISCLAIMER
 One short line: not professional advice; do your own research.
 
-Hard bans (these make the post look amateur):
+Style & formatting:
+1. Tone: institutional, highly technical, analytical, and objective (similar to an equity research report).
+2. Formatting: clear section headings, bullet points, and single-spaced Markdown tables where required.
+3. Data depth: avoid surface-level generalizations. Specify exact technical protocols, mechanisms, percentages, and financial metrics when research supports them.
+
+Hard bans:
 - Do NOT write a thin "Faits clés" / "Key facts" numbered digest that restates one article.
 - Do NOT paste parenthetical domains like (kucoin.com) or (coindesk.com) in the body.
-- Do NOT open with a generic one-liner then repeat the same claim as "fact 1".
-- Do NOT digress into unrelated assets unless {{goal}} explicitly asks for a cross-market view.
+- Do NOT invent prices, TVL, volumes, or unlock schedules — mark unknowns explicitly.
 
 Quality bar:
 - Minimum {{minBodyChars}} characters in the body (before hashtags).
-- Write like a published research note adapted for social — substantive paragraphs.
-- Use web research for timely data; if a metric is unknown, say so instead of inventing numbers.
-- Cover ONLY {{subject}} unless the goal requires otherwise.`,
-    minBodyChars: 1400,
-    maxOutputTokens: 4096,
+- Write like a published institutional research note adapted for social/long-form posting.`,
+    minBodyChars: 2800,
+    maxOutputTokens: 8192,
     matchPatterns: [
       /market\s*anal/i,
       /analyse?\s+(?:de\s+)?march/i,
@@ -250,6 +277,8 @@ Quality bar:
       /detailled?\s+(?:market|crypto)/i,
       /expert\s+(?:market|analysis)/i,
       /institutional[- ]?grade/i,
+      /investment\s*case/i,
+      /deep\s*dive/i,
       /24\s*h(?:eurs?)?/i,
       /derni[eè]res?\s+24/i,
       /last\s+24/i,
