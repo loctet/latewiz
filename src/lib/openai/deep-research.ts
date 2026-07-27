@@ -387,18 +387,19 @@ export async function rewritePromptForDeepResearch(params: {
 }): Promise<{ prompt: string; detail: string | null }> {
   const model = params.model?.trim() || resolveTextModel();
 
-  const instructions = `You will be given a research task. Produce a detailed set of instructions for an OpenAI deep research model. Do NOT complete the research yourself.
+  const instructions = `You will be given a research task. Produce a detailed set of instructions for a deep research model. Do NOT complete the research yourself.
 
 GUIDELINES:
 1. Maximize specificity — include the subject and time window (e.g. last 24 hours) from the brief.
 2. Ask for specific figures, levels, % moves, catalysts, risks, and outlook when relevant.
 3. Prefer reliable, up-to-date sources (exchanges, major news, filings, primary data).
-4. Request a structured analyst-style report with clear section headings.
-5. If the brief is not in English, tell the researcher to respond in that language.
-6. Do not invent facts the user did not provide; mark unspecified dimensions as open-ended.
-7. Phrase the research request in the first person.
-8. CRITICAL — stay on the user's primary subject. Do NOT switch to a different asset, market, or news theme.
-9. CRITICAL — stay objective: do NOT tailor research to a personal brand niche, target audience persona, geography marketing angle, or content-calendar voice. Research the subject itself as an institutional analyst would.`;
+4. Require a COMPLETE institutional report (≥4500 characters) with markdown ## headings and tables where useful.
+5. Explicitly forbid: clarifying questions, offering options, writing social teasers/hashtags, or narrating intent.
+6. If the brief is not in English, tell the researcher to respond in that language.
+7. Do not invent facts the user did not provide; mark unspecified dimensions as open-ended.
+8. Phrase the research request in the first person.
+9. CRITICAL — stay on the user's primary subject. Do NOT switch to a different asset, market, or news theme.
+10. CRITICAL — stay objective: do NOT tailor research to a personal brand niche, target audience persona, geography marketing angle, or content-calendar voice.`;
 
   try {
     const res = await fetch("https://api.openai.com/v1/responses", {

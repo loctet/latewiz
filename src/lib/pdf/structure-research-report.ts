@@ -75,9 +75,15 @@ function parseTable(
 
 function looksLikeHeading(line: string): boolean {
   if (/^#{1,3}\s+\S/.test(line)) return true;
-  if (/^[A-Z][A-Z0-9 &/,\-]{8,80}$/.test(line.trim())) return true;
+  // All-caps headings — but not prompt scaffolding
   if (
-    /^(SNAPSHOT|EXECUTIVE|CORE |COMPARATIVE|TOKENOMICS|TECHNICAL|STRATEGIC|DISCLAIMER|OUTLOOK|SUMMARY|MARKET|RISK)/i.test(
+    /^[A-ZÀ-Ÿ][A-ZÀ-Ÿ0-9 &/,\-]{8,80}$/.test(line.trim()) &&
+    !/PRIMARY SUBJECT|RESEARCH TOPIC|COMPOSER/i.test(line)
+  ) {
+    return true;
+  }
+  if (
+    /^(SNAPSHOT|EXECUTIVE|CORE |COMPARATIVE|TOKENOMICS|TECHNICAL|STRATEGIC|DISCLAIMER|OUTLOOK|SUMMARY|MARKET|RISK|OVERVIEW|INTRODUCTION|CONCLUSION)/i.test(
       line.trim()
     ) &&
     line.trim().length < 90

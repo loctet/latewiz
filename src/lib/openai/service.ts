@@ -228,7 +228,7 @@ export async function generateDraft(
       maxOutputTokens,
       researchDepthId: depthId,
       userId,
-      titleHint: subject,
+      titleHint: subject.replace(/^Research topic[^\n]*:\s*/i, "").slice(0, 120),
       publicOrigin,
     });
 

@@ -201,6 +201,18 @@ export async function generateStructuredContent<T>(params: {
       let pdfUrl: string | null = null;
       let pdfDetail: string | null = null;
 
+      const { assessResearchForPdf, cleanReportTitleHint } = await import(
+        "@/lib/pdf/research-quality"
+      );
+      const assessment = assessResearchForPdf(research.outputText);
+      const reportForTeaser = assessment.cleaned || research.outputText;
+      const titleHint = cleanReportTitleHint(params.titleHint);
+
+      if (!assessment.ok) {
+        // Try expand+PDF only when notes aren't chat fluff; otherwise skip PDF entirely
+        pdfDetail = assessment.reason ?? "PDF skipped";
+      }
+
       if (params.userId?.trim()) {
         const { buildAndPersistResearchPdf } = await import(
           "@/lib/pdf/build-research-pdf"
@@ -209,25 +221,49 @@ export async function generateStructuredContent<T>(params: {
           apiKey: params.apiKey,
           userId: params.userId.trim(),
           researchReport: research.outputText,
-          titleHint: params.titleHint,
+          titleHint,
           publicOrigin: params.publicOrigin,
         });
         if (pdf) {
           pdfUrl = pdf.absoluteUrl;
-        } else {
+          pdfDetail = null;
+        } else if (!pdfDetail) {
           pdfDetail =
-            "Deep research PDF generation failed; teaser returned without link";
+            "Deep research PDF skipped (report under 4500 chars or failed quality checks); teaser returned without link";
         }
       } else {
         pdfDetail =
           "Deep research PDF skipped (no user id); teaser returned without link";
       }
 
+      // If research was pure chat fluff, treat deep as failed for teaser quality too
+      if (
+        assessment.reason?.includes("chat-style") &&
+        assessment.charCount < 1200
+      ) {
+        const deepFailDetail = assessment.reason;
+        console.warn(
+          "[text-generation] Deep research unusable, falling back:",
+          deepFailDetail
+        );
+        const fallback = await generateStructuredContentStandard<T>({
+          ...params,
+          researchParams,
+          researchDepthId: "standard",
+        });
+        return {
+          ...fallback,
+          detail: fallback.detail
+            ? `${deepFailDetail} | ${fallback.detail}`
+            : deepFailDetail,
+        };
+      }
+
       const formatted = await formatStructuredFromResearch<T>({
         apiKey: params.apiKey,
         taskInstructions: params.taskInstructions,
         userInput: params.userInput,
-        researchReport: research.outputText,
+        researchReport: reportForTeaser,
         researchParams,
         maxOutputTokens: Math.min(params.maxOutputTokens ?? 2048, 2048),
         teaserMode: true,
