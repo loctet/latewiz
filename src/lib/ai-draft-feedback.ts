@@ -7,7 +7,7 @@ export function notifyDeepResearchStarting(): void {
   if (useAiStore.getState().researchDepthId !== "deep") return;
   toast.message("Deep research started", {
     description:
-      "OpenAI Deep Research usually takes several minutes. A short teaser + PDF link are returned when it finishes.",
+      "OpenAI Deep Research usually takes several minutes. A short teaser + PDF link are returned when it finishes. (Uses gpt-5.6-sol — older o3/o4 deep-research models are retired.)",
     duration: 12_000,
   });
 }

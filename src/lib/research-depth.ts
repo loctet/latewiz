@@ -9,8 +9,9 @@ export type ResearchDepthId = "standard" | "deep";
 
 export const DEFAULT_RESEARCH_DEPTH_ID: ResearchDepthId = "standard";
 
-/** OpenAI Deep Research model used when Deep is selected (override via OPENAI_DEEP_TEXT_MODEL). */
-export const DEFAULT_DEEP_RESEARCH_MODEL = "o4-mini-deep-research";
+/** OpenAI model used when Deep is selected (override via OPENAI_DEEP_TEXT_MODEL).
+ *  o3/o4-mini deep-research aliases were shut off 2026-07-23 — use gpt-5.6-sol. */
+export const DEFAULT_DEEP_RESEARCH_MODEL = "gpt-5.6-sol";
 
 /** @deprecated Alias — prefer DEFAULT_DEEP_RESEARCH_MODEL */
 export const DEFAULT_DEEP_TEXT_MODEL = DEFAULT_DEEP_RESEARCH_MODEL;
@@ -43,7 +44,7 @@ export const RESEARCH_DEPTHS: ResearchDepth[] = [
     id: "deep",
     label: "Deep research",
     description:
-      "OpenAI Deep Research — full PDF report + ~1000-char social teaser with link. May take several minutes.",
+      "Multi-step web research with GPT-5.6 (PDF report + ~1000-char teaser). May take several minutes.",
     advancedSearch: true,
     maxSearchResults: 10,
     searchContextSize: "high",

@@ -51,5 +51,6 @@ next-env.d.ts
 /public/uploads/generated/*
 !/public/uploads/generated/.gitkeep
 /data/generated-media/
+/data/generated-reports/
 
 /hostinger-cron

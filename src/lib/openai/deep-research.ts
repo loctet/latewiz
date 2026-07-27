@@ -25,11 +25,27 @@ export type DeepResearchResult = {
 };
 
 function resolveDeepResearchModel(): string {
-  return (
+  const raw =
     process.env.OPENAI_DEEP_TEXT_MODEL?.trim() ||
     process.env.OPENAI_DEEP_RESEARCH_MODEL?.trim() ||
-    DEFAULT_DEEP_RESEARCH_MODEL
-  );
+    DEFAULT_DEEP_RESEARCH_MODEL;
+  // Strip inline comments / whitespace from .env values
+  const cleaned = raw.replace(/\s+#.*$/, "").trim();
+  // Migrated aliases shut off 2026-07-23
+  if (
+    /^(o3-deep-research|o4-mini-deep-research)(-|$)/i.test(cleaned)
+  ) {
+    console.warn(
+      `[deep-research] ${cleaned} is deprecated; using ${DEFAULT_DEEP_RESEARCH_MODEL}`
+    );
+    return DEFAULT_DEEP_RESEARCH_MODEL;
+  }
+  return cleaned || DEFAULT_DEEP_RESEARCH_MODEL;
+}
+
+function candidateDeepModels(preferred: string): string[] {
+  const list = [preferred, DEFAULT_DEEP_RESEARCH_MODEL, "gpt-5.5-pro"];
+  return [...new Set(list.filter(Boolean))];
 }
 
 function resolveMaxToolCalls(): number {
@@ -180,38 +196,30 @@ async function pollUntilComplete(
   };
 }
 
-/**
- * Run OpenAI Deep Research with a web search tool.
- * Uses background mode + polling by default (tasks can take several minutes).
- */
-export async function runDeepResearch(params: {
+async function runDeepResearchOnce(params: {
   apiKey: string;
   instructions: string;
   input: string;
-  model?: string;
+  model: string;
+  background: boolean;
+  maxToolCalls: number;
 }): Promise<DeepResearchResult> {
-  const model = params.model?.trim() || resolveDeepResearchModel();
-  const background = useBackgroundMode();
-  const maxToolCalls = resolveMaxToolCalls();
-
-  // Prefer current Responses tool name; fall back to legacy deep-research preview tool.
   const toolTypes = ["web_search", "web_search_preview"] as const;
   let lastFail: DeepResearchResult | null = null;
 
   for (const toolType of toolTypes) {
     const body: Record<string, unknown> = {
-      model,
+      model: params.model,
       instructions: params.instructions,
       input: params.input,
       tools: [{ type: toolType }],
-      reasoning: { summary: "auto" },
-      background,
-      max_tool_calls: maxToolCalls,
+      background: params.background,
+      max_tool_calls: params.maxToolCalls,
     };
 
     try {
       console.info(
-        `[deep-research] starting model=${model} tool=${toolType} background=${background}`
+        `[deep-research] starting model=${params.model} tool=${toolType} background=${params.background}`
       );
       const res = await fetch("https://api.openai.com/v1/responses", {
         method: "POST",
@@ -220,7 +228,9 @@ export async function runDeepResearch(params: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(background ? 120_000 : maxWaitMs()),
+        signal: AbortSignal.timeout(
+          params.background ? 120_000 : maxWaitMs()
+        ),
       });
 
       const bodyRaw = await res.text();
@@ -241,7 +251,6 @@ export async function runDeepResearch(params: {
           status: null,
         };
         console.warn(`[deep-research] ${toolType} failed:`, lastFail.detail);
-        // Retry alternate tool only on likely tool/schema errors
         if (
           toolType === "web_search" &&
           /tool|web_search|unsupported|unknown/i.test(detail)
@@ -255,13 +264,16 @@ export async function runDeepResearch(params: {
       const responseId = typeof data.id === "string" ? data.id : null;
       const status = String(data.status ?? "");
 
-      if (background && responseId && status !== "completed") {
+      if (params.background && responseId && status !== "completed") {
         if (status === "failed" || status === "cancelled") {
+          const errObj = data.error as { message?: string } | undefined;
           return {
             ok: false,
             outputText: "",
             usedWebSearch: false,
-            detail: `Deep research ${status}`,
+            detail:
+              (typeof errObj?.message === "string" && errObj.message) ||
+              `Deep research ${status}`,
             responseId,
             status,
           };
@@ -296,6 +308,63 @@ export async function runDeepResearch(params: {
       console.warn(`[deep-research] ${toolType} exception:`, lastFail.detail);
       return lastFail;
     }
+  }
+
+  return (
+    lastFail ?? {
+      ok: false,
+      outputText: "",
+      usedWebSearch: false,
+      detail: "Deep research failed",
+      responseId: null,
+      status: null,
+    }
+  );
+}
+
+/**
+ * Run OpenAI Deep Research with a web search tool.
+ * Uses background mode + polling by default (tasks can take several minutes).
+ * Retries successor models when o3/o4 deep-research aliases are deprecated.
+ */
+export async function runDeepResearch(params: {
+  apiKey: string;
+  instructions: string;
+  input: string;
+  model?: string;
+}): Promise<DeepResearchResult> {
+  const preferred = params.model?.trim() || resolveDeepResearchModel();
+  const models = candidateDeepModels(preferred);
+  const background = useBackgroundMode();
+  const maxToolCalls = resolveMaxToolCalls();
+  let lastFail: DeepResearchResult | null = null;
+
+  for (const model of models) {
+    const result = await runDeepResearchOnce({
+      apiKey: params.apiKey,
+      instructions: params.instructions,
+      input: params.input,
+      model,
+      background,
+      maxToolCalls,
+    });
+    if (result.ok) return result;
+    lastFail = result;
+    const detail = result.detail ?? "";
+    if (/deprecat|model_not_found|does not exist|invalid.?model/i.test(detail)) {
+      console.warn(
+        `[deep-research] model ${model} unavailable (${detail.slice(0, 120)}); trying next`
+      );
+      continue;
+    }
+    if (/quota|billing|insufficient/i.test(detail)) {
+      return {
+        ...result,
+        detail: `${detail} — Deep model: ${model}. Check OpenAI billing/quota, or set OPENAI_DEEP_TEXT_MODEL.`,
+      };
+    }
+    // Other errors: still try one more candidate model
+    continue;
   }
 
   return (
@@ -370,15 +439,19 @@ export function buildDeepResearchSystemInstructions(): string {
   const today = new Date().toISOString().slice(0, 10);
   return [
     `Today's date (UTC): ${today}.`,
-    "You are a professional research analyst preparing a data-driven report.",
-    "Do:",
+    "You are a professional research analyst. Your ONLY job is to WRITE THE FULL REPORT NOW.",
+    "Hard requirements:",
+    "- Output a complete institutional research report of at least 4500 characters.",
+    "- Use clear markdown section headings (## Heading).",
+    "- Include quantitative facts, catalysts, risks, and outlook when available.",
+    "- Include markdown tables when comparing metrics or competitors.",
     "- Research ONLY the primary subject given by the user — do not switch topics.",
-    "- Include specific figures, trends, statistics, and measurable outcomes when available.",
-    "- Prioritize reliable, up-to-date sources.",
-    "- Be analytical; avoid vague generalities and thin news digests.",
-    "- Structure the report with clear section headings (and tables when useful).",
-    "- If evidence is thin or conflicting, say so explicitly.",
-    "- Stay objective: do NOT bias the report toward a personal brand niche, target audience, or marketing persona.",
-    "Do not invent prices, dates, or events.",
+    "- Stay objective: do NOT bias toward a personal brand niche or marketing persona.",
+    "Strictly forbidden:",
+    "- Do NOT ask clarifying questions.",
+    "- Do NOT offer options like \"I can rewrite\" / \"Would you like me to\".",
+    "- Do NOT write a short social teaser or hashtags.",
+    "- Do NOT apologize or narrate what you are about to do — write the report itself.",
+    "Do not invent prices, dates, or events. If evidence is thin, say so explicitly.",
   ].join("\n");
 }

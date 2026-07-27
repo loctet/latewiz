@@ -101,6 +101,7 @@ export function AiAssistPanel({
   const [researchTopic, setResearchTopic] = useState("");
   const [lastPdfUrl, setLastPdfUrl] = useState<string | null>(null);
   const [lastSource, setLastSource] = useState<string | null>(null);
+  const [lastDetail, setLastDetail] = useState<string | null>(null);
   const [referenceImageUrl, setReferenceImageUrl] = useState<
     string | undefined
   >();
@@ -144,6 +145,7 @@ export function AiAssistPanel({
       onContentChange(parts.join("\n\n"));
       setLastPdfUrl(r.draft.pdfUrl?.trim() || null);
       setLastSource(r.source);
+      setLastDetail(r.detail ?? r.draft.detail ?? null);
       notifyDraftGenerationResult(r);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Generation failed");
@@ -302,30 +304,37 @@ export function AiAssistPanel({
       </div>
 
       {assistEnabled && (lastPdfUrl || lastSource) && (
-        <div className="flex flex-wrap items-center gap-2 px-3 pb-2">
-          {lastSource === "openai+deep-research" ? (
-            <span className="rounded-md bg-primary/15 px-2 py-0.5 text-[11px] font-medium text-primary">
-              Deep research used
-            </span>
-          ) : lastSource ? (
-            <span className="rounded-md bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:text-amber-200">
-              Standard generation (not deep)
-            </span>
-          ) : null}
-          {lastPdfUrl ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-7 text-xs"
-              asChild
-            >
-              <a href={lastPdfUrl} target="_blank" rel="noopener noreferrer">
-                <FileText className="mr-1.5 h-3 w-3" />
-                Full report (PDF)
-                <ExternalLink className="ml-1 h-3 w-3 opacity-70" />
-              </a>
-            </Button>
+        <div className="space-y-1.5 px-3 pb-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {lastSource === "openai+deep-research" ? (
+              <span className="rounded-md bg-primary/15 px-2 py-0.5 text-[11px] font-medium text-primary">
+                Deep research used
+              </span>
+            ) : lastSource ? (
+              <span className="rounded-md bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:text-amber-200">
+                Standard generation (not deep)
+              </span>
+            ) : null}
+            {lastPdfUrl ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                asChild
+              >
+                <a href={lastPdfUrl} target="_blank" rel="noopener noreferrer">
+                  <FileText className="mr-1.5 h-3 w-3" />
+                  Full report (PDF)
+                  <ExternalLink className="ml-1 h-3 w-3 opacity-70" />
+                </a>
+              </Button>
+            ) : null}
+          </div>
+          {lastSource !== "openai+deep-research" && lastDetail ? (
+            <p className="text-[11px] leading-snug text-amber-800/90 dark:text-amber-100/80">
+              Why: {lastDetail.slice(0, 280)}
+            </p>
           ) : null}
         </div>
       )}
