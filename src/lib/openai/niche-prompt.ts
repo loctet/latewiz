@@ -61,11 +61,29 @@ export function parseNicheFromBody(body: Record<string, unknown>): NicheProfile 
 }
 
 /** System-prompt block: language + niche rules for caption/campaign AI */
-export function buildNicheSystemInstructions(niche: NicheProfile): string {
+export function buildNicheSystemInstructions(
+  niche: NicheProfile,
+  options?: { objectiveResearch?: boolean }
+): string {
   const langLabel = resolveNicheLanguage(niche.language);
   const lines: string[] = [
-    `Write ALL user-visible text (titles, bodies, hashtags, labels) in ${langLabel} (${niche.language || "en"}). Do not mix languages unless the niche profile explicitly asks for bilingual content.`,
+    `Write ALL user-visible text (titles, bodies, hashtags, labels) in ${langLabel} (${niche.language || "en"}). Do not mix languages unless explicitly asked for bilingual content.`,
   ];
+
+  if (options?.objectiveResearch) {
+    lines.push(
+      "OBJECTIVE RESEARCH MODE: Do NOT bias analysis toward the workspace niche, brand voice, target audience persona, geography, or marketing angle.",
+      "Analyze the subject as an institutional researcher would — factual, neutral, and complete for the topic itself."
+    );
+    // Keep safety rails only
+    if (niche.forbiddenTopics.trim()) {
+      lines.push(`Never mention or promote: ${niche.forbiddenTopics.trim()}`);
+    }
+    if (niche.complianceNotes.trim()) {
+      lines.push(`Compliance & legal: ${niche.complianceNotes.trim()}`);
+    }
+    return lines.join("\n");
+  }
 
   if (niche.topic.trim()) {
     lines.push(`Content niche / topic: ${niche.topic.trim()}`);
@@ -93,7 +111,19 @@ export function buildNicheSystemInstructions(niche: NicheProfile): string {
 }
 
 /** User-message appendix with full niche JSON for structured context */
-export function buildNicheUserContext(niche: NicheProfile): string {
+export function buildNicheUserContext(
+  niche: NicheProfile,
+  options?: { objectiveResearch?: boolean }
+): string {
+  if (options?.objectiveResearch) {
+    const langLabel = resolveNicheLanguage(niche.language);
+    return [
+      "OBJECTIVE RESEARCH MODE (ignore workspace niche for analysis):",
+      `- Output language only: ${langLabel} (${niche.language || "en"}).`,
+      "- Do NOT tailor findings to the workspace niche topic, audience, geography, or brand tone.",
+      "- Research and write an unbiased institutional analysis of the subject itself.",
+    ].join("\n");
+  }
   return `Workspace niche profile (follow strictly):\n${JSON.stringify(nicheToRecord(niche), null, 2)}`;
 }
 

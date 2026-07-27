@@ -93,15 +93,21 @@ async function formatStructuredFromResearch<T>(params: {
   maxOutputTokens?: number;
 }): Promise<TextGenerationResult<T>> {
   const formatModel = resolveTextModel();
+  const objective = Boolean(params.researchParams?.ignoreNicheBias);
   const instructions = [
     params.taskInstructions,
     buildDeepResearchTaskInstructions(),
     SOCIAL_POST_FORMAT_INSTRUCTIONS,
     buildTimelinessSystemInstructions(),
     params.researchParams
-      ? buildNicheSystemInstructions(params.researchParams.niche)
+      ? buildNicheSystemInstructions(params.researchParams.niche, {
+          objectiveResearch: objective,
+        })
       : "",
     "Use ONLY the Deep Research report below for timely facts. Do not invent additional news.",
+    objective
+      ? "Do not reshape the report to fit a personal niche, audience persona, or brand voice."
+      : "",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -157,8 +163,12 @@ export async function generateStructuredContent<T>(params: {
   const depthId = parseResearchDepthId(params.researchDepthId);
   const depth = getResearchDepth(depthId);
 
-  // --- OpenAI Deep Research path (specialized models + web_search_preview) ---
+  // Deep research is always objective — never bias toward workspace niche/audience
   if (depthId === "deep") {
+    const researchParams = params.researchParams
+      ? { ...params.researchParams, ignoreNicheBias: true }
+      : undefined;
+
     const rewritten = await rewritePromptForDeepResearch({
       apiKey: params.apiKey,
       brief: params.userInput,
@@ -176,7 +186,7 @@ export async function generateStructuredContent<T>(params: {
         taskInstructions: params.taskInstructions,
         userInput: params.userInput,
         researchReport: research.outputText,
-        researchParams: params.researchParams,
+        researchParams,
         maxOutputTokens: params.maxOutputTokens,
       });
     }
@@ -188,6 +198,7 @@ export async function generateStructuredContent<T>(params: {
 
     const fallback = await generateStructuredContentStandard<T>({
       ...params,
+      researchParams,
       researchDepthId: "standard",
     });
 
@@ -221,7 +232,9 @@ async function generateStructuredContentStandard<T>(params: {
     buildFactualResearchInstructions(),
     buildTimelinessSystemInstructions(),
     params.researchParams
-      ? buildNicheSystemInstructions(params.researchParams.niche)
+      ? buildNicheSystemInstructions(params.researchParams.niche, {
+          objectiveResearch: Boolean(params.researchParams.ignoreNicheBias),
+        })
       : "",
   ]
     .filter(Boolean)

@@ -83,6 +83,7 @@ export function buildDeepResearchTaskInstructions(): string {
     "Prefer specific levels, percentages, catalysts, and risks from the report; if evidence is thin, say so.",
     "Write substantive paragraphs under clear section headings — not bullet spam.",
     "Do not paste long URLs; weave findings naturally for social.",
+    "Stay objective — do not reshape findings for a personal niche, target audience, or brand marketing angle.",
   ].join(" ");
 }
 

@@ -49,6 +49,18 @@ export function isBuiltinPostPromptStyle(styleId: string): boolean {
   return POST_PROMPT_STYLES.some((s) => s.id === styleId);
 }
 
+/**
+ * Styles / modes that must stay unbiased by workspace niche, audience, or brand tone
+ * (institutional market analysis, news roundups, deep research).
+ */
+export function isObjectiveResearchStyle(styleId: string): boolean {
+  return (
+    styleId === "crypto-market-analysis" ||
+    styleId === "news-roundup" ||
+    styleId === "expert-research-brief"
+  );
+}
+
 export function createCustomPostPromptStyleId(
   label: string,
   existingIds: Iterable<string>

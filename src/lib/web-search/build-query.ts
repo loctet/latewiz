@@ -16,6 +16,11 @@ export type ContentResearchParams = {
   coveredSubtopics?: string[];
   /** Standard vs deep — deep forces advanced/news-style search */
   researchDepthId?: ResearchDepthId | string | null;
+  /**
+   * Skip niche topic/audience/geography in the search query so research
+   * stays objective (market analysis, news roundup, deep research).
+   */
+  ignoreNicheBias?: boolean;
 };
 
 const NEWS_INTENT_RE =
@@ -68,17 +73,24 @@ export function buildContentResearchQuery(params: ContentResearchParams): string
   const hint = params.hint?.trim() || params.campaignHint?.trim();
   if (hint) parts.push(hint.slice(0, 200));
 
-  const topic = params.niche.topic.trim();
-  if (topic) parts.push(topic);
+  const ignoreNiche = Boolean(params.ignoreNicheBias);
+  if (!ignoreNiche) {
+    const topic = params.niche.topic.trim();
+    if (topic) parts.push(topic);
 
-  const geo = params.niche.geography.trim();
-  if (geo) parts.push(geo);
+    const geo = params.niche.geography.trim();
+    if (geo) parts.push(geo);
 
-  const audience = params.niche.audience.trim();
-  if (audience) parts.push(`for ${audience}`);
+    const audience = params.niche.audience.trim();
+    if (audience) parts.push(`for ${audience}`);
+  }
 
   const goal = params.campaignGoal?.trim();
-  if (goal) parts.push(goal.slice(0, 120));
+  // For objective research, avoid injecting a marketing-style campaign goal into search
+  if (goal && !ignoreNiche) parts.push(goal.slice(0, 120));
+  if (goal && ignoreNiche && (isNewsIntent(goal) || isMarketIntent(goal))) {
+    // Keep only market/news signal words, not brand framing — use searchHint/subject instead
+  }
 
   const newsIntent = isNewsIntent(
     params.searchHint,

@@ -36,6 +36,7 @@ import {
 import {
   buildPostPromptStructureBlock,
   buildPostPromptTaskInstructions,
+  isObjectiveResearchStyle,
   resolvePostPromptStyle,
   type CustomPostPromptStyle,
 } from "@/lib/post-prompt-catalog";
@@ -91,7 +92,6 @@ export async function generateDraft(
     };
   }
 
-  const nicheContext = buildNicheUserContext(niche);
   const hintText = hint?.trim() ?? "";
   const topic = niche.topic.trim() || "your niche";
   const subject = hintText || topic;
@@ -112,6 +112,8 @@ export async function generateDraft(
     goal
   );
   const usePostTemplate = postStyle.minBodyChars > 0;
+  const objectiveResearch =
+    depthId === "deep" || isObjectiveResearchStyle(postStyle.id);
   const structureBlock = usePostTemplate
     ? buildPostPromptStructureBlock(
         postStyle,
@@ -125,10 +127,14 @@ export async function generateDraft(
       )
     : "";
 
+  const nicheContext = buildNicheUserContext(niche, { objectiveResearch });
+
   const userInput = [
     hintText
       ? `Topic / brief (primary subject — search the web for the latest on it):\n${hintText}`
-      : `Generate one timely post aligned with this niche.`,
+      : objectiveResearch
+        ? `Generate one objective research-backed post on the subject.`
+        : `Generate one timely post aligned with this niche.`,
     structureBlock ? `\n${structureBlock}` : "",
     `\n${nicheContext}`,
     usePostTemplate
@@ -150,7 +156,9 @@ export async function generateDraft(
   const maxOutputTokens = usePostTemplate ? postStyle.maxOutputTokens : undefined;
 
   const newsIntent = isNewsIntent(hintText, goal);
-  const topicForSearch = (topic || hintText || "industry").trim();
+  const topicForSearch = objectiveResearch
+    ? (hintText || subject || "crypto market").trim()
+    : (topic || hintText || "industry").trim();
   const researchSearchHint = newsIntent
     ? `${topicForSearch} news headlines today`.slice(0, 200)
     : undefined;
@@ -170,6 +178,7 @@ export async function generateDraft(
         hint: hintText || hint,
         searchHint: researchSearchHint,
         researchDepthId: depthId,
+        ignoreNicheBias: objectiveResearch,
       },
       maxOutputTokens,
       researchDepthId: depthId,
@@ -484,6 +493,8 @@ export async function generateCampaignSlot(
   );
   const usePostTemplate =
     constraints.format !== "micro" && postStyle.minBodyChars > 0;
+  const objectiveResearch =
+    depthId === "deep" || isObjectiveResearchStyle(postStyle.id);
   const structureBlock = usePostTemplate
     ? buildPostPromptStructureBlock(
         postStyle,
@@ -513,7 +524,11 @@ export async function generateCampaignSlot(
       "",
       `This is post ${slotNum} of ${params.totalPosts} in the series.`,
       `Scheduled for: ${params.scheduledAt}`,
-      topic ? `Niche context (background only): ${topic}` : "",
+      objectiveResearch
+        ? "OBJECTIVE RESEARCH: Ignore workspace niche/audience. Analyze the assigned subject only."
+        : topic
+          ? `Niche context (background only): ${topic}`
+          : "",
       "",
       briefBlock,
       formatBlock ? `\n${formatBlock}` : "",
@@ -521,10 +536,12 @@ export async function generateCampaignSlot(
       "",
       "Posts already published in this campaign:",
       priorBlock,
-      params.campaignHint?.trim()
+      params.campaignHint?.trim() && !objectiveResearch
         ? `\nExtra theme notes: ${params.campaignHint.trim()}`
         : "",
-      trendLines.length ? `\nTone references:\n- ${trendLines.join("\n- ")}` : "",
+      trendLines.length && !objectiveResearch
+        ? `\nTone references:\n- ${trendLines.join("\n- ")}`
+        : "",
       "",
       constraints.format === "micro"
         ? "Write ONE unique micro-message matching the goal format. Never copy or paraphrase prior posts."
@@ -565,20 +582,25 @@ export async function generateCampaignSlot(
 
   const researchSearchHint =
     brief.searchHint?.trim() ||
-    (usePostTemplate ? `${brief.subtopic} ${goal}` : undefined);
+    (usePostTemplate
+      ? objectiveResearch
+        ? `${brief.subtopic} market analysis`
+        : `${brief.subtopic} ${goal}`
+      : undefined);
 
   const researchParams = constraints.skipWebSearch
     ? undefined
     : {
         niche,
-        campaignGoal: goal,
-        campaignHint: params.campaignHint,
+        campaignGoal: objectiveResearch ? undefined : goal,
+        campaignHint: objectiveResearch ? undefined : params.campaignHint,
         slotIndex: params.slotIndex,
         totalPosts: params.totalPosts,
-        trendSnippets: params.trendSnippets,
+        trendSnippets: objectiveResearch ? undefined : params.trendSnippets,
         searchHint: researchSearchHint,
         coveredSubtopics: params.coveredSubtopics,
         researchDepthId: depthId,
+        ignoreNicheBias: objectiveResearch,
       };
 
   const maxAttempts = usePostTemplate ? 3 : 2;
