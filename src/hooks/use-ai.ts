@@ -63,6 +63,7 @@ export function useGenerateDraft() {
   const niche = useAiStore((s) => s.niche);
   const postPromptStyleId = useAiStore((s) => s.postPromptStyleId);
   const postPromptTemplates = useAiStore((s) => s.postPromptTemplates);
+  const customPostPromptStyles = useAiStore((s) => s.customPostPromptStyles);
   const researchDepthId = useAiStore((s) => s.researchDepthId);
 
   return useMutation({
@@ -86,6 +87,7 @@ export function useGenerateDraft() {
             (typeof params === "object" ? params?.postPromptStyleId : undefined) ??
             postPromptStyleId,
           post_prompt_templates: postPromptTemplates,
+          custom_post_prompt_styles: customPostPromptStyles,
           research_depth_id:
             (typeof params === "object" ? params?.researchDepthId : undefined) ??
             researchDepthId,
@@ -284,6 +286,7 @@ export interface CampaignSlot {
 export function useGenerateCampaignSlot() {
   const niche = useAiStore((s) => s.niche);
   const postPromptTemplates = useAiStore((s) => s.postPromptTemplates);
+  const customPostPromptStyles = useAiStore((s) => s.customPostPromptStyles);
   const researchDepthId = useAiStore((s) => s.researchDepthId);
 
   return useMutation({
@@ -324,6 +327,7 @@ export function useGenerateCampaignSlot() {
           covered_subtopics: params.coveredSubtopics,
           post_prompt_style_id: params.postPromptStyleId,
           post_prompt_templates: postPromptTemplates,
+          custom_post_prompt_styles: customPostPromptStyles,
           is_list_mode: params.isListMode,
           research_depth_id: params.researchDepthId ?? researchDepthId,
           niche,

@@ -302,6 +302,7 @@ export default function CampaignPlannerPage() {
       videoPromptStyleId: useAiStore.getState().videoPromptStyleId,
       videoProvider,
       postPromptTemplates: useAiStore.getState().postPromptTemplates,
+      customPostPromptStyles: useAiStore.getState().customPostPromptStyles,
       imagePromptTemplates: useAiStore.getState().imagePromptTemplates,
       videoPromptTemplates: useAiStore.getState().videoPromptTemplates,
       imageWatermarkSettings,

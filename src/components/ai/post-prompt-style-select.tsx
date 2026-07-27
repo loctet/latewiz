@@ -4,6 +4,7 @@ import { useAiStore } from "@/stores";
 import {
   AUTO_POST_PROMPT_STYLE_ID,
   POST_PROMPT_STYLES,
+  getPostPromptStyle,
   resolvePostPromptStyle,
 } from "@/lib/post-prompt-catalog";
 import { Label } from "@/components/ui/label";
@@ -40,6 +41,8 @@ export function PostPromptStyleSelect({
 }: PostPromptStyleSelectProps) {
   const storedId = useAiStore((s) => s.postPromptStyleId);
   const setStoredId = useAiStore((s) => s.setPostPromptStyleId);
+  const customStyles = useAiStore((s) => s.customPostPromptStyles);
+  const postPromptTemplates = useAiStore((s) => s.postPromptTemplates);
 
   const value = controlledValue ?? storedId;
 
@@ -49,8 +52,15 @@ export function PostPromptStyleSelect({
           styleId: AUTO_POST_PROMPT_STYLE_ID,
           campaignGoal,
           isListMode,
+          customStyles,
+          templateOverrides: postPromptTemplates,
         })
       : null;
+
+  const selectedMeta =
+    value === AUTO_POST_PROMPT_STYLE_ID
+      ? null
+      : getPostPromptStyle(value, customStyles, postPromptTemplates);
 
   const handleChange = (id: string) => {
     if (onValueChange) {
@@ -63,7 +73,7 @@ export function PostPromptStyleSelect({
   const description =
     value === AUTO_POST_PROMPT_STYLE_ID && resolved
       ? `Auto-selected: ${resolved.label} — ${resolved.description}`
-      : POST_PROMPT_STYLES.find((s) => s.id === value)?.description ??
+      : selectedMeta?.description ??
         "Choose how AI structures and lengths each post.";
 
   return (
@@ -84,13 +94,23 @@ export function PostPromptStyleSelect({
               </SelectItem>
             </SelectGroup>
             <SelectGroup>
-              <SelectLabel>Templates</SelectLabel>
+              <SelectLabel>Built-in</SelectLabel>
               {POST_PROMPT_STYLES.map((s) => (
                 <SelectItem key={s.id} value={s.id}>
                   {s.label}
                 </SelectItem>
               ))}
             </SelectGroup>
+            {customStyles.length > 0 && (
+              <SelectGroup>
+                <SelectLabel>Your styles</SelectLabel>
+                {customStyles.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.label}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            )}
           </SelectContent>
         </Select>
         {!compact && (

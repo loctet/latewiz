@@ -14,6 +14,9 @@ import {
 import { DEFAULT_VIDEO_PROMPT_STYLE_ID } from "@/lib/video-prompt-catalog";
 import {
   DEFAULT_POST_PROMPT_STYLE_ID,
+  isBuiltinPostPromptStyle,
+  normalizeCustomPostPromptStyles,
+  type CustomPostPromptStyle,
 } from "@/lib/post-prompt-catalog";
 import {
   DEFAULT_RESEARCH_DEPTH_ID,
@@ -50,6 +53,8 @@ interface AiState {
   imagePromptTemplates: Record<string, string>;
   /** Custom post structure overrides per style id ({{subject}}, {{goal}}, …) */
   postPromptTemplates: Record<string, string>;
+  /** User-created post prompt styles (template text in postPromptTemplates) */
+  customPostPromptStyles: CustomPostPromptStyle[];
   /** User-created image prompt styles (template text in imagePromptTemplates) */
   customImagePromptStyles: CustomImagePromptStyle[];
   videoPromptTemplates: Record<string, string>;
@@ -74,6 +79,20 @@ interface AiState {
   setPostPromptTemplate: (styleId: string, template: string) => void;
   resetPostPromptTemplate: (styleId: string) => void;
   resetAllPostPromptTemplates: () => void;
+  addCustomPostPromptStyle: (
+    style: CustomPostPromptStyle,
+    template: string
+  ) => void;
+  updateCustomPostPromptStyle: (
+    id: string,
+    patch: Partial<
+      Pick<
+        CustomPostPromptStyle,
+        "label" | "description" | "expertRole" | "minBodyChars" | "maxOutputTokens"
+      >
+    >
+  ) => void;
+  removeCustomPostPromptStyle: (id: string) => void;
   hydrateContentPrefs: (prefs: Partial<ContentPrefs>) => void;
   getContentPrefs: () => ContentPrefs;
   addCustomImagePromptStyle: (
@@ -111,6 +130,7 @@ export const useAiStore = create<AiState>()(
       aiMediaKind: "image",
       imagePromptTemplates: {},
       postPromptTemplates: {},
+      customPostPromptStyles: [],
       customImagePromptStyles: [],
       videoPromptTemplates: {},
       imageWatermarkEnabled: true,
@@ -193,7 +213,44 @@ export const useAiStore = create<AiState>()(
         set({ postPromptTemplates: next });
       },
 
-      resetAllPostPromptTemplates: () => set({ postPromptTemplates: {} }),
+      resetAllPostPromptTemplates: () => {
+        const kept: Record<string, string> = {};
+        for (const [id, template] of Object.entries(get().postPromptTemplates)) {
+          if (!isBuiltinPostPromptStyle(id)) kept[id] = template;
+        }
+        set({ postPromptTemplates: kept });
+      },
+
+      addCustomPostPromptStyle: (style, template) =>
+        set({
+          customPostPromptStyles: [...get().customPostPromptStyles, style],
+          postPromptTemplates: {
+            ...get().postPromptTemplates,
+            [style.id]: template,
+          },
+        }),
+
+      updateCustomPostPromptStyle: (id, patch) =>
+        set({
+          customPostPromptStyles: get().customPostPromptStyles.map((s) =>
+            s.id === id ? { ...s, ...patch } : s
+          ),
+        }),
+
+      removeCustomPostPromptStyle: (id) => {
+        const templates = { ...get().postPromptTemplates };
+        delete templates[id];
+        const next: Partial<AiState> = {
+          customPostPromptStyles: get().customPostPromptStyles.filter(
+            (s) => s.id !== id
+          ),
+          postPromptTemplates: templates,
+        };
+        if (get().postPromptStyleId === id) {
+          next.postPromptStyleId = DEFAULT_POST_PROMPT_STYLE_ID;
+        }
+        set(next);
+      },
 
       hydrateContentPrefs: (prefs) => {
         const normalized = normalizeContentPrefs(prefs);
@@ -202,6 +259,7 @@ export const useAiStore = create<AiState>()(
           researchDepthId: normalized.researchDepthId,
           imagePromptStyleId: normalized.imagePromptStyleId,
           postPromptTemplates: normalized.postPromptTemplates,
+          customPostPromptStyles: normalized.customPostPromptStyles,
           imagePromptTemplates: {
             ...get().imagePromptTemplates,
             ...normalized.imagePromptTemplates,
@@ -219,6 +277,7 @@ export const useAiStore = create<AiState>()(
           researchDepthId: get().researchDepthId,
           imagePromptStyleId: get().imagePromptStyleId,
           postPromptTemplates: get().postPromptTemplates,
+          customPostPromptStyles: get().customPostPromptStyles,
           imagePromptTemplates: get().imagePromptTemplates,
           imageWatermarkEnabled: get().imageWatermarkEnabled,
           imageWatermarkText: get().imageWatermarkText,
@@ -323,6 +382,9 @@ export const useAiStore = create<AiState>()(
           aiMediaKind: p?.aiMediaKind === "video" ? "video" : "image",
           imagePromptTemplates: p?.imagePromptTemplates ?? {},
           postPromptTemplates: p?.postPromptTemplates ?? {},
+          customPostPromptStyles: normalizeCustomPostPromptStyles(
+            p?.customPostPromptStyles
+          ),
           customImagePromptStyles: p?.customImagePromptStyles ?? [],
           videoPromptTemplates: p?.videoPromptTemplates ?? {},
           imageWatermarkEnabled: p?.imageWatermarkEnabled ?? true,
@@ -358,6 +420,7 @@ export const useAiStore = create<AiState>()(
         aiMediaKind: state.aiMediaKind,
         imagePromptTemplates: state.imagePromptTemplates,
         postPromptTemplates: state.postPromptTemplates,
+        customPostPromptStyles: state.customPostPromptStyles,
         customImagePromptStyles: state.customImagePromptStyles,
         videoPromptTemplates: state.videoPromptTemplates,
         imageWatermarkEnabled: state.imageWatermarkEnabled,

@@ -371,6 +371,7 @@ async function processScheduledCampaignSlot(
         .filter((value): value is string => Boolean(value)),
       postPromptStyleId: campaign.postPromptStyleId,
       postPromptTemplates: campaign.postPromptTemplates,
+      customPostPromptStyles: campaign.customPostPromptStyles,
       researchDepthId: campaign.researchDepthId,
       isListMode: campaign.campaignMode === "list",
     });

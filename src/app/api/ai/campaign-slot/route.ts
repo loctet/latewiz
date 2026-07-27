@@ -5,6 +5,7 @@ import {
   type CampaignSlotBrief,
   type PreviousCampaignPost,
 } from "@/lib/openai";
+import { normalizeCustomPostPromptStyles } from "@/lib/post-prompt-catalog";
 import { SessionRequiredError } from "@/lib/server/session";
 import { requireUserAiKeys } from "@/lib/server/ai-request-keys";
 
@@ -123,6 +124,10 @@ export async function POST(request: NextRequest) {
           ? body.researchDepthId
           : undefined;
 
+    const customPostPromptStyles = normalizeCustomPostPromptStyles(
+      body.custom_post_prompt_styles ?? body.customPostPromptStyles
+    );
+
     const result = await generateCampaignSlot(apiKey, niche, {
       campaignGoal,
       slotIndex,
@@ -145,6 +150,7 @@ export async function POST(request: NextRequest) {
       coveredSubtopics,
       postPromptStyleId,
       postPromptTemplates,
+      customPostPromptStyles,
       isListMode,
       researchDepthId,
     });

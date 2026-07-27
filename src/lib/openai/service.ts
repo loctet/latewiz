@@ -37,6 +37,7 @@ import {
   buildPostPromptStructureBlock,
   buildPostPromptTaskInstructions,
   resolvePostPromptStyle,
+  type CustomPostPromptStyle,
 } from "@/lib/post-prompt-catalog";
 import { isNewsIntent } from "@/lib/web-search/build-query";
 import {
@@ -75,7 +76,8 @@ export async function generateDraft(
   hint?: string,
   postPromptStyleId?: string,
   postPromptTemplates?: Record<string, string> | null,
-  researchDepthId?: string | null
+  researchDepthId?: string | null,
+  customPostPromptStyles?: CustomPostPromptStyle[] | null
 ): Promise<DraftResult> {
   if (!apiKey) {
     const topic = niche.topic || "your niche";
@@ -103,6 +105,8 @@ export async function generateDraft(
       campaignGoal: hintText || topic,
       isListMode: false,
       listSubject: hintText || undefined,
+      customStyles: customPostPromptStyles ?? undefined,
+      templateOverrides: postPromptTemplates,
     }),
     depth,
     goal
@@ -423,6 +427,7 @@ export async function generateCampaignSlot(
     coveredSubtopics?: string[];
     postPromptStyleId?: string;
     postPromptTemplates?: Record<string, string> | null;
+    customPostPromptStyles?: CustomPostPromptStyle[] | null;
     isListMode?: boolean;
     researchDepthId?: string | null;
   }
@@ -471,6 +476,8 @@ export async function generateCampaignSlot(
       campaignGoal: goal,
       isListMode: isListItem,
       listSubject: brief.subtopic,
+      customStyles: params.customPostPromptStyles ?? undefined,
+      templateOverrides: params.postPromptTemplates,
     }),
     depth,
     goal

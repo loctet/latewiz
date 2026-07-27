@@ -15,6 +15,121 @@ export type PostPromptStyle = {
   matchPatterns: RegExp[];
 };
 
+/** User-created styles (metadata only; template text lives in postPromptTemplates). */
+export type CustomPostPromptStyle = {
+  id: string;
+  label: string;
+  description: string;
+  expertRole?: string;
+  minBodyChars?: number;
+  maxOutputTokens?: number;
+};
+
+export const CUSTOM_POST_PROMPT_TEMPLATE_STARTER = `Write a post about: {{subject}}
+
+Campaign intent: {{goal}}
+
+Required structure (plain-text section headings on their own line):
+
+HOOK
+One compelling opening line.
+
+BODY
+Develop the idea with clear paragraphs. Use web research for timely facts when relevant.
+
+BOTTOM LINE
+2–3 sentence takeaway.
+
+Quality bar:
+- Minimum {{minBodyChars}} characters in the body (before hashtags).
+- Cover ONLY {{subject}} unless the goal says otherwise.
+- Write in the same language as the brief when the brief is not in English.`;
+
+export function isBuiltinPostPromptStyle(styleId: string): boolean {
+  return POST_PROMPT_STYLES.some((s) => s.id === styleId);
+}
+
+export function createCustomPostPromptStyleId(
+  label: string,
+  existingIds: Iterable<string>
+): string {
+  const taken = new Set(existingIds);
+  const slug =
+    label
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 40) || "template";
+  let id = `custom-${slug}`;
+  let n = 2;
+  while (taken.has(id)) {
+    id = `custom-${slug}-${n}`;
+    n += 1;
+  }
+  return id;
+}
+
+export function getAllPostPromptStyles(
+  custom: CustomPostPromptStyle[] = []
+): PostPromptStyle[] {
+  return [
+    ...POST_PROMPT_STYLES,
+    ...custom.map((style) => customPostStyleToFull(style)),
+  ];
+}
+
+function customPostStyleToFull(
+  style: CustomPostPromptStyle,
+  templateOverride?: string | null
+): PostPromptStyle {
+  return {
+    id: style.id,
+    label: style.label,
+    description: style.description,
+    expertRole:
+      style.expertRole?.trim() ||
+      "expert content strategist who writes clear, high-value social posts",
+    structureTemplate:
+      templateOverride?.trim() || CUSTOM_POST_PROMPT_TEMPLATE_STARTER,
+    minBodyChars: style.minBodyChars ?? 900,
+    maxOutputTokens: style.maxOutputTokens ?? 3072,
+    matchPatterns: [],
+  };
+}
+
+export function normalizeCustomPostPromptStyles(
+  raw: unknown
+): CustomPostPromptStyle[] {
+  if (!Array.isArray(raw)) return [];
+  const out: CustomPostPromptStyle[] = [];
+  for (const row of raw) {
+    if (!row || typeof row !== "object") continue;
+    const r = row as Record<string, unknown>;
+    const id = typeof r.id === "string" ? r.id.trim() : "";
+    const label = typeof r.label === "string" ? r.label.trim() : "";
+    if (!id || !label) continue;
+    out.push({
+      id,
+      label,
+      description:
+        typeof r.description === "string" ? r.description.trim() : "",
+      expertRole:
+        typeof r.expertRole === "string" ? r.expertRole.trim() : undefined,
+      minBodyChars:
+        typeof r.minBodyChars === "number" && Number.isFinite(r.minBodyChars)
+          ? Math.max(0, Math.floor(r.minBodyChars))
+          : undefined,
+      maxOutputTokens:
+        typeof r.maxOutputTokens === "number" &&
+        Number.isFinite(r.maxOutputTokens)
+          ? Math.max(256, Math.floor(r.maxOutputTokens))
+          : undefined,
+    });
+  }
+  return out;
+}
+
 export const POST_PROMPT_STYLES: PostPromptStyle[] = [
   {
     id: "standard-social",
@@ -232,11 +347,33 @@ Requirements:
   },
 ];
 
-export function getPostPromptStyle(id: string): PostPromptStyle {
-  return (
-    POST_PROMPT_STYLES.find((s) => s.id === id) ??
-    POST_PROMPT_STYLES.find((s) => s.id === DEFAULT_POST_PROMPT_STYLE_ID)!
-  );
+export function getPostPromptStyle(
+  id: string,
+  custom: CustomPostPromptStyle[] = [],
+  templateOverrides?: Record<string, string> | null
+): PostPromptStyle {
+  const builtin = POST_PROMPT_STYLES.find((s) => s.id === id);
+  if (builtin) return builtin;
+
+  const meta = custom.find((s) => s.id === id);
+  if (meta) {
+    return customPostStyleToFull(meta, templateOverrides?.[id]);
+  }
+
+  // Template-only fallback (e.g. deferred campaign without metadata)
+  const override = templateOverrides?.[id]?.trim();
+  if (override) {
+    return customPostStyleToFull(
+      {
+        id,
+        label: id,
+        description: "Custom post template",
+      },
+      override
+    );
+  }
+
+  return POST_PROMPT_STYLES.find((s) => s.id === DEFAULT_POST_PROMPT_STYLE_ID)!;
 }
 
 export type ResolvePostPromptStyleParams = {
@@ -244,6 +381,8 @@ export type ResolvePostPromptStyleParams = {
   campaignGoal: string;
   isListMode?: boolean;
   listSubject?: string;
+  customStyles?: CustomPostPromptStyle[];
+  templateOverrides?: Record<string, string> | null;
 };
 
 /** Pick template from explicit id or infer from campaign goal / list mode. */
@@ -252,7 +391,11 @@ export function resolvePostPromptStyle(
 ): PostPromptStyle {
   const explicit = params.styleId?.trim();
   if (explicit && explicit !== AUTO_POST_PROMPT_STYLE_ID) {
-    return getPostPromptStyle(explicit);
+    return getPostPromptStyle(
+      explicit,
+      params.customStyles,
+      params.templateOverrides
+    );
   }
 
   const goal = params.campaignGoal.trim();
@@ -305,9 +448,10 @@ export function buildPostPromptStructureBlock(
 
 export function getEffectivePostStructureTemplate(
   styleId: string,
-  overrides?: Record<string, string> | null
+  overrides?: Record<string, string> | null,
+  custom: CustomPostPromptStyle[] = []
 ): string {
-  const style = getPostPromptStyle(styleId);
+  const style = getPostPromptStyle(styleId, custom, overrides);
   const override = overrides?.[styleId]?.trim();
   return override || style.structureTemplate;
 }

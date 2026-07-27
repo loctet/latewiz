@@ -4,6 +4,7 @@ import type { Platform } from "@/lib/late-api";
 import type { CampaignPlanningMode } from "@/lib/campaign-draft-storage";
 import type { CampaignSlotBrief } from "@/lib/openai";
 import type { NicheProfile } from "@/lib/openai/types";
+import type { CustomPostPromptStyle } from "@/lib/post-prompt-catalog";
 import type { VideoProvider } from "@/lib/video-providers";
 
 export type CampaignGenerationMode = "immediate" | "deferred";
@@ -88,6 +89,8 @@ export type ScheduledCampaign = {
   videoProvider: VideoProvider;
   /** Custom post structure overrides keyed by style id */
   postPromptTemplates: Record<string, string>;
+  /** User-created post styles (metadata); template text in postPromptTemplates */
+  customPostPromptStyles: CustomPostPromptStyle[];
   imagePromptTemplates: Record<string, string>;
   videoPromptTemplates: Record<string, string>;
   imageWatermarkSettings: ImageWatermarkSettings;

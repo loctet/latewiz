@@ -11,6 +11,7 @@ import {
 } from "@/lib/scheduled-campaigns";
 import { normalizeWatermarkSettings } from "@/lib/image-watermark";
 import { defaultNicheProfile } from "@/lib/openai/types";
+import { normalizeCustomPostPromptStyles } from "@/lib/post-prompt-catalog";
 
 const PROCESSING_LEASE_MS = 10 * 60 * 1000;
 
@@ -98,6 +99,9 @@ function normalizeCampaign(
       typeof campaign.postPromptTemplates === "object"
         ? campaign.postPromptTemplates
         : {},
+    customPostPromptStyles: normalizeCustomPostPromptStyles(
+      campaign.customPostPromptStyles
+    ),
     imagePromptTemplates:
       campaign.imagePromptTemplates &&
       typeof campaign.imagePromptTemplates === "object"
