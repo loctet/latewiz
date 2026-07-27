@@ -20,6 +20,10 @@ import { useAiStore } from "@/stores";
 import type { AiMediaKind } from "@/lib/campaign-media";
 import { toast } from "sonner";
 import {
+  notifyDeepResearchStarting,
+  notifyDraftGenerationResult,
+} from "@/lib/ai-draft-feedback";
+import {
   ChevronDown,
   Loader2,
   Sparkles,
@@ -83,23 +87,14 @@ export function AiAssistPanel({
 
   const applyDraft = async () => {
     try {
+      notifyDeepResearchStarting();
       const r = await draftMutation.mutateAsync({
         hint: draftHint,
         postPromptStyleId,
       });
       const parts = [r.draft.body, r.draft.hashtags].filter(Boolean);
       onContentChange(parts.join("\n\n"));
-      if (r.source === "stub") {
-        toast.message("Using placeholder — add your OpenAI key in Settings.");
-      } else if (r.source === "fallback" && r.detail) {
-        toast.error(r.detail);
-      } else {
-        toast.success(
-          content.trim()
-            ? "Caption suggested from your draft"
-            : "Caption generated"
-        );
-      }
+      notifyDraftGenerationResult(r);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Generation failed");
     }

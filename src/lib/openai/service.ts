@@ -79,7 +79,8 @@ export async function generateDraft(
   postPromptTemplates?: Record<string, string> | null,
   researchDepthId?: string | null,
   customPostPromptStyles?: CustomPostPromptStyle[] | null,
-  userId?: string | null
+  userId?: string | null,
+  publicOrigin?: string | null
 ): Promise<DraftResult> {
   if (!apiKey) {
     const topic = niche.topic || "your niche";
@@ -200,6 +201,7 @@ export async function generateDraft(
       researchDepthId: depthId,
       userId,
       titleHint: subject,
+      publicOrigin,
     });
 
     if (!result.data) {
@@ -459,6 +461,7 @@ export async function generateCampaignSlot(
     isListMode?: boolean;
     researchDepthId?: string | null;
     userId?: string | null;
+    publicOrigin?: string | null;
   }
 ): Promise<{
   post: CampaignPostDraft;
@@ -668,6 +671,7 @@ export async function generateCampaignSlot(
         researchDepthId: depthId,
         userId: params.userId,
         titleHint: brief.subtopic,
+        publicOrigin: params.publicOrigin,
       });
 
       detail = result.detail;

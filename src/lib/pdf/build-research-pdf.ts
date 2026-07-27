@@ -73,6 +73,7 @@ export async function buildAndPersistResearchPdf(params: {
   userId: string;
   researchReport: string;
   titleHint?: string;
+  publicOrigin?: string | null;
 }): Promise<{ absoluteUrl: string; report: StructuredResearchReport } | null> {
   try {
     let metrics = await extractMetricsWithLlm({
@@ -95,6 +96,7 @@ export async function buildAndPersistResearchPdf(params: {
       userId: params.userId,
       pdfBuffer,
       title: report.title,
+      publicOrigin: params.publicOrigin,
     });
 
     return { absoluteUrl: saved.absoluteUrl, report };

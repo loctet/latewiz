@@ -13,6 +13,10 @@ import {
   useImageWatermarkSettings,
   watermarkImageIfEnabled,
 } from "@/hooks";
+import {
+  notifyDeepResearchStarting,
+  notifyDraftGenerationResult,
+} from "@/lib/ai-draft-feedback";
 import { useAiStore } from "@/stores";
 import type { AiMediaKind } from "@/lib/campaign-media";
 import { savePostPrefill } from "@/lib/post-prefill";
@@ -121,6 +125,7 @@ export default function AiStudioPage() {
       return;
     }
     try {
+      notifyDeepResearchStarting();
       const r = await draftMutation.mutateAsync({
         hint: hintPayload,
         postPromptStyleId,
@@ -129,27 +134,7 @@ export default function AiStudioPage() {
       setGeneratedBody(r.draft.body);
       setGeneratedHashtags(r.draft.hashtags);
       setPdfUrl(r.draft.pdfUrl?.trim() || "");
-      if (r.source === "stub") {
-        toast.message("Using placeholder — add OpenAI key in Settings.");
-      } else if (r.source === "openai+deep-research") {
-        toast.success(
-          r.draft.pdfUrl
-            ? "Deep research ready — teaser + full PDF report."
-            : "Deep research teaser ready."
-        );
-      } else if (
-        r.source === "openai+web" ||
-        r.source === "openai+fallback-search"
-      ) {
-        toast.success("Caption generated with live web research.");
-      } else if (r.source === "openai") {
-        toast.message(
-          "Caption generated without confirmed web search — results may be generic. Check Settings → Live web research."
-        );
-      }
-      if (r.source === "fallback" && r.detail) {
-        toast.error(r.detail);
-      }
+      notifyDraftGenerationResult(r);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Generation failed");
     }

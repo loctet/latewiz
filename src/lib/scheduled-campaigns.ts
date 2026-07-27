@@ -2,7 +2,7 @@ import type { CampaignMediaMode } from "@/lib/campaign-media";
 import type { ImageWatermarkSettings } from "@/lib/image-watermark";
 import type { Platform } from "@/lib/late-api";
 import type { CampaignPlanningMode } from "@/lib/campaign-draft-storage";
-import type { CampaignSlotBrief } from "@/lib/openai";
+import type { CampaignSlotBrief } from "@/lib/openai/campaign-arc";
 import type { NicheProfile } from "@/lib/openai/types";
 import type { CustomPostPromptStyle } from "@/lib/post-prompt-catalog";
 import type { VideoProvider } from "@/lib/video-providers";

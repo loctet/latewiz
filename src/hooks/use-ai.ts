@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAiStore } from "@/stores/ai-store";
 import type { DraftResult, NicheProfile } from "@/lib/openai/types";
-import type { CampaignSlotBrief } from "@/lib/openai";
+import type { CampaignSlotBrief } from "@/lib/openai/campaign-arc";
 import type { VideoProvider } from "@/lib/video-providers";
 import { generatedMediaKeys } from "./use-generated-media";
 
@@ -64,7 +64,6 @@ export function useGenerateDraft() {
   const postPromptStyleId = useAiStore((s) => s.postPromptStyleId);
   const postPromptTemplates = useAiStore((s) => s.postPromptTemplates);
   const customPostPromptStyles = useAiStore((s) => s.customPostPromptStyles);
-  const researchDepthId = useAiStore((s) => s.researchDepthId);
 
   return useMutation({
     mutationFn: async (
@@ -77,6 +76,10 @@ export function useGenerateDraft() {
           }
     ) => {
       const hint = typeof params === "string" ? params : params?.hint;
+      // Read at call time so Deep selection is never a stale closure
+      const researchDepthId =
+        (typeof params === "object" ? params?.researchDepthId : undefined) ??
+        useAiStore.getState().researchDepthId;
       const res = await fetch("/api/ai/draft", {
         method: "POST",
         headers: aiHeaders(),
@@ -88,9 +91,7 @@ export function useGenerateDraft() {
             postPromptStyleId,
           post_prompt_templates: postPromptTemplates,
           custom_post_prompt_styles: customPostPromptStyles,
-          research_depth_id:
-            (typeof params === "object" ? params?.researchDepthId : undefined) ??
-            researchDepthId,
+          research_depth_id: researchDepthId,
         }),
       });
       if (!res.ok) {
@@ -103,6 +104,7 @@ export function useGenerateDraft() {
         draft: DraftResult;
         source: string;
         detail?: string | null;
+        research_depth_id?: string;
       }>;
     },
   });
@@ -314,6 +316,8 @@ export function useGenerateCampaignSlot() {
       isListMode?: boolean;
       researchDepthId?: string;
     }) => {
+      const depth =
+        params.researchDepthId ?? useAiStore.getState().researchDepthId;
       const res = await fetch("/api/ai/campaign-slot", {
         method: "POST",
         headers: aiHeaders(),
@@ -331,7 +335,7 @@ export function useGenerateCampaignSlot() {
           post_prompt_templates: postPromptTemplates,
           custom_post_prompt_styles: customPostPromptStyles,
           is_list_mode: params.isListMode,
-          research_depth_id: params.researchDepthId ?? researchDepthId,
+          research_depth_id: depth,
           niche,
         }),
       });

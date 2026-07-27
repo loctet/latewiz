@@ -173,6 +173,8 @@ export async function generateStructuredContent<T>(params: {
   /** Required to persist public PDF links for deep research */
   userId?: string | null;
   titleHint?: string;
+  /** Override for absolute PDF URLs (request host) */
+  publicOrigin?: string | null;
 }): Promise<TextGenerationResult<T>> {
   const depthId = parseResearchDepthId(params.researchDepthId);
 
@@ -181,6 +183,8 @@ export async function generateStructuredContent<T>(params: {
     const researchParams = params.researchParams
       ? { ...params.researchParams, ignoreNicheBias: true }
       : undefined;
+
+    console.info("[text-generation] Deep research mode engaged");
 
     const rewritten = await rewritePromptForDeepResearch({
       apiKey: params.apiKey,
@@ -206,11 +210,13 @@ export async function generateStructuredContent<T>(params: {
           userId: params.userId.trim(),
           researchReport: research.outputText,
           titleHint: params.titleHint,
+          publicOrigin: params.publicOrigin,
         });
         if (pdf) {
           pdfUrl = pdf.absoluteUrl;
         } else {
-          pdfDetail = "Deep research PDF generation failed; teaser returned without link";
+          pdfDetail =
+            "Deep research PDF generation failed; teaser returned without link";
         }
       } else {
         pdfDetail =
@@ -246,6 +252,7 @@ export async function generateStructuredContent<T>(params: {
     const deepFailDetail =
       research.detail ??
       "Deep research failed; falling back to standard generation";
+    console.warn("[text-generation] Deep research failed, falling back:", deepFailDetail);
 
     const fallback = await generateStructuredContentStandard<T>({
       ...params,

@@ -102,8 +102,10 @@ export async function saveGeneratedReportPdf(params: {
   userId: string;
   pdfBuffer: Buffer;
   title: string;
+  /** Prefer request origin so local/dev links are reachable */
+  publicOrigin?: string | null;
 }): Promise<{ entry: GeneratedReportEntry; absoluteUrl: string }> {
-  const { userId, pdfBuffer, title } = params;
+  const { userId, pdfBuffer, title, publicOrigin } = params;
   const dir = userDir(userId);
   await ensureDir(dir);
 
@@ -135,7 +137,7 @@ export async function saveGeneratedReportPdf(params: {
 
   return {
     entry,
-    absoluteUrl: toAbsoluteAppUrl(entry.url),
+    absoluteUrl: toAbsoluteAppUrl(entry.url, publicOrigin),
   };
 }
 

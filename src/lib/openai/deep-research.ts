@@ -3,7 +3,7 @@
  * @see https://developers.openai.com/api/docs/guides/deep-research
  *
  * Models: o3-deep-research | o4-mini-deep-research
- * Requires at least one data tool (we use web_search_preview).
+ * Requires at least one data tool (web_search, with web_search_preview fallback).
  * Structured JSON is NOT supported — research returns prose; format in a second pass.
  */
 
@@ -181,7 +181,7 @@ async function pollUntilComplete(
 }
 
 /**
- * Run OpenAI Deep Research with web_search_preview.
+ * Run OpenAI Deep Research with a web search tool.
  * Uses background mode + polling by default (tasks can take several minutes).
  */
 export async function runDeepResearch(params: {
@@ -194,86 +194,120 @@ export async function runDeepResearch(params: {
   const background = useBackgroundMode();
   const maxToolCalls = resolveMaxToolCalls();
 
-  const body: Record<string, unknown> = {
-    model,
-    instructions: params.instructions,
-    input: params.input,
-    tools: [{ type: "web_search_preview" }],
-    reasoning: { summary: "auto" },
-    background,
-    max_tool_calls: maxToolCalls,
-  };
+  // Prefer current Responses tool name; fall back to legacy deep-research preview tool.
+  const toolTypes = ["web_search", "web_search_preview"] as const;
+  let lastFail: DeepResearchResult | null = null;
 
-  try {
-    const res = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${params.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(background ? 120_000 : maxWaitMs()),
-    });
+  for (const toolType of toolTypes) {
+    const body: Record<string, unknown> = {
+      model,
+      instructions: params.instructions,
+      input: params.input,
+      tools: [{ type: toolType }],
+      reasoning: { summary: "auto" },
+      background,
+      max_tool_calls: maxToolCalls,
+    };
 
-    const bodyRaw = await res.text();
-    if (!res.ok) {
-      let detail = bodyRaw.slice(0, 400);
-      try {
-        const err = JSON.parse(bodyRaw) as { error?: { message?: string } };
-        if (err.error?.message) detail = err.error.message;
-      } catch {
-        /* ignore */
-      }
-      return {
-        ok: false,
-        outputText: "",
-        usedWebSearch: false,
-        detail: `OpenAI Deep Research HTTP ${res.status}: ${detail}`,
-        responseId: null,
-        status: null,
-      };
-    }
+    try {
+      console.info(
+        `[deep-research] starting model=${model} tool=${toolType} background=${background}`
+      );
+      const res = await fetch("https://api.openai.com/v1/responses", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${params.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(background ? 120_000 : maxWaitMs()),
+      });
 
-    const data = JSON.parse(bodyRaw) as Record<string, unknown>;
-    const responseId = typeof data.id === "string" ? data.id : null;
-    const status = String(data.status ?? "");
-
-    if (background && responseId && status !== "completed") {
-      if (status === "failed" || status === "cancelled") {
-        return {
+      const bodyRaw = await res.text();
+      if (!res.ok) {
+        let detail = bodyRaw.slice(0, 400);
+        try {
+          const err = JSON.parse(bodyRaw) as { error?: { message?: string } };
+          if (err.error?.message) detail = err.error.message;
+        } catch {
+          /* ignore */
+        }
+        lastFail = {
           ok: false,
           outputText: "",
           usedWebSearch: false,
-          detail: `Deep research ${status}`,
-          responseId,
-          status,
+          detail: `OpenAI Deep Research HTTP ${res.status}: ${detail}`,
+          responseId: null,
+          status: null,
         };
+        console.warn(`[deep-research] ${toolType} failed:`, lastFail.detail);
+        // Retry alternate tool only on likely tool/schema errors
+        if (
+          toolType === "web_search" &&
+          /tool|web_search|unsupported|unknown/i.test(detail)
+        ) {
+          continue;
+        }
+        return lastFail;
       }
-      return pollUntilComplete(params.apiKey, responseId);
-    }
 
-    const outputText = extractOutputTextFromResponse(data);
-    return {
-      ok: Boolean(outputText.trim()),
-      outputText,
-      usedWebSearch: responseUsedWebSearch(data),
-      detail: outputText.trim()
-        ? null
-        : "Deep research returned empty output",
-      responseId,
-      status: status || "completed",
-    };
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Unknown error";
-    return {
+      const data = JSON.parse(bodyRaw) as Record<string, unknown>;
+      const responseId = typeof data.id === "string" ? data.id : null;
+      const status = String(data.status ?? "");
+
+      if (background && responseId && status !== "completed") {
+        if (status === "failed" || status === "cancelled") {
+          return {
+            ok: false,
+            outputText: "",
+            usedWebSearch: false,
+            detail: `Deep research ${status}`,
+            responseId,
+            status,
+          };
+        }
+        console.info(
+          `[deep-research] polling response ${responseId} (status=${status})`
+        );
+        return pollUntilComplete(params.apiKey, responseId);
+      }
+
+      const outputText = extractOutputTextFromResponse(data);
+      return {
+        ok: Boolean(outputText.trim()),
+        outputText,
+        usedWebSearch: responseUsedWebSearch(data),
+        detail: outputText.trim()
+          ? null
+          : "Deep research returned empty output",
+        responseId,
+        status: status || "completed",
+      };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Unknown error";
+      lastFail = {
+        ok: false,
+        outputText: "",
+        usedWebSearch: false,
+        detail: msg.slice(0, 400),
+        responseId: null,
+        status: null,
+      };
+      console.warn(`[deep-research] ${toolType} exception:`, lastFail.detail);
+      return lastFail;
+    }
+  }
+
+  return (
+    lastFail ?? {
       ok: false,
       outputText: "",
       usedWebSearch: false,
-      detail: msg.slice(0, 400),
+      detail: "Deep research failed",
       responseId: null,
       status: null,
-    };
-  }
+    }
+  );
 }
 
 /** Enrich a brief into a detailed deep-research prompt (OpenAI docs recommend this). */

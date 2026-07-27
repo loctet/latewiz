@@ -8,6 +8,7 @@ import {
 import { normalizeCustomPostPromptStyles } from "@/lib/post-prompt-catalog";
 import { SessionRequiredError } from "@/lib/server/session";
 import { requireUserAiKeys } from "@/lib/server/ai-request-keys";
+import { resolveRequestOrigin } from "@/lib/server/app-url";
 
 /** Deep research can take several minutes (background + poll). */
 export const maxDuration = 800;
@@ -154,6 +155,7 @@ export async function POST(request: NextRequest) {
       isListMode,
       researchDepthId,
       userId,
+      publicOrigin: resolveRequestOrigin(request),
     });
 
     const content = [result.post.body, result.post.hashtags]
@@ -165,6 +167,7 @@ export async function POST(request: NextRequest) {
       source: result.source,
       detail: result.detail,
       pdfUrl: result.post.pdfUrl ?? null,
+      research_depth_id: researchDepthId ?? "standard",
     });
   } catch (err) {
     if (err instanceof SessionRequiredError) {

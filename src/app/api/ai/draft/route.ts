@@ -6,6 +6,7 @@ import {
 import { normalizeCustomPostPromptStyles } from "@/lib/post-prompt-catalog";
 import { SessionRequiredError } from "@/lib/server/session";
 import { requireUserAiKeys } from "@/lib/server/ai-request-keys";
+import { resolveRequestOrigin } from "@/lib/server/app-url";
 
 /** Deep research can take several minutes (background + poll). */
 export const maxDuration = 800;
@@ -59,12 +60,14 @@ export async function POST(request: NextRequest) {
           : undefined,
       researchDepthId,
       customPostPromptStyles,
-      userId
+      userId,
+      resolveRequestOrigin(request)
     );
     return NextResponse.json({
       draft,
       source: draft.source,
       detail: draft.detail,
+      research_depth_id: researchDepthId ?? "standard",
     });
   } catch (err) {
     if (err instanceof SessionRequiredError) {
