@@ -63,10 +63,17 @@ export function useGenerateDraft() {
   const niche = useAiStore((s) => s.niche);
   const postPromptStyleId = useAiStore((s) => s.postPromptStyleId);
   const postPromptTemplates = useAiStore((s) => s.postPromptTemplates);
+  const researchDepthId = useAiStore((s) => s.researchDepthId);
 
   return useMutation({
     mutationFn: async (
-      params?: string | { hint?: string; postPromptStyleId?: string }
+      params?:
+        | string
+        | {
+            hint?: string;
+            postPromptStyleId?: string;
+            researchDepthId?: string;
+          }
     ) => {
       const hint = typeof params === "string" ? params : params?.hint;
       const res = await fetch("/api/ai/draft", {
@@ -79,6 +86,9 @@ export function useGenerateDraft() {
             (typeof params === "object" ? params?.postPromptStyleId : undefined) ??
             postPromptStyleId,
           post_prompt_templates: postPromptTemplates,
+          research_depth_id:
+            (typeof params === "object" ? params?.researchDepthId : undefined) ??
+            researchDepthId,
         }),
       });
       if (!res.ok) {
@@ -274,6 +284,7 @@ export interface CampaignSlot {
 export function useGenerateCampaignSlot() {
   const niche = useAiStore((s) => s.niche);
   const postPromptTemplates = useAiStore((s) => s.postPromptTemplates);
+  const researchDepthId = useAiStore((s) => s.researchDepthId);
 
   return useMutation({
     mutationFn: async (params: {
@@ -296,6 +307,7 @@ export function useGenerateCampaignSlot() {
       coveredSubtopics?: string[];
       postPromptStyleId?: string;
       isListMode?: boolean;
+      researchDepthId?: string;
     }) => {
       const res = await fetch("/api/ai/campaign-slot", {
         method: "POST",
@@ -313,6 +325,7 @@ export function useGenerateCampaignSlot() {
           post_prompt_style_id: params.postPromptStyleId,
           post_prompt_templates: postPromptTemplates,
           is_list_mode: params.isListMode,
+          research_depth_id: params.researchDepthId ?? researchDepthId,
           niche,
         }),
       });

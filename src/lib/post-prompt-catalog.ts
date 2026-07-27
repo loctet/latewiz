@@ -84,39 +84,45 @@ Quality bar:
       "In-depth analyst-style breakdown: context, catalysts, risks, and outlook. Works for any niche (markets, science, product, policy).",
     expertRole:
       "senior research analyst who writes institutional-grade notes for a sophisticated audience in this niche",
-    structureTemplate: `Write a DETAILED analysis post for: {{subject}}
+    structureTemplate: `Write a DETAILED institutional-grade analysis post for: {{subject}}
 
 Campaign intent: {{goal}}
 
 Required structure (use these section labels as plain-text headings on their own line):
 
 SNAPSHOT
-Open with a compelling hook, then cover current context, recent developments, and why this matters now. Cite specific figures when web research provides them.
+2–4 dense sentences: where {{subject}} stands now (level, % move over the relevant window when research supports it), what changed, and why it matters. Lead with analysis — not a press-release paraphrase.
 
 NARRATIVE & CATALYSTS
-Explain what is driving attention right now — news, research, regulation, product changes, macro trends, etc. Connect cause and effect like a researcher, not a hype account.
+Explain what is driving the move — flows, news, macro, regulation, product, or sentiment. Connect cause and effect. Synthesize across sources; do not invent catalysts.
 
 STRUCTURED READ
-Provide a thoughtful structural or technical read without overclaiming precision. Frame as observation, not a guarantee.
+Levels, momentum, or relative strength as observation only — no fake precision or guaranteed outcomes.
 
 FUNDAMENTALS (if relevant)
-Briefly address underlying drivers, adoption, or evidence only when material to the thesis.
+Underlying drivers only when material to the thesis.
 
 RISKS & WATCHPOINTS
-Balanced counter-case or monitoring items — what could invalidate the narrative.
+What would invalidate the narrative; key levels or events to watch next.
 
 BOTTOM LINE
-Clear analyst takeaway in 2–4 sentences.
+Clear analyst takeaway in 2–4 sentences. No rhetorical question to the reader.
 
 DISCLAIMER
-One short line when advice-adjacent: not professional advice; do your own research.
+One short line: not professional advice; do your own research.
+
+Hard bans (these make the post look amateur):
+- Do NOT write a thin "Faits clés" / "Key facts" numbered digest that restates one article.
+- Do NOT paste parenthetical domains like (kucoin.com) or (coindesk.com) in the body.
+- Do NOT open with a generic one-liner then repeat the same claim as "fact 1".
+- Do NOT digress into unrelated assets unless {{goal}} explicitly asks for a cross-market view.
 
 Quality bar:
 - Minimum {{minBodyChars}} characters in the body (before hashtags).
-- Write like a published research note adapted for social — substantive paragraphs, not bullet spam.
+- Write like a published research note adapted for social — substantive paragraphs.
 - Use web research for timely data; if a metric is unknown, say so instead of inventing numbers.
-- Cover ONLY {{subject}} — do not digress into unrelated topics.`,
-    minBodyChars: 1200,
+- Cover ONLY {{subject}} unless the goal requires otherwise.`,
+    minBodyChars: 1400,
     maxOutputTokens: 4096,
     matchPatterns: [
       /market\s*anal/i,
@@ -129,6 +135,10 @@ Quality bar:
       /detailled?\s+(?:market|crypto)/i,
       /expert\s+(?:market|analysis)/i,
       /institutional[- ]?grade/i,
+      /24\s*h(?:eurs?)?/i,
+      /derni[eè]res?\s+24/i,
+      /last\s+24/i,
+      /past\s+24/i,
     ],
   },
   {

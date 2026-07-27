@@ -39,6 +39,11 @@ import {
   resolvePostPromptStyle,
 } from "@/lib/post-prompt-catalog";
 import { isNewsIntent } from "@/lib/web-search/build-query";
+import {
+  applyResearchDepthToPostStyle,
+  getResearchDepth,
+  parseResearchDepthId,
+} from "@/lib/research-depth";
 
 export type { PreviousCampaignPost } from "./types";
 export type { CampaignSlotBrief, CampaignOutlineBeat } from "./campaign-arc";
@@ -69,7 +74,8 @@ export async function generateDraft(
   niche: NicheProfile,
   hint?: string,
   postPromptStyleId?: string,
-  postPromptTemplates?: Record<string, string> | null
+  postPromptTemplates?: Record<string, string> | null,
+  researchDepthId?: string | null
 ): Promise<DraftResult> {
   if (!apiKey) {
     const topic = niche.topic || "your niche";
@@ -88,13 +94,19 @@ export async function generateDraft(
   const topic = niche.topic.trim() || "your niche";
   const subject = hintText || topic;
   const goal = hintText || `Timely post for ${topic}`;
+  const depthId = parseResearchDepthId(researchDepthId);
+  const depth = getResearchDepth(depthId);
 
-  const postStyle = resolvePostPromptStyle({
-    styleId: postPromptStyleId,
-    campaignGoal: hintText || topic,
-    isListMode: false,
-    listSubject: hintText || undefined,
-  });
+  const postStyle = applyResearchDepthToPostStyle(
+    resolvePostPromptStyle({
+      styleId: postPromptStyleId,
+      campaignGoal: hintText || topic,
+      isListMode: false,
+      listSubject: hintText || undefined,
+    }),
+    depth,
+    goal
+  );
   const usePostTemplate = postStyle.minBodyChars > 0;
   const structureBlock = usePostTemplate
     ? buildPostPromptStructureBlock(
@@ -153,8 +165,10 @@ export async function generateDraft(
         niche,
         hint: hintText || hint,
         searchHint: researchSearchHint,
+        researchDepthId: depthId,
       },
       maxOutputTokens,
+      researchDepthId: depthId,
     });
 
     if (!result.data) {
@@ -410,6 +424,7 @@ export async function generateCampaignSlot(
     postPromptStyleId?: string;
     postPromptTemplates?: Record<string, string> | null;
     isListMode?: boolean;
+    researchDepthId?: string | null;
   }
 ): Promise<{
   post: CampaignPostDraft;
@@ -420,6 +435,8 @@ export async function generateCampaignSlot(
   const goal = params.campaignGoal.trim() || "Grow audience engagement";
   const topic = niche.topic.trim() || "your niche";
   const constraints = parseCampaignGoalConstraints(goal);
+  const depthId = parseResearchDepthId(params.researchDepthId);
+  const depth = getResearchDepth(depthId);
 
   if (!apiKey) {
     const brief = assignFallbackSlotBrief(
@@ -448,12 +465,16 @@ export async function generateCampaignSlot(
 
   const isListItem =
     params.isListMode ?? brief.beat === "list item focus";
-  const postStyle = resolvePostPromptStyle({
-    styleId: params.postPromptStyleId,
-    campaignGoal: goal,
-    isListMode: isListItem,
-    listSubject: brief.subtopic,
-  });
+  const postStyle = applyResearchDepthToPostStyle(
+    resolvePostPromptStyle({
+      styleId: params.postPromptStyleId,
+      campaignGoal: goal,
+      isListMode: isListItem,
+      listSubject: brief.subtopic,
+    }),
+    depth,
+    goal
+  );
   const usePostTemplate =
     constraints.format !== "micro" && postStyle.minBodyChars > 0;
   const structureBlock = usePostTemplate
@@ -550,6 +571,7 @@ export async function generateCampaignSlot(
         trendSnippets: params.trendSnippets,
         searchHint: researchSearchHint,
         coveredSubtopics: params.coveredSubtopics,
+        researchDepthId: depthId,
       };
 
   const maxAttempts = usePostTemplate ? 3 : 2;
@@ -579,6 +601,7 @@ export async function generateCampaignSlot(
         jsonSchema: { name: "campaign_slot_post", schema: CAMPAIGN_POST_JSON_SCHEMA },
         researchParams,
         maxOutputTokens,
+        researchDepthId: depthId,
       });
 
       detail = result.detail;

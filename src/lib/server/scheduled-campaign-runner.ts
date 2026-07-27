@@ -371,6 +371,7 @@ async function processScheduledCampaignSlot(
         .map((item) => item.brief?.subtopic)
         .filter((value): value is string => Boolean(value)),
       postPromptStyleId: campaign.postPromptStyleId,
+      researchDepthId: campaign.researchDepthId,
       isListMode: campaign.campaignMode === "list",
     });
 

@@ -61,6 +61,7 @@ import {
   ImagePromptStyleSelect,
   ImageWatermarkControls,
   PostPromptStyleSelect,
+  ResearchDepthSelect,
   VideoPromptStyleSelect,
   VideoProviderSelect,
 } from "@/components/ai";
@@ -98,6 +99,7 @@ export default function CampaignPlannerPage() {
   const imagePromptStyleId = useAiStore((s) => s.imagePromptStyleId);
   const setImagePromptStyleId = useAiStore((s) => s.setImagePromptStyleId);
   const postPromptStyleId = useAiStore((s) => s.postPromptStyleId);
+  const researchDepthId = useAiStore((s) => s.researchDepthId);
   const imageWatermarkSettings = useImageWatermarkSettings();
   const videoConfigured = isVideoGenerationConfigured(videoProvider, status);
   const slotMutation = useGenerateCampaignSlot();
@@ -295,6 +297,7 @@ export default function CampaignPlannerPage() {
       mediaMode,
       niche: useAiStore.getState().niche,
       postPromptStyleId,
+      researchDepthId,
       imagePromptStyleId,
       videoPromptStyleId: useAiStore.getState().videoPromptStyleId,
       videoProvider,
@@ -345,6 +348,7 @@ export default function CampaignPlannerPage() {
       mediaMode,
       planDays,
       postPromptStyleId,
+      researchDepthId,
       postsPerDay,
       profileId,
       saveName,
@@ -725,6 +729,7 @@ export default function CampaignPlannerPage() {
           coveredSubtopics: outlineBeats.slice(0, i).map((b) => b.subtopic),
           postPromptStyleId,
           isListMode,
+          researchDepthId,
         });
 
         if (r.source === "stub") hadStub = true;
@@ -1440,6 +1445,8 @@ export default function CampaignPlannerPage() {
               campaignGoal={campaignGoal}
               isListMode={isListMode}
             />
+
+            <ResearchDepthSelect compact />
 
             <div>
               <button

@@ -5,9 +5,15 @@ import {
 } from "@/lib/image-watermark";
 import { DEFAULT_IMAGE_PROMPT_STYLE_ID } from "@/lib/image-prompt-catalog";
 import { DEFAULT_POST_PROMPT_STYLE_ID } from "@/lib/post-prompt-catalog";
+import {
+  DEFAULT_RESEARCH_DEPTH_ID,
+  parseResearchDepthId,
+  type ResearchDepthId,
+} from "@/lib/research-depth";
 
 export type ContentPrefs = {
   postPromptStyleId: string;
+  researchDepthId: ResearchDepthId;
   imagePromptStyleId: string;
   postPromptTemplates: Record<string, string>;
   imagePromptTemplates: Record<string, string>;
@@ -20,6 +26,7 @@ export type ContentPrefs = {
 export function defaultContentPrefs(): ContentPrefs {
   return {
     postPromptStyleId: DEFAULT_POST_PROMPT_STYLE_ID,
+    researchDepthId: DEFAULT_RESEARCH_DEPTH_ID,
     imagePromptStyleId: DEFAULT_IMAGE_PROMPT_STYLE_ID,
     postPromptTemplates: {},
     imagePromptTemplates: {},
@@ -41,6 +48,7 @@ export function normalizeContentPrefs(
       partial.postPromptStyleId.trim()
         ? partial.postPromptStyleId
         : defaults.postPromptStyleId,
+    researchDepthId: parseResearchDepthId(partial.researchDepthId),
     imagePromptStyleId:
       typeof partial.imagePromptStyleId === "string" &&
       partial.imagePromptStyleId.trim()

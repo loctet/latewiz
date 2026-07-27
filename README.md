@@ -83,7 +83,10 @@ NEXT_PUBLIC_GOOGLE_AUTH_ENABLED=true
 | `CRON_SECRET` | Recommended | Protects deferred campaign cron |
 | `ALLOW_ENV_KEY_FALLBACK` | No | `true` allows `LATE_API_KEY` / `OPENAI_API_KEY` for solo local only |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | No | Google sign-in |
-| `OPENAI_TEXT_MODEL` | No | Text model (default `gpt-4o-mini`) |
+| `OPENAI_TEXT_MODEL` | No | Standard text model (default `gpt-4o-mini`) |
+| `OPENAI_DEEP_TEXT_MODEL` | No | Deep research model (default `o4-mini-deep-research`; or `o3-deep-research`) |
+| `OPENAI_DEEP_BACKGROUND` | No | Run deep research in background + poll (default `true`) |
+| `OPENAI_DEEP_MAX_WAIT_MS` | No | Max wait for deep research (default `480000`) |
 | `TAVILY_API_KEY` / `SERPER_API_KEY` | No | Web-search fallbacks (server-wide) |
 
 ## Getting API keys

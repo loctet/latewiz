@@ -12,6 +12,10 @@ export type ResponsesCallParams = {
   jsonSchema: { name: string; schema: Record<string, unknown> };
   requireWebSearch?: boolean;
   maxOutputTokens?: number;
+  /** Override model (e.g. deep research uses OPENAI_DEEP_TEXT_MODEL). */
+  model?: string;
+  /** Prefer high search context when deep research is on. */
+  searchContextSize?: "low" | "medium" | "high";
 };
 
 export type ResponsesCallResult = {
@@ -25,6 +29,8 @@ export type ResponsesCallResult = {
 export function resolveTextModel(): string {
   return process.env.OPENAI_TEXT_MODEL?.trim() || "gpt-4o-mini";
 }
+
+export { resolveTextModelForDepth } from "@/lib/research-depth";
 
 export function isNativeWebSearchPreferred(): boolean {
   const flag = process.env.OPENAI_NATIVE_WEB_SEARCH?.trim().toLowerCase();
@@ -42,13 +48,17 @@ function parseAllowedDomains(): string[] {
     .slice(0, 100);
 }
 
-export function buildWebSearchTool(): WebSearchToolConfig {
+export function buildWebSearchTool(options?: {
+  searchContextSize?: "low" | "medium" | "high";
+}): WebSearchToolConfig {
   const tool: WebSearchToolConfig = { type: "web_search" };
   const domains = parseAllowedDomains();
   if (domains.length > 0) {
     tool.filters = { allowed_domains: domains };
   }
-  const size = process.env.OPENAI_WEB_SEARCH_CONTEXT_SIZE?.trim();
+  const size =
+    options?.searchContextSize ??
+    process.env.OPENAI_WEB_SEARCH_CONTEXT_SIZE?.trim();
   if (size === "low" || size === "medium" || size === "high") {
     tool.search_context_size = size;
   }
@@ -78,7 +88,7 @@ export function buildFactualResearchInstructions(): string {
   ].join("\n");
 }
 
-function extractOutputText(data: Record<string, unknown>): string {
+export function extractOutputTextFromResponse(data: Record<string, unknown>): string {
   if (typeof data.output_text === "string" && data.output_text.trim()) {
     return data.output_text;
   }
@@ -109,8 +119,10 @@ function responseUsedWebSearch(data: Record<string, unknown>): boolean {
 export async function createResponseWithWebSearch(
   params: ResponsesCallParams
 ): Promise<ResponsesCallResult> {
-  const model = resolveTextModel();
-  const webTool = buildWebSearchTool();
+  const model = params.model?.trim() || resolveTextModel();
+  const webTool = buildWebSearchTool({
+    searchContextSize: params.searchContextSize,
+  });
   const requireSearch =
     params.requireWebSearch ??
     process.env.OPENAI_WEB_SEARCH_REQUIRED?.trim().toLowerCase() === "true";
@@ -166,7 +178,7 @@ export async function createResponseWithWebSearch(
     }
 
     const data = JSON.parse(bodyRaw) as Record<string, unknown>;
-    const outputText = extractOutputText(data);
+    const outputText = extractOutputTextFromResponse(data);
     return {
       ok: true,
       status: res.status,

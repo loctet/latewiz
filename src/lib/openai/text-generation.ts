@@ -3,17 +3,34 @@ import {
   createResponseWithWebSearch,
   isNativeWebSearchPreferred,
   parseJsonFromModelOutput,
+  resolveTextModel,
+  resolveTextModelForDepth,
 } from "./responses";
+import {
+  buildDeepResearchSystemInstructions,
+  rewritePromptForDeepResearch,
+  runDeepResearch,
+} from "./deep-research";
 import { buildNicheSystemInstructions } from "./niche-prompt";
 import { SOCIAL_POST_FORMAT_INSTRUCTIONS } from "./sanitize-post-text";
 import { buildTimelinessSystemInstructions } from "@/lib/web-search/content-research";
 import { appendWebResearchToUserMessage } from "@/lib/web-search/content-research";
 import type { ContentResearchParams } from "@/lib/web-search/build-query";
+import {
+  buildDeepResearchTaskInstructions,
+  getResearchDepth,
+  parseResearchDepthId,
+  type ResearchDepthId,
+} from "@/lib/research-depth";
 
 export type TextGenerationResult<T> = {
   data: T | null;
   detail: string | null;
-  source: "openai+web" | "openai" | "openai+fallback-search";
+  source:
+    | "openai+web"
+    | "openai"
+    | "openai+fallback-search"
+    | "openai+deep-research";
 };
 
 function summarizeOpenAiError(status: number, bodyRaw: string): string {
@@ -32,8 +49,12 @@ async function chatCompletionsJson<T>(params: {
   system: string;
   user: string;
   maxTokens?: number;
+  model?: string;
 }): Promise<{ data: T | null; detail: string | null }> {
-  const model = process.env.OPENAI_TEXT_MODEL?.trim() || "gpt-4o-mini";
+  const model =
+    params.model?.trim() ||
+    process.env.OPENAI_TEXT_MODEL?.trim() ||
+    "gpt-4o-mini";
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -63,8 +84,65 @@ async function chatCompletionsJson<T>(params: {
   return { data: parseJsonFromModelOutput<T>(text), detail: null };
 }
 
+async function formatStructuredFromResearch<T>(params: {
+  apiKey: string;
+  taskInstructions: string;
+  userInput: string;
+  researchReport: string;
+  researchParams?: ContentResearchParams;
+  maxOutputTokens?: number;
+}): Promise<TextGenerationResult<T>> {
+  const formatModel = resolveTextModel();
+  const instructions = [
+    params.taskInstructions,
+    buildDeepResearchTaskInstructions(),
+    SOCIAL_POST_FORMAT_INSTRUCTIONS,
+    buildTimelinessSystemInstructions(),
+    params.researchParams
+      ? buildNicheSystemInstructions(params.researchParams.niche)
+      : "",
+    "Use ONLY the Deep Research report below for timely facts. Do not invent additional news.",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  const userInput = [
+    params.userInput,
+    "",
+    "=== OPENAI DEEP RESEARCH REPORT (authoritative) ===",
+    params.researchReport.slice(0, 48_000),
+    "=== END REPORT ===",
+    "",
+    "Write the social post JSON now, following the structure and quality bar in the instructions.",
+  ].join("\n");
+
+  // Deep research models lack structured outputs — format with the standard text model.
+  const chat = await chatCompletionsJson<T>({
+    apiKey: params.apiKey,
+    system: instructions,
+    user: userInput,
+    maxTokens: params.maxOutputTokens,
+    model: formatModel,
+  });
+
+  if (chat.data) {
+    return {
+      data: chat.data,
+      detail: chat.detail,
+      source: "openai+deep-research",
+    };
+  }
+
+  return {
+    data: null,
+    detail: chat.detail ?? "Failed to format deep research into a post",
+    source: "openai+deep-research",
+  };
+}
+
 /**
  * Generate structured JSON using OpenAI Responses API + web_search when possible.
+ * Deep research mode: OpenAI o4-mini/o3-deep-research → then format to JSON.
  * Falls back to Tavily/Serper pre-fetch + Chat Completions, then plain Chat Completions.
  */
 export async function generateStructuredContent<T>(params: {
@@ -74,7 +152,69 @@ export async function generateStructuredContent<T>(params: {
   jsonSchema: { name: string; schema: Record<string, unknown> };
   researchParams?: ContentResearchParams;
   maxOutputTokens?: number;
+  researchDepthId?: ResearchDepthId | string | null;
 }): Promise<TextGenerationResult<T>> {
+  const depthId = parseResearchDepthId(params.researchDepthId);
+  const depth = getResearchDepth(depthId);
+
+  // --- OpenAI Deep Research path (specialized models + web_search_preview) ---
+  if (depthId === "deep") {
+    const rewritten = await rewritePromptForDeepResearch({
+      apiKey: params.apiKey,
+      brief: params.userInput,
+    });
+
+    const research = await runDeepResearch({
+      apiKey: params.apiKey,
+      instructions: buildDeepResearchSystemInstructions(),
+      input: rewritten.prompt,
+    });
+
+    if (research.ok && research.outputText.trim()) {
+      return formatStructuredFromResearch<T>({
+        apiKey: params.apiKey,
+        taskInstructions: params.taskInstructions,
+        userInput: params.userInput,
+        researchReport: research.outputText,
+        researchParams: params.researchParams,
+        maxOutputTokens: params.maxOutputTokens,
+      });
+    }
+
+    // Fall through to standard generation if deep research fails
+    const deepFailDetail =
+      research.detail ??
+      "Deep research failed; falling back to standard generation";
+
+    const fallback = await generateStructuredContentStandard<T>({
+      ...params,
+      researchDepthId: "standard",
+    });
+
+    return {
+      ...fallback,
+      detail: fallback.detail
+        ? `${deepFailDetail} | ${fallback.detail}`
+        : deepFailDetail,
+    };
+  }
+
+  return generateStructuredContentStandard<T>(params);
+}
+
+async function generateStructuredContentStandard<T>(params: {
+  apiKey: string;
+  taskInstructions: string;
+  userInput: string;
+  jsonSchema: { name: string; schema: Record<string, unknown> };
+  researchParams?: ContentResearchParams;
+  maxOutputTokens?: number;
+  researchDepthId?: ResearchDepthId | string | null;
+}): Promise<TextGenerationResult<T>> {
+  const depthId = parseResearchDepthId(params.researchDepthId);
+  const depth = getResearchDepth(depthId);
+  const model = resolveTextModelForDepth(depthId);
+
   const instructions = [
     params.taskInstructions,
     SOCIAL_POST_FORMAT_INSTRUCTIONS,
@@ -90,10 +230,10 @@ export async function generateStructuredContent<T>(params: {
   let userInput = params.userInput;
   let usedFallbackSearch = false;
   if (params.researchParams) {
-    const enriched = await appendWebResearchToUserMessage(
-      params.userInput,
-      params.researchParams
-    );
+    const enriched = await appendWebResearchToUserMessage(params.userInput, {
+      ...params.researchParams,
+      researchDepthId: depthId,
+    });
     userInput = enriched.message;
     usedFallbackSearch = enriched.usedWebSearch;
   }
@@ -106,6 +246,8 @@ export async function generateStructuredContent<T>(params: {
       jsonSchema: params.jsonSchema,
       maxOutputTokens: params.maxOutputTokens,
       requireWebSearch: Boolean(params.researchParams),
+      model,
+      searchContextSize: depth.searchContextSize,
     });
 
     if (native.ok) {
@@ -130,6 +272,7 @@ export async function generateStructuredContent<T>(params: {
     system: instructions,
     user: userInput,
     maxTokens: params.maxOutputTokens,
+    model,
   });
 
   if (chat.data) {

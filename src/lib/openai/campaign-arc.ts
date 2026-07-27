@@ -185,20 +185,22 @@ export function assignListItemSlotBrief(
   const item = listItem.trim();
   const goal = campaignGoal.trim() || "In-depth coverage";
   const isMarketAnalysis =
-    /market\s*anal|analyse?\s+(?:de\s+)?march|detail+ed?\s+market/i.test(goal);
+    /market\s*anal|analyse?\s+(?:de\s+)?march|detail+ed?\s+market|24\s*h(?:eurs?)?|derni[eè]res?\s+24|last\s+24|past\s+24/i.test(
+      goal
+    );
   return {
     slotIndex,
     phase: phaseForSlot(slotIndex, totalPosts),
     beat: "list item focus",
     subtopic: item,
     angle: isMarketAnalysis
-      ? `Expert market analysis for ${item}`
+      ? `Expert 24h market analysis for ${item}`
       : `${goal} — dedicated to ${item}`,
     keyPoint: isMarketAnalysis
-      ? `Institutional-quality market analysis for ${item}: price context, catalysts, technical read, risks, and outlook. Cover ONLY ${item}.`
+      ? `Institutional-quality 24h market analysis for ${item}: price context, catalysts, structured read, risks, and outlook. Cover ONLY ${item}. Synthesize multiple sources — never a thin key-facts digest.`
       : `Write ${goal.toLowerCase()} for ${item} only. Do not cover other assets or topics from the list.`,
     searchHint: isMarketAnalysis
-      ? `${item} market price analysis news`
+      ? `${item} last 24 hours market analysis price catalysts news`
       : `${item} ${goal} latest developments`,
   };
 }

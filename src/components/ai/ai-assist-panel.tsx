@@ -36,6 +36,7 @@ import { ImagePromptStyleSelect } from "./image-prompt-style-select";
 import { VideoPromptStyleSelect } from "./video-prompt-style-select";
 import { VideoProviderSelect } from "./video-provider-select";
 import { PostPromptStyleSelect } from "./post-prompt-style-select";
+import { ResearchDepthSelect } from "./research-depth-select";
 
 interface AiAssistPanelProps {
   content: string;
@@ -271,6 +272,7 @@ export function AiAssistPanel({
               compact
               campaignGoal={draftHint ?? ""}
             />
+            <ResearchDepthSelect compact />
             <AiMediaModeSelect
               compact
               value={aiMediaKind}

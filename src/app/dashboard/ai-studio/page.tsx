@@ -49,6 +49,7 @@ import {
   AiMediaModeSelect,
   ImagePromptStyleSelect,
   PostPromptStyleSelect,
+  ResearchDepthSelect,
   VideoPromptStyleSelect,
   VideoProviderSelect,
 } from "@/components/ai";
@@ -368,6 +369,7 @@ export default function AiStudioPage() {
                   compact
                   campaignGoal={topic.trim()}
                 />
+                <ResearchDepthSelect compact />
                 <AiMediaModeSelect
                   compact
                   value={aiMediaKind}

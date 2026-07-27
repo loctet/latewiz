@@ -1,11 +1,12 @@
 import type { NicheProfile } from "@/lib/openai/types";
 import {
   buildContentResearchQuery,
-  isNewsIntent,
+  prefersAdvancedSearch,
   type ContentResearchParams,
 } from "./build-query";
 import { formatWebContextForPrompt } from "./format-context";
 import { isWebSearchEnabled, searchWeb } from "./service";
+import { getResearchDepth, parseResearchDepthId } from "@/lib/research-depth";
 
 export type ContentWebResearch = {
   block: string;
@@ -25,13 +26,12 @@ export async function fetchContentWebResearch(
     return { block: "", usedWebSearch: false, query: null };
   }
 
-  const newsIntent = isNewsIntent(
-    params.searchHint,
-    params.hint,
-    params.campaignGoal,
-    params.campaignHint
-  );
-  const ctx = await searchWeb(query, { newsIntent });
+  const advanced = prefersAdvancedSearch(params);
+  const depth = getResearchDepth(parseResearchDepthId(params.researchDepthId));
+  const ctx = await searchWeb(query, {
+    newsIntent: advanced,
+    maxResults: advanced ? depth.maxSearchResults : undefined,
+  });
   const block = formatWebContextForPrompt(ctx);
   return {
     block,

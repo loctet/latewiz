@@ -1,3 +1,4 @@
+export * from "./deep-research";
 export * from "./types";
 export * from "./resolve-key";
 export * from "./niche-prompt";

@@ -3,6 +3,7 @@ export { AiImageReferencePicker } from "./ai-image-reference-picker";
 export { ImagePromptStyleSelect } from "./image-prompt-style-select";
 export { ImageWatermarkControls } from "./image-watermark-controls";
 export { PostPromptStyleSelect } from "./post-prompt-style-select";
+export { ResearchDepthSelect } from "./research-depth-select";
 export { VideoPromptStyleSelect } from "./video-prompt-style-select";
 export { VideoProviderSelect } from "./video-provider-select";
 export { AiMediaModeSelect } from "./ai-media-mode-select";

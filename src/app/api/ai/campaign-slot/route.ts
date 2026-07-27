@@ -8,6 +8,9 @@ import {
 import { SessionRequiredError } from "@/lib/server/session";
 import { requireUserAiKeys } from "@/lib/server/ai-request-keys";
 
+/** Deep research can take several minutes (background + poll). */
+export const maxDuration = 800;
+
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as Record<string, unknown>;
@@ -113,6 +116,13 @@ export async function POST(request: NextRequest) {
 
     const isListMode = body.is_list_mode === true || body.isListMode === true;
 
+    const researchDepthId =
+      typeof body.research_depth_id === "string"
+        ? body.research_depth_id
+        : typeof body.researchDepthId === "string"
+          ? body.researchDepthId
+          : undefined;
+
     const result = await generateCampaignSlot(apiKey, niche, {
       campaignGoal,
       slotIndex,
@@ -136,6 +146,7 @@ export async function POST(request: NextRequest) {
       postPromptStyleId,
       postPromptTemplates,
       isListMode,
+      researchDepthId,
     });
 
     const content = [result.post.body, result.post.hashtags]

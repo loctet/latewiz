@@ -80,6 +80,7 @@ export type ScheduledCampaign = {
   mediaMode: CampaignMediaMode;
   niche: NicheProfile;
   postPromptStyleId: string;
+  researchDepthId: string;
   imagePromptStyleId: string;
   videoPromptStyleId: string;
   videoProvider: VideoProvider;

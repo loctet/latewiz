@@ -13,9 +13,13 @@ import {
 } from "@/lib/image-prompt-catalog";
 import { DEFAULT_VIDEO_PROMPT_STYLE_ID } from "@/lib/video-prompt-catalog";
 import {
-  AUTO_POST_PROMPT_STYLE_ID,
   DEFAULT_POST_PROMPT_STYLE_ID,
 } from "@/lib/post-prompt-catalog";
+import {
+  DEFAULT_RESEARCH_DEPTH_ID,
+  parseResearchDepthId,
+  type ResearchDepthId,
+} from "@/lib/research-depth";
 import type { AiMediaKind } from "@/lib/campaign-media";
 import {
   DEFAULT_VIDEO_PROVIDER,
@@ -38,6 +42,7 @@ interface AiState {
   niche: NicheProfile;
   imagePromptStyleId: string;
   postPromptStyleId: string;
+  researchDepthId: ResearchDepthId;
   videoPromptStyleId: string;
   videoProvider: VideoProvider;
   aiMediaKind: AiMediaKind;
@@ -60,6 +65,7 @@ interface AiState {
   setNiche: (niche: Partial<NicheProfile>) => void;
   setImagePromptStyleId: (id: string) => void;
   setPostPromptStyleId: (id: string) => void;
+  setResearchDepthId: (id: ResearchDepthId) => void;
   setVideoPromptStyleId: (id: string) => void;
   setAiMediaKind: (kind: AiMediaKind) => void;
   setImagePromptTemplate: (styleId: string, template: string) => void;
@@ -99,6 +105,7 @@ export const useAiStore = create<AiState>()(
       niche: defaultNicheProfile(),
       imagePromptStyleId: DEFAULT_IMAGE_PROMPT_STYLE_ID,
       postPromptStyleId: DEFAULT_POST_PROMPT_STYLE_ID,
+      researchDepthId: DEFAULT_RESEARCH_DEPTH_ID,
       videoPromptStyleId: DEFAULT_VIDEO_PROMPT_STYLE_ID,
       videoProvider: DEFAULT_VIDEO_PROVIDER,
       aiMediaKind: "image",
@@ -142,6 +149,9 @@ export const useAiStore = create<AiState>()(
       setImagePromptStyleId: (id) => set({ imagePromptStyleId: id }),
 
       setPostPromptStyleId: (id) => set({ postPromptStyleId: id }),
+
+      setResearchDepthId: (id) =>
+        set({ researchDepthId: parseResearchDepthId(id) }),
 
       setVideoPromptStyleId: (id) => set({ videoPromptStyleId: id }),
 
@@ -189,6 +199,7 @@ export const useAiStore = create<AiState>()(
         const normalized = normalizeContentPrefs(prefs);
         set({
           postPromptStyleId: normalized.postPromptStyleId,
+          researchDepthId: normalized.researchDepthId,
           imagePromptStyleId: normalized.imagePromptStyleId,
           postPromptTemplates: normalized.postPromptTemplates,
           imagePromptTemplates: {
@@ -205,6 +216,7 @@ export const useAiStore = create<AiState>()(
       getContentPrefs: () =>
         normalizeContentPrefs({
           postPromptStyleId: get().postPromptStyleId,
+          researchDepthId: get().researchDepthId,
           imagePromptStyleId: get().imagePromptStyleId,
           postPromptTemplates: get().postPromptTemplates,
           imagePromptTemplates: get().imagePromptTemplates,
@@ -302,6 +314,7 @@ export const useAiStore = create<AiState>()(
             p?.imagePromptStyleId ?? DEFAULT_IMAGE_PROMPT_STYLE_ID,
           postPromptStyleId:
             p?.postPromptStyleId ?? DEFAULT_POST_PROMPT_STYLE_ID,
+          researchDepthId: parseResearchDepthId(p?.researchDepthId),
           videoPromptStyleId:
             p?.videoPromptStyleId ?? DEFAULT_VIDEO_PROMPT_STYLE_ID,
           videoProvider:
@@ -339,6 +352,7 @@ export const useAiStore = create<AiState>()(
         niche: state.niche,
         imagePromptStyleId: state.imagePromptStyleId,
         postPromptStyleId: state.postPromptStyleId,
+        researchDepthId: state.researchDepthId,
         videoPromptStyleId: state.videoPromptStyleId,
         videoProvider: state.videoProvider,
         aiMediaKind: state.aiMediaKind,

@@ -163,6 +163,8 @@ async function searchSerper(
 export type SearchWebOptions = {
   /** Prefer news APIs and return up to 10 recent headlines when configured. */
   newsIntent?: boolean;
+  /** Override result cap (e.g. deep research). */
+  maxResults?: number;
 };
 
 /** Run live web search when configured; otherwise return null. */
@@ -176,7 +178,12 @@ export async function searchWeb(
   if (!trimmed) return null;
 
   const newsIntent = Boolean(options?.newsIntent);
-  const limit = maxResults(newsIntent);
+  const limit =
+    options?.maxResults != null &&
+    Number.isFinite(options.maxResults) &&
+    options.maxResults > 0
+      ? Math.min(10, Math.floor(options.maxResults))
+      : maxResults(newsIntent);
   const searchedAt = new Date().toISOString();
   const tavilyKey = process.env.TAVILY_API_KEY?.trim();
   const serperKey = process.env.SERPER_API_KEY?.trim();

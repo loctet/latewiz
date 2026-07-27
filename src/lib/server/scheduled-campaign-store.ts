@@ -84,6 +84,10 @@ function normalizeCampaign(
         : "none",
     niche: { ...defaultNicheProfile(), ...(campaign.niche ?? {}) },
     postPromptStyleId: String(campaign.postPromptStyleId ?? "auto"),
+    researchDepthId:
+      String(campaign.researchDepthId ?? "").toLowerCase() === "deep"
+        ? "deep"
+        : "standard",
     imagePromptStyleId: String(campaign.imagePromptStyleId ?? ""),
     videoPromptStyleId: String(campaign.videoPromptStyleId ?? ""),
     videoProvider:
