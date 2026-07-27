@@ -38,7 +38,7 @@ BODY
 Develop the idea with clear paragraphs. Use web research for timely facts when relevant.
 
 BOTTOM LINE
-2–3 sentence takeaway.
+2-3 sentence takeaway.
 
 Quality bar:
 - Minimum {{minBodyChars}} characters in the body (before hashtags).
@@ -146,39 +146,53 @@ Keep it readable in one scroll — no filler.`,
     id: "news-roundup",
     label: "Recent news roundup",
     description:
-      "Digest of the latest headlines from live web research — 5–10 distinct stories with context.",
+      "Institutional crypto/Web3 news roundup: macro drivers, movers, regulation, protocols, and risk radar.",
     expertRole:
-      "senior news editor who curates today's most important headlines for a smart audience in this niche",
-    structureTemplate: `Write a timely news roundup post about: {{subject}}
+      "Principal Crypto & Web3 Lead Analyst who curates verified, high-impact developments for an institutional audience",
+    structureTemplate: `Act as a Principal Crypto & Web3 Lead Analyst. Generate a concise, high-value news roundup covering {{subject}} from the past 24 hours (extend to the past 7 days only when 24h coverage is too thin in the research).
 
-Campaign intent: {{goal}}
+Do NOT rely on speculative price targets, unverified hype, or social media rumors. Focus strictly on verified developments with macro, structural, or significant market impact. Use only facts supported by web research — never invent events, prices, dates, or flows.
 
-Required structure (plain-text section headings on their own line):
+Organize the roundup into this exact framework (plain-text section headings on their own line):
 
-HOOK
-One compelling opening line on why today's news matters for this audience.
+1. EXECUTIVE SUMMARY & MARKET DRIVERS
+- Macro Environment: Summarize major macroeconomic news affecting crypto (e.g., Fed interest rate decisions, global inflation data, traditional market correlations).
+- Sentiment & Liquidity: Overview of market liquidity, stablecoin supply changes, or major institutional flows (e.g., ETF net inflows/outflows).
 
-TOP STORIES
-Cover 5–8 DISTINCT recent headlines pulled from the web research block. For each story:
-- Start with a clear headline (paraphrase the source, do not copy verbatim)
-- 1–2 sentences summarizing what happened
-- One line on why it matters for people who follow this topic
+2. 24-HOUR MARKET MOVERS (TOP GAINERS & LOSERS)
+- Top Performers (Gainers): Identify the top 3-5 assets (minimum $100M+ market cap) with the highest 24-hour gains. Briefly state the main catalyst for each move (e.g., mainnet launch, exchange listing, short squeeze).
+- Worst Performers (Losers): Identify the top 3-5 assets (minimum $100M+ market cap) with the steepest 24-hour declines. Briefly state the underlying driver for each drop (e.g., token unlock, protocol exploit, negative regulatory signal).
 
-Use only stories supported by web research. Skip any headline you cannot verify from the research block.
+3. REGULATORY, LEGAL & POLICY UPDATES
+- Highlight major government actions, SEC/CFTC enforcement or approvals, landmark court rulings, or global regulatory updates (EU MiCA, Asian market frameworks, etc.).
+- Include a 1-sentence takeaway on the immediate industry implication for each item.
 
-MOOD (optional, if research supports it)
-Brief read on overall sentiment in this niche.
+4. PROTOCOL & INFRASTRUCTURE DEVELOPMENTS
+- Detail significant Layer 1/Layer 2 upgrades, mainnet launches, hard forks, or critical smart contract vulnerability patches.
+- Note key network metrics if relevant (e.g., TVL shifts, active user spikes, gas fee dynamics).
+- End each fundamental item with a "Takeaway" sentence explaining why it matters to the broader market.
 
-BOTTOM LINE
-2–3 sentences synthesizing the day's narrative.
+5. INSTITUTIONAL & ECOSYSTEM HIGHLIGHTS
+- Notable venture capital raises ($20M+), corporate treasury acquisitions, major enterprise Web3 integrations, or strategic partnerships.
+- Include a "Takeaway" sentence where material.
+
+6. SECURITY & RISK RADAR (IF APPLICABLE)
+- Summarize major protocol hacks, exploits, or systemic risks identified during this period, including total value lost and the exploit vector when known.
+- If nothing material occurred, state that briefly and skip padded filler.
+
+Formatting & quality requirements:
+- Enforce a minimum ~$100M market cap threshold for Gainers/Losers to filter out low-liquidity pumps and rugs.
+- Use bullet points with bold lead-ins for maximum scannability.
+- Maintain an objective, institutional, and concise tone.
+- Do NOT paste parenthetical source domains like (coindesk.com) in the body.
+- Do NOT invent unverified rumors or speculative price targets.
 
 Quality bar:
 - Minimum {{minBodyChars}} characters in the body (before hashtags).
-- Every story must trace to web research — never invent events, prices, or dates.
 - Prefer the most recent sources in the research block.
-- Write in the same language as the brief when the brief is not in English.`,
-    minBodyChars: 900,
-    maxOutputTokens: 4096,
+- Write in the same language as {{subject}} when it is not in English.`,
+    minBodyChars: 1600,
+    maxOutputTokens: 6144,
     matchPatterns: [
       /actualit/i,
       /\bnews\b/i,
@@ -190,6 +204,8 @@ Quality bar:
       /fil d.?actualit/i,
       /aujourd.?hui/i,
       /today'?s?\s+(?:news|headlines)/i,
+      /24\s*h(?:eurs?)?/i,
+      /market\s*movers?/i,
     ],
   },
   {
@@ -208,14 +224,14 @@ Your analysis must be objective, data-driven, highly granular, and structured ac
 Required structure (use these section labels as plain-text headings on their own line):
 
 SNAPSHOT
-2–4 dense sentences: where {{subject}} stands now (level, % move over the relevant window when research supports it), what changed, and why it matters. Lead with analysis — not a press-release paraphrase.
+2-4 dense sentences: where {{subject}} stands now (level, % move over the relevant window when research supports it), what changed, and why it matters. Lead with analysis — not a press-release paraphrase.
 
 TITLE & EXECUTIVE SUMMARY
 - Title line: Investment Case: {{subject}} and the [KEY ARCHITECTURAL PARADIGM / VALUE PROPOSITION]
 - Executive Thesis: Synthesize the macro market context, the problem the project solves, its core technological breakthrough, key supported ecosystems, and a summary of its competitive edge.
 
 CORE ARCHITECTURE AND TECHNICAL MECHANICS
-- Deep Technical Explanation: Explain the protocol’s core design, consensus/validation mechanism, execution layer, and operational workflows.
+- Deep Technical Explanation: Explain the protocol's core design, consensus/validation mechanism, execution layer, and operational workflows.
 - Developer & Integration Infrastructure: Detail developer tools (e.g., SDKs, APIs, custom hooks, cross-chain messaging, AI/agentic integration parameters).
 - Architecture Comparison Table: Include a Markdown table comparing the project's architectural paradigm against legacy/traditional models across parameters such as:
 
@@ -224,7 +240,7 @@ CORE ARCHITECTURE AND TECHNICAL MECHANICS
 
 COMPARATIVE MARKET PERFORMANCE & ON-CHAIN METRICS
 - Quantitative Performance: Detail trading/transaction volume, daily active addresses, transaction fees generated, user retention, and performance under stress/congestion.
-- Competitive Landscape Table: Include a Markdown table comparing the protocol against 3–4 direct market competitors across key metrics:
+- Competitive Landscape Table: Include a Markdown table comparing the protocol against 3-4 direct market competitors across key metrics:
 
 | Metric | {{subject}} | Competitor 1 | Competitor 2 | Competitor 3 |
 (Include parameters like: Messaging/Execution Engine, Order Matching Algorithm, Median Finality/Speed, Median Transaction Size, Protocol Fees, Profitability/Revenue, Cumulative Volume, Security Track Record).
@@ -299,10 +315,10 @@ Campaign intent: {{goal}}
 Structure (plain-text section headings):
 
 THESIS
-State the core argument or framing in 2–3 sentences.
+State the core argument or framing in 2-3 sentences.
 
 KEY FINDINGS
-3–5 substantive paragraphs with evidence, data points, and context from research. Explain mechanisms and implications.
+3-5 substantive paragraphs with evidence, data points, and context from research. Explain mechanisms and implications.
 
 COUNTERPOINTS
 What skeptics would say — address fairly.
@@ -497,7 +513,7 @@ export function buildPostPromptTaskInstructions(style: PostPromptStyle): string 
     depthNote,
     "Use current web research when the brief requires facts, figures, or recent events.",
     "Title: clear and specific (topic + angle).",
-    "Hashtags: 3–6 relevant tags, or fewer for professional analysis posts.",
+    "Hashtags: 3-6 relevant tags, or fewer for professional analysis posts.",
     SOCIAL_POST_FORMAT_INSTRUCTIONS,
   ].join(" ");
 }
