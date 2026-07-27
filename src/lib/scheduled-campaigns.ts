@@ -51,6 +51,8 @@ export type ScheduledCampaignSlot = {
   lastError?: string | null;
   processingStartedAt?: string | null;
   processingLeaseUntil?: string | null;
+  /** Random token set on acquire — used to detect lost lease races */
+  processingOwnerToken?: string | null;
 };
 
 export type ScheduledCampaignSlotInput = Omit<ScheduledCampaignSlot, "id"> & {
@@ -84,6 +86,8 @@ export type ScheduledCampaign = {
   imagePromptStyleId: string;
   videoPromptStyleId: string;
   videoProvider: VideoProvider;
+  /** Custom post structure overrides keyed by style id */
+  postPromptTemplates: Record<string, string>;
   imagePromptTemplates: Record<string, string>;
   videoPromptTemplates: Record<string, string>;
   imageWatermarkSettings: ImageWatermarkSettings;

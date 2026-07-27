@@ -41,6 +41,7 @@ function normalizeSlot(
     lastError: slot.lastError ?? null,
     processingStartedAt: slot.processingStartedAt ?? null,
     processingLeaseUntil: slot.processingLeaseUntil ?? null,
+    processingOwnerToken: slot.processingOwnerToken ?? null,
   };
 }
 
@@ -92,6 +93,11 @@ function normalizeCampaign(
     videoPromptStyleId: String(campaign.videoPromptStyleId ?? ""),
     videoProvider:
       campaign.videoProvider === "fal-pika" ? "fal-pika" : "openai-sora",
+    postPromptTemplates:
+      campaign.postPromptTemplates &&
+      typeof campaign.postPromptTemplates === "object"
+        ? campaign.postPromptTemplates
+        : {},
     imagePromptTemplates:
       campaign.imagePromptTemplates &&
       typeof campaign.imagePromptTemplates === "object"
@@ -318,6 +324,8 @@ export async function getDueScheduledCampaignSlots(now = Date.now()): Promise<
     if (campaign.generationMode !== "deferred") continue;
     if (campaign.status === "paused" || campaign.status === "cancelled") continue;
     for (const slot of campaign.slots) {
+      // Already published to Late — never re-generate / re-create
+      if (slot.postId?.trim()) continue;
       if (slot.status !== "pending_generation" && slot.status !== "failed")
         continue;
       const dueAt =
@@ -342,9 +350,14 @@ export async function acquireScheduledCampaignSlot(
   slotId: string,
   now = Date.now()
 ): Promise<ScheduledCampaign | null> {
-  return updateScheduledCampaign(campaignId, (campaign) => {
+  const ownerToken = randomUUID();
+  let acquired = false;
+
+  const updated = await updateScheduledCampaign(campaignId, (campaign) => {
     const slots: ScheduledCampaignSlot[] = campaign.slots.map((slot) => {
       if (slot.id !== slotId) return slot;
+      // Already published — never reclaim for another Late create
+      if (slot.postId?.trim()) return slot;
       const leaseUntilMs = slot.processingLeaseUntil
         ? new Date(slot.processingLeaseUntil).getTime()
         : 0;
@@ -355,11 +368,13 @@ export async function acquireScheduledCampaignSlot(
       ) {
         return slot;
       }
+      acquired = true;
       return {
         ...slot,
         status: "processing" as ScheduledCampaignSlotStatus,
         processingStartedAt: new Date(now).toISOString(),
         processingLeaseUntil: new Date(now + PROCESSING_LEASE_MS).toISOString(),
+        processingOwnerToken: ownerToken,
         lastError: null,
       };
     });
@@ -368,4 +383,20 @@ export async function acquireScheduledCampaignSlot(
       slots,
     };
   });
+
+  if (!updated || !acquired) return null;
+
+  // Re-read after write — concurrent RMW can overwrite our lease token
+  const fresh = await getScheduledCampaign(campaignId);
+  const verified = fresh?.slots.find((slot) => slot.id === slotId);
+  if (
+    !fresh ||
+    !verified ||
+    verified.status !== "processing" ||
+    verified.processingOwnerToken !== ownerToken
+  ) {
+    return null;
+  }
+
+  return fresh;
 }

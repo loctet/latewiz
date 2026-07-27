@@ -162,12 +162,10 @@ async function maybeGenerateMedia(
       slot.reference_image_url?.trim() ? [slot.reference_image_url.trim()] : undefined
     );
     if (!imageResult.url && !imageResult.b64_json) {
-      return {
-        slotPatch: {
-          detail: imageResult.detail,
-        },
-        warning: imageResult.detail ?? "Image generation failed; posting text-only.",
-      };
+      throw new Error(
+        imageResult.detail ??
+          "Image generation failed for this scheduled slot (media mode requires an image)."
+      );
     }
 
     const imageUrl = imageResult.url ?? `data:image/png;base64,${imageResult.b64_json}`;
@@ -209,12 +207,10 @@ async function maybeGenerateMedia(
       campaign.videoPromptTemplates
     );
     if (!videoResult.url) {
-      return {
-        slotPatch: {
-          detail: videoResult.detail,
-        },
-        warning: videoResult.detail ?? "Video generation failed; posting text-only.",
-      };
+      throw new Error(
+        videoResult.detail ??
+          "Video generation failed for this scheduled slot (media mode requires a video)."
+      );
     }
 
     const previewUrl = await persistGeneratedVideoBestEffort(
@@ -289,6 +285,9 @@ async function processScheduledCampaignSlot(
   const acquired = await acquireScheduledCampaignSlot(campaignId, slotId);
   const acquiredSlot = acquired?.slots.find((slot) => slot.id === slotId);
   if (!acquired || !acquiredSlot || acquiredSlot.status !== "processing") {
+    return { status: "skipped" };
+  }
+  if (acquiredSlot.postId?.trim()) {
     return { status: "skipped" };
   }
 
@@ -371,6 +370,7 @@ async function processScheduledCampaignSlot(
         .map((item) => item.brief?.subtopic)
         .filter((value): value is string => Boolean(value)),
       postPromptStyleId: campaign.postPromptStyleId,
+      postPromptTemplates: campaign.postPromptTemplates,
       researchDepthId: campaign.researchDepthId,
       isListMode: campaign.campaignMode === "list",
     });
@@ -399,6 +399,23 @@ async function processScheduledCampaignSlot(
       lastError: null,
     };
 
+    // Persist copy while still processing so a crash mid-publish doesn't lose work
+    await updateScheduledCampaign(campaignId, (current) => ({
+      ...current,
+      slots: current.slots.map((currentSlot) =>
+        currentSlot.id === slotId
+          ? {
+              ...currentSlot,
+              ...generatedSlot,
+              status: "processing",
+              processingLeaseUntil: new Date(
+                Date.now() + 10 * 60 * 1000
+              ).toISOString(),
+            }
+          : currentSlot
+      ),
+    }));
+
     const media = await maybeGenerateMedia(
       campaign,
       generatedSlot,
@@ -408,15 +425,40 @@ async function processScheduledCampaignSlot(
       userId
     );
     const mediaWarning = media.warning?.trim() || "";
-    const postId = await createScheduledPost(
-      campaign,
-      {
-        ...generatedSlot,
-        ...media.slotPatch,
-      },
-      lateKey,
-      media.mediaItems
-    );
+
+    // Idempotency: if a previous attempt already created the Late post, reuse it
+    const latest = (await getScheduledCampaign(campaignId)) ?? campaign;
+    const latestSlot = latest.slots.find((s) => s.id === slotId);
+    let postId = latestSlot?.postId?.trim() || null;
+
+    if (!postId) {
+      postId = await createScheduledPost(
+        campaign,
+        {
+          ...generatedSlot,
+          ...media.slotPatch,
+        },
+        lateKey,
+        media.mediaItems
+      );
+      // Save postId immediately so a later crash won't create a duplicate
+      if (postId) {
+        await updateScheduledCampaign(campaignId, (current) => ({
+          ...current,
+          slots: current.slots.map((currentSlot) =>
+            currentSlot.id === slotId
+              ? {
+                  ...currentSlot,
+                  ...generatedSlot,
+                  ...media.slotPatch,
+                  postId,
+                  status: "processing",
+                }
+              : currentSlot
+          ),
+        }));
+      }
+    }
 
     await updateScheduledCampaign(campaignId, (current) => ({
       ...current,
@@ -430,6 +472,7 @@ async function processScheduledCampaignSlot(
               postId,
               postedAt: new Date().toISOString(),
               processingLeaseUntil: null,
+              processingOwnerToken: null,
               lastError: null,
               detail: [generated.detail, mediaWarning].filter(Boolean).join(" | ") || null,
             }
@@ -456,6 +499,31 @@ async function processScheduledCampaignSlot(
       message,
       error
     );
+
+    // If Late already accepted the post, mark generated to avoid duplicate creates
+    const latest = await getScheduledCampaign(campaignId);
+    const latestSlot = latest?.slots.find((s) => s.id === slotId);
+    if (latestSlot?.postId?.trim()) {
+      await updateScheduledCampaign(campaignId, (campaign) => ({
+        ...campaign,
+        slots: campaign.slots.map((slot) =>
+          slot.id === slotId
+            ? {
+                ...slot,
+                status: "generated",
+                processingLeaseUntil: null,
+                processingOwnerToken: null,
+                lastError: null,
+                detail: [slot.detail, `Recovered after: ${message}`]
+                  .filter(Boolean)
+                  .join(" | "),
+              }
+            : slot
+        ),
+      }));
+      return { status: "generated" };
+    }
+
     await updateScheduledCampaign(campaignId, (campaign) => ({
       ...campaign,
       slots: campaign.slots.map((slot) =>
@@ -465,6 +533,7 @@ async function processScheduledCampaignSlot(
               status: "failed",
               lastError: message,
               processingLeaseUntil: null,
+              processingOwnerToken: null,
             }
           : slot
       ),
@@ -526,6 +595,7 @@ export async function runScheduledCampaign(
   const slotIds: string[] = [];
   const failures: NonNullable<ScheduledCampaignRunResult["failures"]> = [];
   for (const slot of campaign.slots) {
+    if (slot.postId?.trim()) continue;
     if (slot.status !== "pending_generation" && slot.status !== "failed") continue;
     processed++;
     slotIds.push(slot.id);

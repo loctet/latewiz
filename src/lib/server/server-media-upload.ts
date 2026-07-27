@@ -15,20 +15,51 @@ function getExtension(contentType: string, type: "image" | "video"): string {
   return type === "video" ? "mp4" : "png";
 }
 
+async function loadMediaBytes(
+  sourceUrl: string,
+  type: "image" | "video"
+): Promise<{ buffer: Buffer; contentType: string }> {
+  const trimmed = sourceUrl.trim();
+
+  if (trimmed.startsWith("data:")) {
+    const match =
+      /^data:([^;,]+)?(?:;charset=[^;,]+)?(?:;base64)?,(.*)$/i.exec(trimmed);
+    if (!match?.[2]) {
+      throw new Error(`Invalid ${type} data URL`);
+    }
+    const contentType =
+      match[1]?.trim() || (type === "video" ? "video/mp4" : "image/png");
+    const isBase64 = /;base64/i.test(trimmed);
+    const payload = match[2].replace(/\s+/g, "");
+    const buffer = isBase64
+      ? Buffer.from(payload, "base64")
+      : Buffer.from(decodeURIComponent(payload), "utf8");
+    if (!buffer.length) {
+      throw new Error(`Empty ${type} data URL`);
+    }
+    return { buffer, contentType };
+  }
+
+  const response = await fetch(trimmed);
+  if (!response.ok) {
+    throw new Error(`Failed to download ${type} before upload`);
+  }
+  const contentType =
+    response.headers.get("content-type") ??
+    (type === "video" ? "video/mp4" : "image/png");
+  return {
+    buffer: Buffer.from(await response.arrayBuffer()),
+    contentType,
+  };
+}
+
 export async function uploadMediaFromUrl(
   apiKey: string,
   sourceUrl: string,
   type: "image" | "video",
   filenamePrefix: string
 ): Promise<UploadedServerMedia> {
-  const response = await fetch(sourceUrl);
-  if (!response.ok) {
-    throw new Error(`Failed to download ${type} before upload`);
-  }
-
-  const contentType =
-    response.headers.get("content-type") ??
-    (type === "video" ? "video/mp4" : "image/png");
+  const { buffer, contentType } = await loadMediaBytes(sourceUrl, type);
   const extension = getExtension(contentType, type);
   const filename = `${filenamePrefix}.${extension}`;
 
@@ -42,7 +73,7 @@ export async function uploadMediaFromUrl(
 
   const uploadResponse = await fetch(data.uploadUrl, {
     method: "PUT",
-    body: Buffer.from(await response.arrayBuffer()),
+    body: new Uint8Array(buffer),
     headers: {
       "Content-Type": contentType,
     },
