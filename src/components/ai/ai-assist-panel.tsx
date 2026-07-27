@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import {
   useGenerateDraft,
   useGenerateImage,
@@ -31,6 +32,8 @@ import {
   ImageIcon,
   Film,
   SlidersHorizontal,
+  FileText,
+  ExternalLink,
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -50,14 +53,40 @@ interface AiAssistPanelProps {
   hint?: string;
 }
 
-/** Prefer draft text from the composer; keep any external hint as extra context. */
-function buildDraftHint(content: string, hint?: string): string | undefined {
-  const draft = content.trim();
-  const brief = hint?.trim();
-  if (draft && brief && draft !== brief) {
-    return `Brief: ${brief}\n\nExisting draft / notes to refine:\n${draft}`;
+/**
+ * Resolve what Deep / Suggest caption should research.
+ * Priority: Options research topic → compose box → external hint → niche (server).
+ */
+function buildDraftHint(params: {
+  content: string;
+  researchTopic: string;
+  hint?: string;
+}): string | undefined {
+  const topic = params.researchTopic.trim();
+  const draft = params.content.trim();
+  const brief = params.hint?.trim();
+
+  if (topic) {
+    if (draft && draft !== topic) {
+      return [
+        `Research topic: ${topic}`,
+        "",
+        "Additional context from the compose box (use only if relevant to the research topic):",
+        draft.slice(0, 2500),
+      ].join("\n");
+    }
+    return `Research topic: ${topic}`;
   }
-  return draft || brief || undefined;
+
+  if (draft) {
+    return [
+      "Research topic / brief from the composer (PRIMARY SUBJECT — stay on this):",
+      draft.slice(0, 3000),
+    ].join("\n");
+  }
+
+  if (brief) return `Research topic: ${brief}`;
+  return undefined;
 }
 
 export function AiAssistPanel({
@@ -69,7 +98,12 @@ export function AiAssistPanel({
 }: AiAssistPanelProps) {
   const [assistEnabled, setAssistEnabled] = useState(true);
   const [optionsOpen, setOptionsOpen] = useState(false);
-  const [referenceImageUrl, setReferenceImageUrl] = useState<string | undefined>();
+  const [researchTopic, setResearchTopic] = useState("");
+  const [lastPdfUrl, setLastPdfUrl] = useState<string | null>(null);
+  const [lastSource, setLastSource] = useState<string | null>(null);
+  const [referenceImageUrl, setReferenceImageUrl] = useState<
+    string | undefined
+  >();
   const aiMediaKind = useAiStore((s) => s.aiMediaKind);
   const setAiMediaKind = useAiStore((s) => s.setAiMediaKind);
   const videoProvider = useAiStore((s) => s.videoProvider);
@@ -83,17 +117,33 @@ export function AiAssistPanel({
   const uploadMutation = useUploadMedia();
 
   const configured = status?.openai_configured ?? false;
-  const draftHint = buildDraftHint(content, hint);
+  const draftHint = buildDraftHint({ content, researchTopic, hint });
 
   const applyDraft = async () => {
+    const depthId = useAiStore.getState().researchDepthId;
+    const nicheTopic = useAiStore.getState().niche.topic.trim();
+    const resolved = buildDraftHint({ content, researchTopic, hint });
+
+    if (depthId === "deep" && !resolved && !nicheTopic) {
+      toast.error("Add a research topic first", {
+        description:
+          "Type a topic in the compose box, or open Options → Research topic. Deep research needs a clear subject.",
+      });
+      setOptionsOpen(true);
+      return;
+    }
+
     try {
       notifyDeepResearchStarting();
       const r = await draftMutation.mutateAsync({
-        hint: draftHint,
+        hint: resolved,
         postPromptStyleId,
+        researchDepthId: depthId,
       });
       const parts = [r.draft.body, r.draft.hashtags].filter(Boolean);
       onContentChange(parts.join("\n\n"));
+      setLastPdfUrl(r.draft.pdfUrl?.trim() || null);
+      setLastSource(r.source);
       notifyDraftGenerationResult(r);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Generation failed");
@@ -120,7 +170,7 @@ export function AiAssistPanel({
       if (aiMediaKind === "video") {
         const r = await videoMutation.mutateAsync({
           captionContext,
-          prompt: hint,
+          prompt: researchTopic.trim() || hint,
         });
         if (!r.video_url) {
           toast.error(r.detail ?? "No video returned");
@@ -133,7 +183,7 @@ export function AiAssistPanel({
       } else {
         const r = await imageMutation.mutateAsync({
           captionContext,
-          prompt: hint,
+          prompt: researchTopic.trim() || hint,
           referenceImageUrl,
         });
         if (!r.image_url) {
@@ -238,12 +288,47 @@ export function AiAssistPanel({
                 )}
               />
             </Button>
-            <Button type="button" variant="ghost" size="sm" className="h-8" asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8"
+              asChild
+            >
               <Link href="/dashboard/ai-studio">Studio</Link>
             </Button>
           </div>
         )}
       </div>
+
+      {assistEnabled && (lastPdfUrl || lastSource) && (
+        <div className="flex flex-wrap items-center gap-2 px-3 pb-2">
+          {lastSource === "openai+deep-research" ? (
+            <span className="rounded-md bg-primary/15 px-2 py-0.5 text-[11px] font-medium text-primary">
+              Deep research used
+            </span>
+          ) : lastSource ? (
+            <span className="rounded-md bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:text-amber-200">
+              Standard generation (not deep)
+            </span>
+          ) : null}
+          {lastPdfUrl ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              asChild
+            >
+              <a href={lastPdfUrl} target="_blank" rel="noopener noreferrer">
+                <FileText className="mr-1.5 h-3 w-3" />
+                Full report (PDF)
+                <ExternalLink className="ml-1 h-3 w-3 opacity-70" />
+              </a>
+            </Button>
+          ) : null}
+        </div>
+      )}
 
       {!configured && assistEnabled && (
         <p className="px-3 pb-2 text-xs text-muted-foreground">
@@ -260,12 +345,29 @@ export function AiAssistPanel({
       )}
 
       {assistEnabled && optionsOpen && (
-        <div className="border-t border-primary/15 px-3 py-3 space-y-3 animate-in fade-in-0 slide-in-from-top-1 duration-200">
+        <div className="space-y-3 border-t border-primary/15 px-3 py-3 animate-in fade-in-0 slide-in-from-top-1 duration-200">
+          <div className="space-y-1.5">
+            <Label htmlFor="research-topic" className="text-xs">
+              Research topic
+            </Label>
+            <Input
+              id="research-topic"
+              value={researchTopic}
+              onChange={(e) => setResearchTopic(e.target.value)}
+              placeholder='e.g. "Bitcoin ETF flows this week" — overrides the compose box as the subject'
+              className="h-8 text-sm"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Empty compose box → uses this topic or your niche. Filled compose
+              box → that text is the subject (unless you set a research topic
+              here). Deep research may take several minutes and adds a PDF link.
+            </p>
+          </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <PostPromptStyleSelect
               variant="compose"
               compact
-              campaignGoal={draftHint ?? ""}
+              campaignGoal={draftHint ?? researchTopic ?? ""}
             />
             <ResearchDepthSelect compact />
             <AiMediaModeSelect

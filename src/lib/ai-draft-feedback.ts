@@ -43,7 +43,7 @@ export function notifyDraftGenerationResult(r: {
   if (r.source === "openai+deep-research") {
     toast.success(
       r.draft.pdfUrl
-        ? "Deep research ready — teaser + full PDF report."
+        ? "Deep research ready — teaser + See more PDF link."
         : "Deep research teaser ready (PDF link missing — check server logs)."
     );
     if (detail && /pdf/i.test(detail)) {

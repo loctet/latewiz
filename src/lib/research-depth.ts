@@ -82,7 +82,7 @@ export function buildDeepResearchTaskInstructions(): string {
     "Do not append parenthetical source domains like (kucoin.com) in the body.",
     "Do not end with a rhetorical question to the reader.",
     "Prefer specific levels, percentages, catalysts, and risks from the report; if evidence is thin, say so.",
-    "Do not invent or paste a PDF URL — the system appends the Full report link after generation.",
+    "Do not invent or paste a PDF URL — the system appends the See more (full PDF report) link after generation.",
     "Stay objective — do not reshape findings for a personal niche, target audience, or brand marketing angle.",
   ].join(" ");
 }
@@ -93,7 +93,7 @@ export function buildDeepResearchTeaserTaskInstructions(): string {
     "Target body length: 900–1100 characters (before hashtags). Hard max ~1100 characters.",
     "Structure: a punchy title, then 2–3 dense paragraphs covering the thesis, 1–2 specific data points, and the main risk or catalyst.",
     "Do NOT include long section headings like CORE ARCHITECTURE, TOKENOMICS tables, or multi-section blueprints — those belong in the PDF.",
-    "Do not invent a URL or write 'Full report:' — the system appends the PDF link after generation.",
+    "Do not invent a URL or write 'See more' / 'Full report:' — the system appends the PDF link after generation.",
     "Do not end with a rhetorical question. Stay objective and factual from the research report only.",
   ].join(" ");
 }
@@ -102,7 +102,7 @@ export function appendFullReportLink(body: string, pdfUrl: string): string {
   const trimmed = body.trim();
   if (!pdfUrl) return trimmed;
   if (trimmed.includes(pdfUrl)) return trimmed;
-  return `${trimmed}\n\nFull report: ${pdfUrl}`;
+  return `${trimmed}\n\nSee more (full PDF report): ${pdfUrl}`;
 }
 
 /**

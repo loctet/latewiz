@@ -328,7 +328,8 @@ GUIDELINES:
 5. If the brief is not in English, tell the researcher to respond in that language.
 6. Do not invent facts the user did not provide; mark unspecified dimensions as open-ended.
 7. Phrase the research request in the first person.
-8. CRITICAL — stay objective: do NOT tailor research to a personal brand niche, target audience persona, geography marketing angle, or content-calendar voice. Research the subject itself as an institutional analyst would.`;
+8. CRITICAL — stay on the user's primary subject. Do NOT switch to a different asset, market, or news theme.
+9. CRITICAL — stay objective: do NOT tailor research to a personal brand niche, target audience persona, geography marketing angle, or content-calendar voice. Research the subject itself as an institutional analyst would.`;
 
   try {
     const res = await fetch("https://api.openai.com/v1/responses", {
@@ -371,10 +372,11 @@ export function buildDeepResearchSystemInstructions(): string {
     `Today's date (UTC): ${today}.`,
     "You are a professional research analyst preparing a data-driven report.",
     "Do:",
+    "- Research ONLY the primary subject given by the user — do not switch topics.",
     "- Include specific figures, trends, statistics, and measurable outcomes when available.",
     "- Prioritize reliable, up-to-date sources.",
     "- Be analytical; avoid vague generalities and thin news digests.",
-    "- Structure the report with clear section headings.",
+    "- Structure the report with clear section headings (and tables when useful).",
     "- If evidence is thin or conflicting, say so explicitly.",
     "- Stay objective: do NOT bias the report toward a personal brand niche, target audience, or marketing persona.",
     "Do not invent prices, dates, or events.",

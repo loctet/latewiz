@@ -96,10 +96,22 @@ export async function generateDraft(
 
   const hintText = hint?.trim() ?? "";
   const topic = niche.topic.trim() || "your niche";
-  const subject = hintText || topic;
+  // Never invent a generic crypto subject — user brief wins, then niche topic.
+  const subject = (hintText || topic).trim();
   const goal = hintText || `Timely post for ${topic}`;
   const depthId = parseResearchDepthId(researchDepthId);
   const depth = getResearchDepth(depthId);
+
+  if (depthId === "deep" && !hintText && !niche.topic.trim()) {
+    return {
+      title: "Topic required",
+      body: "",
+      hashtags: "",
+      source: "fallback",
+      detail:
+        "Deep research needs a topic. Type one in the compose box (or Options → Research topic), or set your niche topic in Settings.",
+    };
+  }
 
   const postStyle = applyResearchDepthToPostStyle(
     resolvePostPromptStyle({
@@ -133,21 +145,31 @@ export async function generateDraft(
 
   const nicheContext = buildNicheUserContext(niche, { objectiveResearch });
 
+  const templateDeepHint =
+    depthId === "deep" && usePostTemplate
+      ? [
+          `Post template: ${postStyle.label} (${postStyle.id}).`,
+          `Expert role for the FULL PDF report: ${postStyle.expertRole}.`,
+          "The social caption must stay a short teaser; put the full institutional structure in the research report (PDF).",
+        ].join(" ")
+      : "";
+
   const userInput = [
     hintText
-      ? `Topic / brief (primary subject — search the web for the latest on it):\n${hintText}`
+      ? `PRIMARY SUBJECT (mandatory — research and write about THIS; do not substitute a different topic):\n${hintText}`
       : objectiveResearch
-        ? `Generate one objective research-backed post on the subject.`
+        ? `PRIMARY SUBJECT (mandatory):\n${subject}`
         : `Generate one timely post aligned with this niche.`,
+    templateDeepHint ? `\n${templateDeepHint}` : "",
     structureBlock ? `\n${structureBlock}` : "",
     depthId === "deep"
-      ? "\nDeep mode: produce a short social teaser (~1000 characters). Full analysis is delivered as a PDF."
+      ? "\nDeep mode: produce a short social teaser (~900–1100 characters) about the PRIMARY SUBJECT only. Full analysis is delivered as a PDF."
       : "",
     `\n${nicheContext}`,
     usePostTemplate && depthId !== "deep"
       ? "\nWrite ONE post following the structure above. Use web research for timely facts."
       : depthId === "deep"
-        ? "\nWrite one short teaser grounded in deep research."
+        ? "\nWrite one short teaser grounded in deep research on the PRIMARY SUBJECT."
         : "\nWrite one timely post grounded in current web research when available.",
   ]
     .filter(Boolean)
@@ -159,6 +181,7 @@ export async function generateDraft(
           "You write short professional social teasers from deep research.",
           "Return JSON with keys title, body, hashtags.",
           "Body target ~900–1100 characters.",
+          "Stay on the PRIMARY SUBJECT from the user message — never pivot to an unrelated theme.",
           SOCIAL_POST_FORMAT_INSTRUCTIONS,
         ].join(" ")
       : usePostTemplate
@@ -170,15 +193,20 @@ export async function generateDraft(
             SOCIAL_POST_FORMAT_INSTRUCTIONS,
           ].join(" ");
 
-  const maxOutputTokens = usePostTemplate ? postStyle.maxOutputTokens : undefined;
+  const maxOutputTokens =
+    depthId === "deep"
+      ? Math.min(postStyle.maxOutputTokens, 2048)
+      : usePostTemplate
+        ? postStyle.maxOutputTokens
+        : undefined;
 
   const newsIntent = isNewsIntent(hintText, goal);
-  const topicForSearch = objectiveResearch
-    ? (hintText || subject || "crypto market").trim()
-    : (topic || hintText || "industry").trim();
+  const topicForSearch = (hintText || subject || topic).trim();
   const researchSearchHint = newsIntent
     ? `${topicForSearch} news headlines today`.slice(0, 200)
-    : undefined;
+    : depthId === "deep" || isObjectiveResearchStyle(postStyle.id)
+      ? topicForSearch.slice(0, 200)
+      : undefined;
 
   try {
     const result = await generateStructuredContent<{
@@ -688,7 +716,7 @@ export async function generateCampaignSlot(
       // Exclude PDF URL line from length check for deep teasers
       const bodyForLength =
         depthId === "deep"
-          ? clean.body.replace(/\n\nFull report:\s*\S+/i, "").trim()
+          ? clean.body.replace(/\n\n(?:See more \(full PDF report\)|Full report):\s*\S+/i, "").trim()
           : clean.body;
       const body =
         depthId === "deep"

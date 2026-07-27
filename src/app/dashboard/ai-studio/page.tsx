@@ -85,6 +85,8 @@ export default function AiStudioPage() {
   const [generatedBody, setGeneratedBody] = useState("");
   const [generatedHashtags, setGeneratedHashtags] = useState("");
   const [pdfUrl, setPdfUrl] = useState("");
+  const [lastSource, setLastSource] = useState<string | null>(null);
+  const [lastDetail, setLastDetail] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
   const [referenceImageUrl, setReferenceImageUrl] = useState<
@@ -125,15 +127,19 @@ export default function AiStudioPage() {
       return;
     }
     try {
+      const researchDepthId = useAiStore.getState().researchDepthId;
       notifyDeepResearchStarting();
       const r = await draftMutation.mutateAsync({
         hint: hintPayload,
         postPromptStyleId,
+        researchDepthId,
       });
       setGeneratedTitle(r.draft.title);
       setGeneratedBody(r.draft.body);
       setGeneratedHashtags(r.draft.hashtags);
       setPdfUrl(r.draft.pdfUrl?.trim() || "");
+      setLastSource(r.source);
+      setLastDetail(r.detail ?? r.draft.detail ?? null);
       notifyDraftGenerationResult(r);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Generation failed");
@@ -511,6 +517,57 @@ export default function AiStudioPage() {
               )}
 
               <div className="space-y-3">
+                {lastSource ? (
+                  <div
+                    className={cn(
+                      "rounded-lg border px-3 py-2.5 text-sm",
+                      pdfUrl
+                        ? "border-primary/30 bg-primary/5"
+                        : "border-amber-500/30 bg-amber-500/10"
+                    )}
+                  >
+                    {pdfUrl ? (
+                      <>
+                        <p className="font-medium text-primary">
+                          Deep research PDF ready
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          The caption includes a{" "}
+                          <span className="font-medium">See more</span> link at
+                          the end. You can also open the PDF here:
+                        </p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="mt-2"
+                          asChild
+                        >
+                          <a
+                            href={pdfUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <FileText className="mr-2 h-4 w-4" />
+                            Open full PDF report
+                            <ExternalLink className="ml-1.5 h-3.5 w-3.5 opacity-70" />
+                          </a>
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <p className="font-medium text-amber-900 dark:text-amber-100">
+                          {lastSource === "openai+deep-research"
+                            ? "Deep research ran, but no PDF was saved"
+                            : "No PDF — Deep research did not complete"}
+                        </p>
+                        <p className="mt-1 text-xs text-amber-950/80 dark:text-amber-100/80">
+                          {lastDetail?.slice(0, 320) ||
+                            "The post below is a standard caption only. Deep research must finish successfully before a PDF and See more link are added."}
+                        </p>
+                      </>
+                    )}
+                  </div>
+                ) : null}
                 <div className="space-y-1.5">
                   <Label htmlFor="studio-title" className="text-xs">
                     Title
@@ -554,7 +611,7 @@ export default function AiStudioPage() {
                   <Button variant="outline" asChild>
                     <a href={pdfUrl} target="_blank" rel="noopener noreferrer">
                       <FileText className="mr-2 h-4 w-4" />
-                      Full report (PDF)
+                      Open full PDF report
                       <ExternalLink className="ml-1.5 h-3.5 w-3.5 opacity-70" />
                     </a>
                   </Button>
