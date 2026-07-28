@@ -836,8 +836,6 @@ export default function CampaignPlannerPage() {
       });
       if (r.source === "fallback" && r.detail) {
         toast.error(r.detail);
-      } else if (r.source === "openai+deep-research" && r.draft.pdfUrl) {
-        toast.success("Copy regenerated with full PDF report");
       } else {
         toast.success("Copy regenerated");
       }

@@ -21,7 +21,6 @@ import { useAiStore } from "@/stores";
 import type { AiMediaKind } from "@/lib/campaign-media";
 import { toast } from "sonner";
 import {
-  notifyDeepResearchStarting,
   notifyDraftGenerationResult,
 } from "@/lib/ai-draft-feedback";
 import {
@@ -32,8 +31,6 @@ import {
   ImageIcon,
   Film,
   SlidersHorizontal,
-  FileText,
-  ExternalLink,
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -99,7 +96,6 @@ export function AiAssistPanel({
   const [assistEnabled, setAssistEnabled] = useState(true);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [researchTopic, setResearchTopic] = useState("");
-  const [lastPdfUrl, setLastPdfUrl] = useState<string | null>(null);
   const [lastSource, setLastSource] = useState<string | null>(null);
   const [lastDetail, setLastDetail] = useState<string | null>(null);
   const [referenceImageUrl, setReferenceImageUrl] = useState<
@@ -128,14 +124,13 @@ export function AiAssistPanel({
     if (depthId === "deep" && !resolved && !nicheTopic) {
       toast.error("Add a research topic first", {
         description:
-          "Type a topic in the compose box, or open Options → Research topic. Deep research needs a clear subject.",
+          "Type a topic in the compose box, or open Options → Research topic.",
       });
       setOptionsOpen(true);
       return;
     }
 
     try {
-      notifyDeepResearchStarting();
       const r = await draftMutation.mutateAsync({
         hint: resolved,
         postPromptStyleId,
@@ -143,7 +138,6 @@ export function AiAssistPanel({
       });
       const parts = [r.draft.body, r.draft.hashtags].filter(Boolean);
       onContentChange(parts.join("\n\n"));
-      setLastPdfUrl(r.draft.pdfUrl?.trim() || null);
       setLastSource(r.source);
       setLastDetail(r.detail ?? r.draft.detail ?? null);
       notifyDraftGenerationResult(r);
@@ -303,37 +297,23 @@ export function AiAssistPanel({
         )}
       </div>
 
-      {assistEnabled && (lastPdfUrl || lastSource) && (
+      {assistEnabled && lastSource && (
         <div className="space-y-1.5 px-3 pb-2">
           <div className="flex flex-wrap items-center gap-2">
-            {lastSource === "openai+deep-research" ? (
+            {lastSource === "openai+web" ||
+            lastSource === "openai+fallback-search" ? (
               <span className="rounded-md bg-primary/15 px-2 py-0.5 text-[11px] font-medium text-primary">
-                Deep research used
+                Web research used
               </span>
-            ) : lastSource ? (
+            ) : (
               <span className="rounded-md bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:text-amber-200">
-                Standard generation (not deep)
+                Generated without confirmed web search
               </span>
-            ) : null}
-            {lastPdfUrl ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs"
-                asChild
-              >
-                <a href={lastPdfUrl} target="_blank" rel="noopener noreferrer">
-                  <FileText className="mr-1.5 h-3 w-3" />
-                  Full report (PDF)
-                  <ExternalLink className="ml-1 h-3 w-3 opacity-70" />
-                </a>
-              </Button>
-            ) : null}
+            )}
           </div>
-          {lastSource !== "openai+deep-research" && lastDetail ? (
-            <p className="text-[11px] leading-snug text-amber-800/90 dark:text-amber-100/80">
-              Why: {lastDetail.slice(0, 280)}
+          {lastDetail ? (
+            <p className="text-[11px] leading-snug text-muted-foreground">
+              {lastDetail.slice(0, 280)}
             </p>
           ) : null}
         </div>
@@ -369,7 +349,7 @@ export function AiAssistPanel({
             <p className="text-[11px] text-muted-foreground">
               Empty compose box → uses this topic or your niche. Filled compose
               box → that text is the subject (unless you set a research topic
-              here). Deep research may take several minutes and adds a PDF link.
+              here). Thorough depth uses higher web-search context.
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">

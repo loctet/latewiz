@@ -25,9 +25,9 @@ export interface DraftResult {
   title: string;
   body: string;
   hashtags: string;
-  source: "openai" | "openai+web" | "openai+fallback-search" | "openai+deep-research" | "stub" | "fallback";
+  source: "openai" | "openai+web" | "openai+fallback-search" | "stub" | "fallback";
   detail: string | null;
-  /** Public URL to the full deep-research PDF when Deep mode succeeds */
+  /** @deprecated Deep-research PDF path removed */
   pdfUrl?: string | null;
 }
 

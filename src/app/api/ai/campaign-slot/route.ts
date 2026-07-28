@@ -10,8 +10,8 @@ import { SessionRequiredError } from "@/lib/server/session";
 import { requireUserAiKeys } from "@/lib/server/ai-request-keys";
 import { resolveRequestOrigin } from "@/lib/server/app-url";
 
-/** Deep research can take several minutes (background + poll). */
-export const maxDuration = 800;
+/** Allow longer generation when thorough web search is selected. */
+export const maxDuration = 120;
 
 export async function POST(request: NextRequest) {
   try {

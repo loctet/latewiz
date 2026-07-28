@@ -2,6 +2,8 @@ export type WebSearchToolConfig = {
   type: "web_search";
   filters?: { allowed_domains: string[] };
   search_context_size?: "low" | "medium" | "high";
+  /** GPT-5+ reasoning web search — use "unlimited" for deep multi-page research */
+  return_token_budget?: "default" | "unlimited";
   external_web_access?: boolean;
 };
 

@@ -12,7 +12,9 @@ import {
   cleanReportTitleHint,
   cleanResearchReportText,
   isConversationalMetaResponse,
+  isRefusalOrRefusalEssay,
   MIN_PDF_REPORT_CHARS,
+  reportMatchesSubject,
 } from "@/lib/pdf/research-quality";
 import { renderResearchReportPdf } from "@/lib/pdf/render-research-pdf";
 import { saveGeneratedReportPdf } from "@/lib/server/generated-report-files";
@@ -84,9 +86,21 @@ async function expandToFullReport(params: {
   researchNotes: string;
   titleHint?: string;
 }): Promise<string | null> {
+  // Never expand refusals / off-topic meta into a fake long report
+  if (
+    isConversationalMetaResponse(params.researchNotes) ||
+    isRefusalOrRefusalEssay(params.researchNotes)
+  ) {
+    return null;
+  }
+  const subject = cleanReportTitleHint(params.titleHint);
+  if (subject && !reportMatchesSubject(params.researchNotes, subject)) {
+    return null;
+  }
+
   try {
     const model = resolveTextModel();
-    const subject = cleanReportTitleHint(params.titleHint) || "the subject";
+    const subjectLabel = subject || "the subject";
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -100,23 +114,25 @@ async function expandToFullReport(params: {
             role: "system",
             content: [
               "You turn research notes into a COMPLETE institutional PDF report.",
+              `The report MUST be about: ${subjectLabel}.`,
               `Write at least ${MIN_PDF_REPORT_CHARS} characters.`,
               "Use markdown ## section headings and tables where useful.",
               "Stay factual — only use claims supported by the notes; if thin, say evidence is limited.",
               "Do NOT ask questions, offer options, write hashtags, or write a social teaser.",
+              "If the notes are a model refusal or about something other than the subject, reply with exactly: OFF_TOPIC_REFUSAL",
               "Output the report body only.",
             ].join(" "),
           },
           {
             role: "user",
             content: [
-              `Subject: ${subject}`,
+              `Subject: ${subjectLabel}`,
               "",
               "=== RESEARCH NOTES ===",
               params.researchNotes.slice(0, 40_000),
               "=== END NOTES ===",
               "",
-              "Write the full institutional report now.",
+              `Write the full institutional report about ${subjectLabel} now.`,
             ].join("\n"),
           },
         ],
@@ -130,7 +146,11 @@ async function expandToFullReport(params: {
     const text = cleanResearchReportText(
       body.choices?.[0]?.message?.content ?? ""
     );
-    if (!text || isConversationalMetaResponse(text)) return null;
+    if (!text || /OFF_TOPIC_REFUSAL/i.test(text)) return null;
+    if (isConversationalMetaResponse(text) || isRefusalOrRefusalEssay(text)) {
+      return null;
+    }
+    if (subject && !reportMatchesSubject(text, subject)) return null;
     if (text.length < MIN_PDF_REPORT_CHARS) return null;
     return text;
   } catch {
@@ -150,13 +170,19 @@ export async function buildAndPersistResearchPdf(params: {
   skippedReason?: string;
 } | null> {
   try {
-    let assessment = assessResearchForPdf(params.researchReport);
+    let assessment = assessResearchForPdf(
+      params.researchReport,
+      params.titleHint
+    );
 
     // Expand short-but-usable notes into a full report before giving up
     if (
       !assessment.ok &&
       assessment.cleaned.length >= 400 &&
       !isConversationalMetaResponse(assessment.cleaned) &&
+      !isRefusalOrRefusalEssay(assessment.cleaned) &&
+      (!params.titleHint ||
+        reportMatchesSubject(assessment.cleaned, params.titleHint)) &&
       assessment.charCount < MIN_PDF_REPORT_CHARS
     ) {
       const expanded = await expandToFullReport({
@@ -165,7 +191,7 @@ export async function buildAndPersistResearchPdf(params: {
         titleHint: params.titleHint,
       });
       if (expanded) {
-        assessment = assessResearchForPdf(expanded);
+        assessment = assessResearchForPdf(expanded, params.titleHint);
       }
     }
 

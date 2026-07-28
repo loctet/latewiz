@@ -3,23 +3,14 @@ import {
   createResponseWithWebSearch,
   isNativeWebSearchPreferred,
   parseJsonFromModelOutput,
-  resolveTextModel,
   resolveTextModelForDepth,
 } from "./responses";
-import {
-  buildDeepResearchSystemInstructions,
-  rewritePromptForDeepResearch,
-  runDeepResearch,
-} from "./deep-research";
 import { buildNicheSystemInstructions } from "./niche-prompt";
 import { SOCIAL_POST_FORMAT_INSTRUCTIONS } from "./sanitize-post-text";
 import { buildTimelinessSystemInstructions } from "@/lib/web-search/content-research";
 import { appendWebResearchToUserMessage } from "@/lib/web-search/content-research";
 import type { ContentResearchParams } from "@/lib/web-search/build-query";
 import {
-  appendFullReportLink,
-  buildDeepResearchTaskInstructions,
-  buildDeepResearchTeaserTaskInstructions,
   getResearchDepth,
   parseResearchDepthId,
   type ResearchDepthId,
@@ -28,11 +19,8 @@ import {
 export type TextGenerationResult<T> = {
   data: T | null;
   detail: string | null;
-  source:
-    | "openai+web"
-    | "openai"
-    | "openai+fallback-search"
-    | "openai+deep-research";
+  source: "openai+web" | "openai" | "openai+fallback-search";
+  /** @deprecated Deep-research PDF path removed — always null */
   pdfUrl?: string | null;
 };
 
@@ -87,79 +75,9 @@ async function chatCompletionsJson<T>(params: {
   return { data: parseJsonFromModelOutput<T>(text), detail: null };
 }
 
-async function formatStructuredFromResearch<T>(params: {
-  apiKey: string;
-  taskInstructions: string;
-  userInput: string;
-  researchReport: string;
-  researchParams?: ContentResearchParams;
-  maxOutputTokens?: number;
-  teaserMode?: boolean;
-}): Promise<TextGenerationResult<T>> {
-  const formatModel = resolveTextModel();
-  const objective = Boolean(params.researchParams?.ignoreNicheBias);
-  const instructions = [
-    params.teaserMode
-      ? buildDeepResearchTeaserTaskInstructions()
-      : params.taskInstructions,
-    buildDeepResearchTaskInstructions(),
-    SOCIAL_POST_FORMAT_INSTRUCTIONS,
-    buildTimelinessSystemInstructions(),
-    params.researchParams
-      ? buildNicheSystemInstructions(params.researchParams.niche, {
-          objectiveResearch: objective,
-        })
-      : "",
-    "Use ONLY the Deep Research report below for timely facts. Do not invent additional news.",
-    objective
-      ? "Do not reshape the report to fit a personal niche, audience persona, or brand voice."
-      : "",
-    params.teaserMode
-      ? "Return JSON with title, body (~900–1100 chars), hashtags. Body is a teaser only."
-      : "",
-  ]
-    .filter(Boolean)
-    .join("\n\n");
-
-  const userInput = [
-    params.userInput,
-    "",
-    "=== OPENAI DEEP RESEARCH REPORT (authoritative) ===",
-    params.researchReport.slice(0, 48_000),
-    "=== END REPORT ===",
-    "",
-    params.teaserMode
-      ? "Write the short social teaser JSON now (not the full report)."
-      : "Write the social post JSON now, following the structure and quality bar in the instructions.",
-  ].join("\n");
-
-  // Deep research models lack structured outputs — format with the standard text model.
-  const chat = await chatCompletionsJson<T>({
-    apiKey: params.apiKey,
-    system: instructions,
-    user: userInput,
-    maxTokens: params.maxOutputTokens ?? 2048,
-    model: formatModel,
-  });
-
-  if (chat.data) {
-    return {
-      data: chat.data,
-      detail: chat.detail,
-      source: "openai+deep-research",
-    };
-  }
-
-  return {
-    data: null,
-    detail: chat.detail ?? "Failed to format deep research into a post",
-    source: "openai+deep-research",
-  };
-}
-
 /**
- * Generate structured JSON using OpenAI Responses API + web_search when possible.
- * Deep research mode: OpenAI o4-mini/o3-deep-research → then format to JSON.
+ * Generate structured JSON using the normal text model + web_search when possible.
+ * "Deep" depth only raises search context / result count — same model path.
  * Falls back to Tavily/Serper pre-fetch + Chat Completions, then plain Chat Completions.
  */
 export async function generateStructuredContent<T>(params: {
@@ -170,140 +88,11 @@ export async function generateStructuredContent<T>(params: {
   researchParams?: ContentResearchParams;
   maxOutputTokens?: number;
   researchDepthId?: ResearchDepthId | string | null;
-  /** Required to persist public PDF links for deep research */
+  /** Kept for API compat; unused after deep-research removal */
   userId?: string | null;
   titleHint?: string;
-  /** Override for absolute PDF URLs (request host) */
   publicOrigin?: string | null;
 }): Promise<TextGenerationResult<T>> {
-  const depthId = parseResearchDepthId(params.researchDepthId);
-
-  // Deep research is always objective — never bias toward workspace niche/audience
-  if (depthId === "deep") {
-    const researchParams = params.researchParams
-      ? { ...params.researchParams, ignoreNicheBias: true }
-      : undefined;
-
-    console.info("[text-generation] Deep research mode engaged");
-
-    const rewritten = await rewritePromptForDeepResearch({
-      apiKey: params.apiKey,
-      brief: params.userInput,
-    });
-
-    const research = await runDeepResearch({
-      apiKey: params.apiKey,
-      instructions: buildDeepResearchSystemInstructions(),
-      input: rewritten.prompt,
-    });
-
-    if (research.ok && research.outputText.trim()) {
-      let pdfUrl: string | null = null;
-      let pdfDetail: string | null = null;
-
-      const { assessResearchForPdf, cleanReportTitleHint } = await import(
-        "@/lib/pdf/research-quality"
-      );
-      const assessment = assessResearchForPdf(research.outputText);
-      const reportForTeaser = assessment.cleaned || research.outputText;
-      const titleHint = cleanReportTitleHint(params.titleHint);
-
-      if (!assessment.ok) {
-        // Try expand+PDF only when notes aren't chat fluff; otherwise skip PDF entirely
-        pdfDetail = assessment.reason ?? "PDF skipped";
-      }
-
-      if (params.userId?.trim()) {
-        const { buildAndPersistResearchPdf } = await import(
-          "@/lib/pdf/build-research-pdf"
-        );
-        const pdf = await buildAndPersistResearchPdf({
-          apiKey: params.apiKey,
-          userId: params.userId.trim(),
-          researchReport: research.outputText,
-          titleHint,
-          publicOrigin: params.publicOrigin,
-        });
-        if (pdf) {
-          pdfUrl = pdf.absoluteUrl;
-          pdfDetail = null;
-        } else if (!pdfDetail) {
-          pdfDetail =
-            "Deep research PDF skipped (report under 4500 chars or failed quality checks); teaser returned without link";
-        }
-      } else {
-        pdfDetail =
-          "Deep research PDF skipped (no user id); teaser returned without link";
-      }
-
-      // If research was pure chat fluff, treat deep as failed for teaser quality too
-      if (
-        assessment.reason?.includes("chat-style") &&
-        assessment.charCount < 1200
-      ) {
-        const deepFailDetail = assessment.reason;
-        console.warn(
-          "[text-generation] Deep research unusable, falling back:",
-          deepFailDetail
-        );
-        const fallback = await generateStructuredContentStandard<T>({
-          ...params,
-          researchParams,
-          researchDepthId: "standard",
-        });
-        return {
-          ...fallback,
-          detail: fallback.detail
-            ? `${deepFailDetail} | ${fallback.detail}`
-            : deepFailDetail,
-        };
-      }
-
-      const formatted = await formatStructuredFromResearch<T>({
-        apiKey: params.apiKey,
-        taskInstructions: params.taskInstructions,
-        userInput: params.userInput,
-        researchReport: reportForTeaser,
-        researchParams,
-        maxOutputTokens: Math.min(params.maxOutputTokens ?? 2048, 2048),
-        teaserMode: true,
-      });
-
-      if (formatted.data && pdfUrl) {
-        const row = formatted.data as { body?: unknown };
-        if (typeof row.body === "string") {
-          row.body = appendFullReportLink(row.body, pdfUrl);
-        }
-      }
-
-      const detailParts = [formatted.detail, pdfDetail].filter(Boolean);
-      return {
-        ...formatted,
-        pdfUrl,
-        detail: detailParts.length ? detailParts.join(" | ") : null,
-      };
-    }
-
-    // Fall through to standard generation if deep research fails
-    const deepFailDetail =
-      research.detail ??
-      "Deep research failed; falling back to standard generation";
-    console.warn("[text-generation] Deep research failed, falling back:", deepFailDetail);
-
-    const fallback = await generateStructuredContentStandard<T>({
-      ...params,
-      researchParams,
-      researchDepthId: "standard",
-    });
-
-    return {
-      ...fallback,
-      detail: fallback.detail
-        ? `${deepFailDetail} | ${fallback.detail}`
-        : deepFailDetail,
-    };
-  }
-
   return generateStructuredContentStandard<T>(params);
 }
 

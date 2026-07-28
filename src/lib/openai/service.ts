@@ -102,17 +102,6 @@ export async function generateDraft(
   const depthId = parseResearchDepthId(researchDepthId);
   const depth = getResearchDepth(depthId);
 
-  if (depthId === "deep" && !hintText && !niche.topic.trim()) {
-    return {
-      title: "Topic required",
-      body: "",
-      hashtags: "",
-      source: "fallback",
-      detail:
-        "Deep research needs a topic. Type one in the compose box (or Options → Research topic), or set your niche topic in Settings.",
-    };
-  }
-
   const postStyle = applyResearchDepthToPostStyle(
     resolvePostPromptStyle({
       styleId: postPromptStyleId,
@@ -128,31 +117,20 @@ export async function generateDraft(
   const usePostTemplate = postStyle.minBodyChars > 0;
   const objectiveResearch =
     depthId === "deep" || isObjectiveResearchStyle(postStyle.id);
-  // Deep mode: teaser only — skip long-form structure blocks (full report → PDF)
-  const structureBlock =
-    usePostTemplate && depthId !== "deep"
-      ? buildPostPromptStructureBlock(
-          postStyle,
-          {
-            subject,
-            goal,
-            slotNum: 1,
-            totalPosts: 1,
-          },
-          postPromptTemplates?.[postStyle.id]
-        )
-      : "";
+  const structureBlock = usePostTemplate
+    ? buildPostPromptStructureBlock(
+        postStyle,
+        {
+          subject,
+          goal,
+          slotNum: 1,
+          totalPosts: 1,
+        },
+        postPromptTemplates?.[postStyle.id]
+      )
+    : "";
 
   const nicheContext = buildNicheUserContext(niche, { objectiveResearch });
-
-  const templateDeepHint =
-    depthId === "deep" && usePostTemplate
-      ? [
-          `Post template: ${postStyle.label} (${postStyle.id}).`,
-          `Expert role for the FULL PDF report: ${postStyle.expertRole}.`,
-          "The social caption must stay a short teaser; put the full institutional structure in the research report (PDF).",
-        ].join(" ")
-      : "";
 
   const userInput = [
     hintText
@@ -160,45 +138,27 @@ export async function generateDraft(
       : objectiveResearch
         ? `PRIMARY SUBJECT (mandatory):\n${subject}`
         : `Generate one timely post aligned with this niche.`,
-    templateDeepHint ? `\n${templateDeepHint}` : "",
     structureBlock ? `\n${structureBlock}` : "",
-    depthId === "deep"
-      ? "\nDeep mode: produce a short social teaser (~900–1100 characters) about the PRIMARY SUBJECT only. Full analysis is delivered as a PDF."
-      : "",
     `\n${nicheContext}`,
-    usePostTemplate && depthId !== "deep"
+    usePostTemplate
       ? "\nWrite ONE post following the structure above. Use web research for timely facts."
-      : depthId === "deep"
-        ? "\nWrite one short teaser grounded in deep research on the PRIMARY SUBJECT."
-        : "\nWrite one timely post grounded in current web research when available.",
+      : "\nWrite one timely post grounded in current web research when available.",
   ]
     .filter(Boolean)
     .join("\n");
 
-  const taskInstructions =
-    depthId === "deep"
-      ? [
-          "You write short professional social teasers from deep research.",
-          "Return JSON with keys title, body, hashtags.",
-          "Body target ~900–1100 characters.",
-          "Stay on the PRIMARY SUBJECT from the user message — never pivot to an unrelated theme.",
-          SOCIAL_POST_FORMAT_INSTRUCTIONS,
-        ].join(" ")
-      : usePostTemplate
-        ? buildPostPromptTaskInstructions(postStyle)
-        : [
-            "You write concise, timely social media posts.",
-            "Return JSON with keys title, body, hashtags.",
-            "Prioritize recent developments from web research over generic or outdated claims.",
-            SOCIAL_POST_FORMAT_INSTRUCTIONS,
-          ].join(" ");
+  const taskInstructions = usePostTemplate
+    ? buildPostPromptTaskInstructions(postStyle)
+    : [
+        "You write concise, timely social media posts.",
+        "Return JSON with keys title, body, hashtags.",
+        "Prioritize recent developments from web research over generic or outdated claims.",
+        SOCIAL_POST_FORMAT_INSTRUCTIONS,
+      ].join(" ");
 
-  const maxOutputTokens =
-    depthId === "deep"
-      ? Math.min(postStyle.maxOutputTokens, 2048)
-      : usePostTemplate
-        ? postStyle.maxOutputTokens
-        : undefined;
+  const maxOutputTokens = usePostTemplate
+    ? postStyle.maxOutputTokens
+    : undefined;
 
   const newsIntent = isNewsIntent(hintText, goal);
   const topicForSearch = (hintText || subject || topic).trim();
@@ -228,7 +188,13 @@ export async function generateDraft(
       maxOutputTokens,
       researchDepthId: depthId,
       userId,
-      titleHint: subject.replace(/^Research topic[^\n]*:\s*/i, "").slice(0, 120),
+      titleHint: (() => {
+        const fromHint = hintText
+          .split("\n")
+          .map((l) => l.trim())
+          .find((l) => l && !/^Tone:\s*/i.test(l));
+        return (fromHint || subject).slice(0, 120);
+      })(),
       publicOrigin,
     });
 
@@ -546,19 +512,18 @@ export async function generateCampaignSlot(
     constraints.format !== "micro" && postStyle.minBodyChars > 0;
   const objectiveResearch =
     depthId === "deep" || isObjectiveResearchStyle(postStyle.id);
-  const structureBlock =
-    usePostTemplate && depthId !== "deep"
-      ? buildPostPromptStructureBlock(
-          postStyle,
-          {
-            subject: brief.subtopic,
-            goal,
-            slotNum,
-            totalPosts: params.totalPosts,
-          },
-          params.postPromptTemplates?.[postStyle.id]
-        )
-      : "";
+  const structureBlock = usePostTemplate
+    ? buildPostPromptStructureBlock(
+        postStyle,
+        {
+          subject: brief.subtopic,
+          goal,
+          slotNum,
+          totalPosts: params.totalPosts,
+        },
+        params.postPromptTemplates?.[postStyle.id]
+      )
+    : "";
 
   const priorBlock = formatPriorPostsBlock(params.previousPosts);
   const briefBlock = formatSlotBriefBlock(brief);
@@ -581,9 +546,6 @@ export async function generateCampaignSlot(
         : topic
           ? `Niche context (background only): ${topic}`
           : "",
-      depthId === "deep"
-        ? "Deep mode: short social teaser (~1000 chars). Full analysis is delivered as a PDF with a link in the post."
-        : "",
       "",
       briefBlock,
       formatBlock ? `\n${formatBlock}` : "",
@@ -600,9 +562,7 @@ export async function generateCampaignSlot(
       "",
       constraints.format === "micro"
         ? "Write ONE unique micro-message matching the goal format. Never copy or paraphrase prior posts."
-        : depthId === "deep"
-          ? "Write ONE short teaser for the assigned subtopic. Never reuse prior posts."
-          : "Write ONE post that delivers ONLY the assigned subtopic/angle. Never reuse opening lines, statistics, or arguments from prior posts.",
+        : "Write ONE post that delivers ONLY the assigned subtopic/angle. Never reuse opening lines, statistics, or arguments from prior posts.",
       retryNote ?? "",
     ]
       .filter(Boolean)
@@ -618,13 +578,6 @@ export async function generateCampaignSlot(
           "Title can be short (e.g. day number) or empty string.",
           SOCIAL_POST_FORMAT_INSTRUCTIONS,
         ].join(" ")
-      : depthId === "deep"
-        ? [
-            "You write short professional social teasers from deep research.",
-            "Return JSON only: {\"title\":\"...\",\"body\":\"...\",\"hashtags\":\"#a #b\"}.",
-            "Body target ~900–1100 characters — full report is a separate PDF.",
-            SOCIAL_POST_FORMAT_INSTRUCTIONS,
-          ].join(" ")
       : usePostTemplate
         ? buildPostPromptTaskInstructions(postStyle)
         : [
@@ -678,9 +631,7 @@ export async function generateCampaignSlot(
       const retryNote =
         attempt > 0
           ? lastBodyTooShort && postStyle.minBodyChars > 0
-            ? depthId === "deep"
-              ? `\n\nRETRY: Your previous body was too short (under ${postStyle.minBodyChars} characters). Write a denser ~1000-character teaser with thesis, data points, and risk/catalyst.`
-              : `\n\nRETRY: Your previous body was too short (under ${postStyle.minBodyChars} characters). Write the FULL structured analysis with all required sections and substantive paragraphs.`
+            ? `\n\nRETRY: Your previous body was too short (under ${postStyle.minBodyChars} characters). Write the FULL structured analysis with all required sections and substantive paragraphs.`
             : "\n\nRETRY: Your previous attempt duplicated an earlier post or ignored the goal format. Write something completely different that matches the goal."
           : undefined;
       lastBodyTooShort = false;
@@ -713,15 +664,8 @@ export async function generateCampaignSlot(
         hashtags: result.data.hashtags,
       });
 
-      // Exclude PDF URL line from length check for deep teasers
-      const bodyForLength =
-        depthId === "deep"
-          ? clean.body.replace(/\n\n(?:See more \(full PDF report\)|Full report):\s*\S+/i, "").trim()
-          : clean.body;
-      const body =
-        depthId === "deep"
-          ? clean.body
-          : enforceBodyLength(clean.body, constraints.maxBodyChars);
+      const bodyForLength = clean.body;
+      const body = enforceBodyLength(clean.body, constraints.maxBodyChars);
 
       if (
         postStyle.minBodyChars > 0 &&
