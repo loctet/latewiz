@@ -92,6 +92,12 @@ export default function PostsAllPage() {
         success: boolean;
         successCount: number;
         failureCount: number;
+        results?: Array<{
+          postId: string;
+          success: boolean;
+          message: string;
+          details?: string[];
+        }>;
       };
     },
     onSuccess: (result) => {
@@ -100,8 +106,16 @@ export default function PostsAllPage() {
       setConfirmDeleteOpen(false);
 
       if (result.failureCount > 0) {
+        const failed = (result.results ?? []).filter((r) => !r.success);
+        const sample = failed
+          .slice(0, 2)
+          .map((r) => {
+            const detail = r.details?.find((d) => d.startsWith("Failed to unpublish"));
+            return detail ?? r.message;
+          })
+          .join("; ");
         toast.warning(
-          `${result.successCount} deleted/unpublished, ${result.failureCount} failed`
+          `${result.successCount} removed, ${result.failureCount} incomplete${sample ? `: ${sample}` : ""}`
         );
         return;
       }
@@ -318,7 +332,10 @@ export default function PostsAllPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete selected posts?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will unpublish published posts from supported social platforms, then delete them from Zernio where possible. This action cannot be undone.
+              Each selected post will be unpublished from social platforms, then
+              deleted from Zernio. A post only counts as removed when the Zernio
+              record is gone. Instagram, TikTok, and Snapchat cannot be
+              unpublished via API.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
