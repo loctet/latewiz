@@ -16,6 +16,13 @@ type BulkDeleteInput = {
   }>;
 };
 
+type DeleteResult = {
+  postId: string;
+  success: boolean;
+  message: string;
+  details?: string[];
+};
+
 const UNPUBLISHABLE_PLATFORMS = new Set([
   "threads",
   "facebook",
@@ -41,6 +48,86 @@ function shouldUnpublish(postStatus: string | undefined, platformStatus: string 
   return postStatus === "published" || postStatus === "partial" || platformStatus === "published";
 }
 
+async function deleteOnePost(
+  apiKey: string,
+  post: NonNullable<BulkDeleteInput["posts"]>[number]
+): Promise<DeleteResult | null> {
+  const postId = post.postId?.trim();
+  if (!postId) return null;
+
+  const details: string[] = [];
+  const uniquePlatforms = Array.from(
+    new Set(
+      (post.platforms ?? [])
+        .map((p) => ({
+          platform: normalizePlatform(p.platform),
+          status: p.status?.toLowerCase(),
+        }))
+        .filter((p) => p.platform && UNPUBLISHABLE_PLATFORMS.has(p.platform))
+        .filter((p) => shouldUnpublish(post.status?.toLowerCase(), p.status))
+        .map((p) => p.platform as string)
+    )
+  );
+
+  const unpublishResults = await Promise.all(
+    uniquePlatforms.map(async (platform) => {
+      try {
+        await zernioRequest(apiKey, `/posts/${postId}/unpublish`, {
+          method: "POST",
+          body: { platform },
+        });
+        return { platform, ok: true as const };
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Unknown unpublish error";
+        return { platform, ok: false as const, message };
+      }
+    })
+  );
+
+  let unpublishFailures = 0;
+  for (const result of unpublishResults) {
+    if (!result.ok) {
+      unpublishFailures += 1;
+      details.push(`Failed to unpublish ${result.platform}: ${result.message}`);
+    }
+  }
+
+  let deleted = false;
+  try {
+    await zernioRequest(apiKey, `/posts/${postId}`, { method: "DELETE" });
+    deleted = true;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown delete error";
+    details.push(`Failed to delete post record: ${message}`);
+  }
+
+  if (deleted) {
+    return {
+      postId,
+      success: true,
+      message: "Deleted",
+      details: details.length > 0 ? details : undefined,
+    };
+  }
+
+  if (uniquePlatforms.length > 0 && unpublishFailures < uniquePlatforms.length) {
+    return {
+      postId,
+      success: true,
+      message: "Unpublished from social platforms but record deletion failed",
+      details,
+    };
+  }
+
+  return {
+    postId,
+    success: false,
+    message: "Delete failed",
+    details,
+  };
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { zernioApiKey: apiKey } = await requireUserZernioKey(request);
@@ -51,78 +138,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No posts provided" }, { status: 400 });
     }
 
-    const results: Array<{
-      postId: string;
-      success: boolean;
-      message: string;
-      details?: string[];
-    }> = [];
-
-    for (const post of posts) {
-      const postId = post.postId?.trim();
-      if (!postId) continue;
-
-      const details: string[] = [];
-      const uniquePlatforms = Array.from(
-        new Set(
-          (post.platforms ?? [])
-            .map((p) => ({
-              platform: normalizePlatform(p.platform),
-              status: p.status?.toLowerCase(),
-            }))
-            .filter((p) => p.platform && UNPUBLISHABLE_PLATFORMS.has(p.platform))
-            .filter((p) => shouldUnpublish(post.status?.toLowerCase(), p.status))
-            .map((p) => p.platform as string)
-        )
-      );
-
-      let unpublishFailures = 0;
-      for (const platform of uniquePlatforms) {
-        try {
-          await zernioRequest(apiKey, `/posts/${postId}/unpublish`, {
-            method: "POST",
-            body: { platform },
-          });
-        } catch (err) {
-          unpublishFailures += 1;
-          const message =
-            err instanceof Error ? err.message : "Unknown unpublish error";
-          details.push(`Failed to unpublish ${platform}: ${message}`);
-        }
-      }
-
-      let deleted = false;
-      try {
-        await zernioRequest(apiKey, `/posts/${postId}`, { method: "DELETE" });
-        deleted = true;
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Unknown delete error";
-        details.push(`Failed to delete post record: ${message}`);
-      }
-
-      if (deleted) {
-        results.push({
-          postId,
-          success: true,
-          message: "Deleted",
-          details: details.length > 0 ? details : undefined,
-        });
-      } else if (uniquePlatforms.length > 0 && unpublishFailures < uniquePlatforms.length) {
-        results.push({
-          postId,
-          success: true,
-          message: "Unpublished from social platforms but record deletion failed",
-          details,
-        });
-      } else {
-        results.push({
-          postId,
-          success: false,
-          message: "Delete failed",
-          details,
-        });
-      }
-    }
+    const settled = await Promise.all(
+      posts.map((post) => deleteOnePost(apiKey, post))
+    );
+    const results = settled.filter((r): r is DeleteResult => r !== null);
 
     const successCount = results.filter((r) => r.success).length;
     const failureCount = results.length - successCount;

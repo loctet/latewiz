@@ -25,7 +25,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-const PAGE_SIZE = 25;
+const PAGE_SIZE = 50;
 
 type PostRow = {
   _id: string;
@@ -228,7 +228,7 @@ export default function PostsAllPage() {
           </CardHeader>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           {posts.map((post) => {
             const scheduledText = post.scheduledFor
               ? format(parseISO(post.scheduledFor), "MMM d, yyyy, h:mm a")
@@ -341,7 +341,7 @@ export default function PostsAllPage() {
 
 function LoadingState() {
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 animate-pulse">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 animate-pulse">
       {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
         <div key={i} className="overflow-hidden rounded-xl border">
           <div className="h-32 bg-muted" />
