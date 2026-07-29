@@ -26,6 +26,7 @@ import {
   PenSquare,
   Calendar,
   Users,
+  Files,
   ListOrdered,
   MessageSquare,
   Sparkles,
@@ -56,6 +57,11 @@ const navItems = [
     label: "Calendar",
     href: "/dashboard/calendar",
     icon: Calendar,
+  },
+  {
+    label: "Posts",
+    href: "/dashboard/posts-all",
+    icon: Files,
   },
   {
     label: "Accounts",
