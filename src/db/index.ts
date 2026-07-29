@@ -34,6 +34,17 @@ export function isTursoConfigured(): boolean {
   return Boolean(process.env.TURSO_DATABASE_URL?.trim());
 }
 
+/**
+ * Use Turso only on Vercel, or when USE_TURSO=true.
+ * Local .env often contains Turso credentials for deploy — that must not
+ * silently switch local auth off of data/latewiz.db (breaks login).
+ */
+export function shouldUseTurso(): boolean {
+  if (!isTursoConfigured()) return false;
+  if (process.env.USE_TURSO === "true") return true;
+  return process.env.VERCEL === "1";
+}
+
 export function isEphemeralVercelDb(): boolean {
   return process.env.VERCEL === "1" && !isTursoConfigured();
 }
@@ -160,7 +171,7 @@ function createDb(): Db {
     );
   }
 
-  if (isTursoConfigured()) {
+  if (shouldUseTurso()) {
     const client = createClient({
       url: process.env.TURSO_DATABASE_URL!.trim(),
       authToken: process.env.TURSO_AUTH_TOKEN?.trim(),
@@ -168,6 +179,13 @@ function createDb(): Db {
     _libsql = client;
     _schemaReady = ensureLibsqlSchema(client);
     return drizzleLibsql(client, { schema }) as unknown as Db;
+  }
+
+  if (isTursoConfigured() && process.env.VERCEL !== "1") {
+    console.info(
+      "[latewiz] TURSO_DATABASE_URL is set but ignored locally. " +
+        "Using SQLite (data/latewiz.db). Set USE_TURSO=true to force Turso in local dev."
+    );
   }
 
   const dbPath = resolveSqlitePath();
