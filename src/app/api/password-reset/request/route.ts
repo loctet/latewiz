@@ -1,11 +1,18 @@
 import { randomBytes, randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { dbReady } from "@/db";
 import { user, verification } from "@/db/schema";
 import { sendPasswordResetEmail } from "@/lib/server/send-password-reset-email";
 
 function appOrigin(request: NextRequest): string {
+  // Prefer the request host so local emails stay on localhost.
+  const host = request.headers.get("x-forwarded-host") || request.headers.get("host");
+  const proto =
+    request.headers.get("x-forwarded-proto") ||
+    (host?.includes("localhost") ? "http" : "https");
+  if (host) return `${proto}://${host}`.replace(/\/$/, "");
+
   const fromEnv =
     process.env.BETTER_AUTH_URL?.trim() ||
     process.env.NEXT_PUBLIC_APP_URL?.trim();
@@ -21,7 +28,7 @@ function appOrigin(request: NextRequest): string {
 
 /**
  * Password reset request that fails the HTTP response when email delivery fails.
- * Better Auth's built-in endpoint always returns 200 and swallows Resend errors.
+ * Email links go directly to /reset-password?token=… (no Better Auth redirect hop).
  */
 export async function POST(request: NextRequest) {
   try {
@@ -34,7 +41,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Email is required" }, { status: 400 });
     }
 
-    const redirectTo = body.redirectTo?.trim() || "/reset-password";
     const db = await dbReady();
     const [found] = await db
       .select({
@@ -43,7 +49,7 @@ export async function POST(request: NextRequest) {
         email: user.email,
       })
       .from(user)
-      .where(eq(user.email, email))
+      .where(sql`lower(${user.email}) = ${email}`)
       .limit(1);
 
     // Don't reveal whether the account exists.
@@ -68,9 +74,8 @@ export async function POST(request: NextRequest) {
       updatedAt: now,
     });
 
-    const origin = appOrigin(request);
-    const callbackURL = encodeURIComponent(redirectTo);
-    const resetUrl = `${origin}/api/auth/reset-password/${token}?callbackURL=${callbackURL}`;
+    // Direct app link — avoids /api/auth/reset-password redirect losing the token.
+    const resetUrl = `${appOrigin(request)}/reset-password?token=${encodeURIComponent(token)}`;
 
     const sent = await sendPasswordResetEmail({
       to: found.email,
@@ -79,7 +84,6 @@ export async function POST(request: NextRequest) {
     });
 
     if (!sent.ok) {
-      // Clean up unused token so a failed send doesn't leave a dangling reset.
       await db
         .delete(verification)
         .where(eq(verification.identifier, `reset-password:${token}`));

@@ -30,14 +30,17 @@ export function SessionBootstrap({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (isPending) return;
 
-    const publicPaths = ["/", "/login", "/signup"];
-    const isPublic = publicPaths.includes(pathname);
+    const publicExact = new Set(["/", "/login", "/signup", "/forgot-password", "/reset-password"]);
+    const isPublic =
+      publicExact.has(pathname) ||
+      pathname === "/callback" ||
+      pathname.startsWith("/callback/");
 
     if (!session?.user) {
       unlockedFor.current = null;
       unlockInFlight.current = null;
       setApiKey(null);
-      if (!isPublic && pathname !== "/callback") {
+      if (!isPublic) {
         router.replace(`/login?next=${encodeURIComponent(pathname)}`);
       }
       return;
