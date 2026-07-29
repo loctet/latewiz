@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { resetPassword } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/shared/logo";
 import { toast } from "sonner";
@@ -75,9 +75,8 @@ function ResetPasswordForm() {
           >
             <div className="space-y-2">
               <Label htmlFor="password">New password</Label>
-              <Input
+              <PasswordInput
                 id="password"
-                type="password"
                 autoComplete="new-password"
                 required
                 minLength={8}
@@ -87,9 +86,8 @@ function ResetPasswordForm() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="confirm">Confirm password</Label>
-              <Input
+              <PasswordInput
                 id="confirm"
-                type="password"
                 autoComplete="new-password"
                 required
                 minLength={8}

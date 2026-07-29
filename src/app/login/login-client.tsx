@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/shared/logo";
 import { BRAND } from "@/lib/brand";
@@ -93,9 +94,8 @@ export default function LoginPage() {
                 Forgot password?
               </Link>
             </div>
-            <Input
+            <PasswordInput
               id="password"
-              type="password"
               autoComplete="current-password"
               required
               minLength={8}
