@@ -16,7 +16,7 @@ import {
   generatePostVideo,
   sanitizeSocialPostText,
 } from "@/lib/openai";
-import { createLateClient } from "@/lib/late-api";
+import { zernioRequest } from "@/lib/zernio-api";
 import { saveGeneratedImageFile, saveGeneratedVideoFile } from "@/lib/server/generated-media-files";
 import { uploadMediaFromUrl } from "@/lib/server/server-media-upload";
 import { getUserSecret, allowEnvKeyFallback } from "@/lib/server/vault";
@@ -238,6 +238,34 @@ async function maybeGenerateMedia(
   return { slotPatch: {} };
 }
 
+function extractPostId(data: unknown): string | null {
+  if (!data || typeof data !== "object") return null;
+  const record = data as Record<string, unknown>;
+  const direct =
+    (typeof record._id === "string" && record._id) ||
+    (typeof record.id === "string" && record.id) ||
+    null;
+  if (direct) return direct;
+
+  for (const key of ["post", "existingPost", "data"] as const) {
+    const nested = record[key];
+    if (nested && typeof nested === "object") {
+      const nestedRecord = nested as Record<string, unknown>;
+      const id =
+        (typeof nestedRecord._id === "string" && nestedRecord._id) ||
+        (typeof nestedRecord.id === "string" && nestedRecord.id) ||
+        null;
+      if (id) return id;
+    }
+  }
+  return null;
+}
+
+/**
+ * Create (or idempotently reuse) a Zernio post for this campaign slot.
+ * Deferred slots schedule for slot.scheduled_at — Zernio publishes later.
+ * Catch-up (scheduled time already past) uses publishNow once.
+ */
 async function createScheduledPost(
   campaign: ScheduledCampaign,
   slot: ScheduledCampaignSlot,
@@ -250,27 +278,43 @@ async function createScheduledPost(
     );
   }
 
-  const late = createLateClient(lateKey);
   const now = Date.now();
   const scheduledAtMs = new Date(slot.scheduled_at).getTime();
-  const publishNow = !Number.isNaN(scheduledAtMs) && scheduledAtMs <= now + 60_000;
-  const { data, error } = await late.posts.createPost({
-    body: {
-      content: sanitizeSocialPostText(slot.content || buildSlotContent(slot)),
-      mediaItems,
-      platforms: campaign.targets.map((target) => ({
-        platform: target.platform,
-        accountId: target.accountId,
-      })),
-      scheduledFor: publishNow ? undefined : slot.scheduled_at,
-      publishNow,
-      timezone: campaign.timezone,
+  // Generate ~1h early, then let Zernio hold until the scheduled time.
+  // Only publish immediately when the scheduled time has already passed.
+  const publishNow =
+    !Number.isNaN(scheduledAtMs) && scheduledAtMs <= now;
+
+  const requestId = `latewiz-campaign-${campaign.id}-slot-${slot.id}`;
+  const body = {
+    content: sanitizeSocialPostText(slot.content || buildSlotContent(slot)),
+    mediaItems,
+    platforms: campaign.targets.map((target) => ({
+      platform: target.platform,
+      accountId: target.accountId,
+    })),
+    scheduledFor: publishNow ? undefined : slot.scheduled_at,
+    publishNow,
+    timezone: campaign.timezone,
+  };
+
+  const data = await zernioRequest<unknown>(lateKey, "/posts", {
+    method: "POST",
+    body,
+    headers: {
+      // Zernio same-request idempotency — retries must not create duplicates.
+      "x-request-id": requestId,
     },
   });
-  if (error) {
-    throw error;
+
+  const postId = extractPostId(data);
+  if (!postId) {
+    console.warn(
+      "Zernio createPost returned no post id; response:",
+      typeof data === "object" ? JSON.stringify(data).slice(0, 500) : data
+    );
   }
-  return (data as { _id?: string; id?: string } | null)?._id ?? data?.id ?? null;
+  return postId;
 }
 
 type SlotProcessResult = {
@@ -344,6 +388,25 @@ async function processScheduledCampaignSlot(
     const slot = sortedSlots[slotIndex];
     if (!slot) return { status: "skipped" };
 
+    // If a previous attempt already scheduled/published this slot, never recreate.
+    if (slot.postId?.trim()) {
+      await updateScheduledCampaign(campaignId, (current) => ({
+        ...current,
+        slots: current.slots.map((currentSlot) =>
+          currentSlot.id === slotId
+            ? {
+                ...currentSlot,
+                status: "generated",
+                processingLeaseUntil: null,
+                processingOwnerToken: null,
+                lastError: null,
+              }
+            : currentSlot
+        ),
+      }));
+      return { status: "generated" };
+    }
+
     const previousPosts = sortedSlots
       .slice(0, slotIndex)
       .filter((item) => item.status === "generated" && item.body.trim())
@@ -353,54 +416,70 @@ async function processScheduledCampaignSlot(
         hashtags: item.hashtags,
       }));
 
-    const generated = await generateCampaignSlot(openaiKey, campaign.niche, {
-      campaignGoal: campaign.campaignGoal,
-      slotIndex,
-      totalPosts: sortedSlots.length,
-      scheduledAt: slot.scheduled_at,
-      previousPosts,
-      campaignHint: campaign.campaignHint || undefined,
-      trendSnippets: campaign.trendBlock
-        .split("\n")
-        .map((value) => value.trim())
-        .filter(Boolean),
-      slotBrief: slot.brief,
-      coveredSubtopics: sortedSlots
-        .slice(0, slotIndex)
-        .map((item) => item.brief?.subtopic)
-        .filter((value): value is string => Boolean(value)),
-      postPromptStyleId: campaign.postPromptStyleId,
-      postPromptTemplates: campaign.postPromptTemplates,
-      customPostPromptStyles: campaign.customPostPromptStyles,
-      researchDepthId: campaign.researchDepthId,
-      isListMode: campaign.campaignMode === "list",
-      userId: campaign.userId,
-    });
+    // Reuse copy from a partial previous attempt (avoid regenerating on retry).
+    let generatedSlot: ScheduledCampaignSlot;
+    const canReuseCopy =
+      Boolean(slot.body?.trim()) &&
+      Boolean(slot.generatedAt) &&
+      slot.source !== "stub" &&
+      slot.source !== "fallback";
 
-    if (!generated.post.body.trim()) {
-      throw new Error(generated.detail ?? "Campaign slot generation returned no body.");
-    }
-    if (generated.source === "stub" || generated.source === "fallback") {
-      throw new Error(
-        generated.detail ??
-          "Scheduled campaign generation needs live AI output; fallback copy is not published automatically."
-      );
-    }
+    if (canReuseCopy) {
+      generatedSlot = {
+        ...slot,
+        content: slot.content || buildSlotContent(slot),
+        lastError: null,
+      };
+    } else {
+      const generated = await generateCampaignSlot(openaiKey, campaign.niche, {
+        campaignGoal: campaign.campaignGoal,
+        slotIndex,
+        totalPosts: sortedSlots.length,
+        scheduledAt: slot.scheduled_at,
+        previousPosts,
+        campaignHint: campaign.campaignHint || undefined,
+        trendSnippets: campaign.trendBlock
+          .split("\n")
+          .map((value) => value.trim())
+          .filter(Boolean),
+        slotBrief: slot.brief,
+        coveredSubtopics: sortedSlots
+          .slice(0, slotIndex)
+          .map((item) => item.brief?.subtopic)
+          .filter((value): value is string => Boolean(value)),
+        postPromptStyleId: campaign.postPromptStyleId,
+        postPromptTemplates: campaign.postPromptTemplates,
+        customPostPromptStyles: campaign.customPostPromptStyles,
+        researchDepthId: campaign.researchDepthId,
+        isListMode: campaign.campaignMode === "list",
+        userId: campaign.userId,
+      });
 
-    const generatedSlot: ScheduledCampaignSlot = {
-      ...slot,
-      title: generated.post.title,
-      body: generated.post.body,
-      hashtags: generated.post.hashtags,
-      content: [generated.post.body, generated.post.hashtags]
-        .filter(Boolean)
-        .join("\n\n"),
-      source: generated.source,
-      detail: generated.detail,
-      pdfUrl: generated.post.pdfUrl ?? null,
-      generatedAt: new Date().toISOString(),
-      lastError: null,
-    };
+      if (!generated.post.body.trim()) {
+        throw new Error(generated.detail ?? "Campaign slot generation returned no body.");
+      }
+      if (generated.source === "stub" || generated.source === "fallback") {
+        throw new Error(
+          generated.detail ??
+            "Scheduled campaign generation needs live AI output; fallback copy is not published automatically."
+        );
+      }
+
+      generatedSlot = {
+        ...slot,
+        title: generated.post.title,
+        body: generated.post.body,
+        hashtags: generated.post.hashtags,
+        content: [generated.post.body, generated.post.hashtags]
+          .filter(Boolean)
+          .join("\n\n"),
+        source: generated.source,
+        detail: generated.detail,
+        pdfUrl: generated.post.pdfUrl ?? null,
+        generatedAt: new Date().toISOString(),
+        lastError: null,
+      };
+    }
 
     // Persist copy while still processing so a crash mid-publish doesn't lose work
     await updateScheduledCampaign(campaignId, (current) => ({
@@ -419,15 +498,30 @@ async function processScheduledCampaignSlot(
       ),
     }));
 
-    const media = await maybeGenerateMedia(
-      campaign,
-      generatedSlot,
-      lateKey,
-      openaiKey,
-      falKey,
-      userId
-    );
-    const mediaWarning = media.warning?.trim() || "";
+    // Reuse uploaded media URLs when present to avoid regenerating images on retry.
+    let mediaItems: Array<{ type: "image" | "video"; url: string }> | undefined;
+    let mediaSlotPatch: Partial<ScheduledCampaignSlot> = {};
+    let mediaWarning = "";
+
+    const existingImage = generatedSlot.image_url?.trim();
+    const existingVideo = generatedSlot.video_url?.trim();
+    if (campaign.mediaMode === "image" && existingImage?.startsWith("http")) {
+      mediaItems = [{ type: "image", url: existingImage }];
+    } else if (campaign.mediaMode === "video" && existingVideo?.startsWith("http")) {
+      mediaItems = [{ type: "video", url: existingVideo }];
+    } else {
+      const media = await maybeGenerateMedia(
+        campaign,
+        generatedSlot,
+        lateKey,
+        openaiKey,
+        falKey,
+        userId
+      );
+      mediaItems = media.mediaItems;
+      mediaSlotPatch = media.slotPatch;
+      mediaWarning = media.warning?.trim() || "";
+    }
 
     // Idempotency: if a previous attempt already created the Late post, reuse it
     const latest = (await getScheduledCampaign(campaignId)) ?? campaign;
@@ -439,10 +533,10 @@ async function processScheduledCampaignSlot(
         campaign,
         {
           ...generatedSlot,
-          ...media.slotPatch,
+          ...mediaSlotPatch,
         },
         lateKey,
-        media.mediaItems
+        mediaItems
       );
       // Save postId immediately so a later crash won't create a duplicate
       if (postId) {
@@ -453,13 +547,30 @@ async function processScheduledCampaignSlot(
               ? {
                   ...currentSlot,
                   ...generatedSlot,
-                  ...media.slotPatch,
+                  ...mediaSlotPatch,
                   postId,
-                  status: "processing",
+                  status: "generated",
+                  postedAt: new Date().toISOString(),
+                  processingLeaseUntil: null,
+                  processingOwnerToken: null,
+                  lastError: null,
+                  detail:
+                    [generatedSlot.detail, mediaWarning]
+                      .filter(Boolean)
+                      .join(" | ") || null,
                 }
               : currentSlot
           ),
+          status: computeCampaignStatus(
+            current.slots.map((currentSlot) =>
+              currentSlot.id === slotId
+                ? { ...currentSlot, status: "generated" }
+                : currentSlot
+            ),
+            current.status
+          ),
         }));
+        return { status: "generated" };
       }
     }
 
@@ -470,14 +581,17 @@ async function processScheduledCampaignSlot(
           ? {
               ...currentSlot,
               ...generatedSlot,
-              ...media.slotPatch,
+              ...mediaSlotPatch,
               status: "generated",
               postId,
               postedAt: new Date().toISOString(),
               processingLeaseUntil: null,
               processingOwnerToken: null,
               lastError: null,
-              detail: [generated.detail, mediaWarning].filter(Boolean).join(" | ") || null,
+              detail:
+                [generatedSlot.detail, mediaWarning]
+                  .filter(Boolean)
+                  .join(" | ") || null,
             }
           : currentSlot
       ),

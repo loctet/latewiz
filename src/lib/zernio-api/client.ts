@@ -30,6 +30,7 @@ export async function zernioRequest<T>(
     method?: string;
     query?: Record<string, string | number | boolean | undefined | null>;
     body?: unknown;
+    headers?: Record<string, string>;
   } = {}
 ): Promise<T> {
   const method = options.method ?? "GET";
@@ -45,6 +46,7 @@ export async function zernioRequest<T>(
   const headers: Record<string, string> = {
     Authorization: `Bearer ${apiKey}`,
     Accept: "application/json",
+    ...options.headers,
   };
 
   if (isBrowser) {

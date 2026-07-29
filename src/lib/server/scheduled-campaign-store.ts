@@ -330,8 +330,9 @@ export async function getDueScheduledCampaignSlots(now = Date.now()): Promise<
     for (const slot of campaign.slots) {
       // Already published to Late — never re-generate / re-create
       if (slot.postId?.trim()) continue;
-      if (slot.status !== "pending_generation" && slot.status !== "failed")
-        continue;
+      // Cron only picks pending slots. Failed slots need a manual re-run
+      // (auto-retrying "failed" every minute caused dozens of duplicate publishes).
+      if (slot.status !== "pending_generation") continue;
       const dueAt =
         new Date(slot.scheduled_at).getTime() -
         campaign.generationLeadMinutes * 60_000;
