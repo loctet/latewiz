@@ -2,7 +2,6 @@
 
 import { FormEvent, useState } from "react";
 import Link from "next/link";
-import { forgetPassword } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,16 +18,30 @@ export default function ForgotPasswordPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      const result = await forgetPassword({
-        email,
-        redirectTo: "/reset-password",
+      const response = await fetch("/api/password-reset/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          redirectTo: "/reset-password",
+        }),
       });
-      if (result.error) {
-        toast.error(result.error.message || "Could not send reset email");
+      const json = (await response.json()) as {
+        error?: string;
+        message?: string;
+        status?: boolean;
+      };
+
+      if (!response.ok) {
+        toast.error(json.error || "Could not send reset email");
         return;
       }
+
       setSent(true);
-      toast.success("If that email exists, a reset link was sent.");
+      toast.success(
+        json.message ||
+          "If that email exists, a reset link was sent."
+      );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not send reset email");
     } finally {
