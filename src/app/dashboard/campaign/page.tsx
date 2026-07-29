@@ -26,6 +26,7 @@ import { buildCampaignSlotTimes } from "@/lib/openai/campaign-slots";
 import { sanitizeSocialPostText } from "@/lib/openai/sanitize-post-text";
 import {
   assignListItemSlotBrief,
+  assignDeferredGoalSlotBrief,
   parseCampaignListItems,
   slotBriefToAiInstruction,
 } from "@/lib/openai/campaign-arc";
@@ -644,6 +645,41 @@ export default function CampaignPlannerPage() {
     }));
     setSlots(emptySlots);
     setDraftRestored(true);
+
+    // Deferred: schedule only — no AI. Cron generates later with saved
+    // prompt + research depth + goal (or list item).
+    if (isDeferredMode) {
+      const deferredSlots: CampaignSlotDraft[] = slotTimes.map(
+        (scheduled_at, i) => {
+          const brief = isListMode
+            ? assignListItemSlotBrief(listModeItems[i], i, total, goal)
+            : assignDeferredGoalSlotBrief(i, total, goal);
+          return {
+            scheduled_at,
+            title: "",
+            body: "",
+            hashtags: "",
+            content: "",
+            aiInstruction: isListMode
+              ? listModeItems[i]
+              : goal,
+            generationStatus: "pending_generation" as const,
+            imagePromptStyleId,
+            videoPromptStyleId: useAiStore.getState().videoPromptStyleId,
+            brief,
+          };
+        }
+      );
+      setSlots(deferredSlots);
+      toast.success(
+        isListMode
+          ? `Planned ${total} deferred slot${total === 1 ? "" : "s"} from your list — content generates near publish`
+          : `Planned ${total} deferred slot${total === 1 ? "" : "s"} — content generates near publish using your prompt`
+      );
+      setStudioPhase("review");
+      return;
+    }
+
     setGeneratingProgress({
       current: 0,
       total,
@@ -676,54 +712,6 @@ export default function CampaignPlannerPage() {
         });
         outlineBeats = outline.beats;
         if (outline.source === "stub") hadStub = true;
-      }
-
-      if (isDeferredMode) {
-        const deferredSlots: CampaignSlotDraft[] = slotTimes.map(
-          (scheduled_at, i) => {
-            const brief = outlineBeats[i];
-            return {
-              scheduled_at,
-              title: "",
-              body: "",
-              hashtags: "",
-              content: "",
-              aiInstruction: brief
-                ? slotBriefToAiInstruction({
-                    ...brief,
-                    phase: brief.phase as
-                      | "intro"
-                      | "build"
-                      | "deepen"
-                      | "apply"
-                      | "close",
-                  })
-                : "",
-              generationStatus: "pending_generation",
-              imagePromptStyleId,
-              videoPromptStyleId: useAiStore.getState().videoPromptStyleId,
-              brief: brief
-                ? {
-                    ...brief,
-                    phase: brief.phase as
-                      | "intro"
-                      | "build"
-                      | "deepen"
-                      | "apply"
-                      | "close",
-                  }
-                : undefined,
-            };
-          }
-        );
-        setSlots(deferredSlots);
-        toast.success(
-          isListMode
-            ? `Planned ${total} deferred slot${total === 1 ? "" : "s"} from your list`
-            : `Planned ${total} deferred campaign slot${total === 1 ? "" : "s"}`
-        );
-        setStudioPhase("review");
-        return;
       }
 
       setGeneratingProgress({ current: 0, total, phase: "posts" });
@@ -1328,6 +1316,12 @@ export default function CampaignPlannerPage() {
                 {isDeferredMode && !status?.scheduled_campaigns_configured ? (
                   <p className="text-[11px] text-destructive">
                     Needs Zernio + OpenAI keys in Settings vault.
+                  </p>
+                ) : isDeferredMode ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    Plans schedule only — no AI yet. Near publish, each slot
+                    uses your post prompt, research depth, and goal
+                    {isListMode ? " (or list item)" : ""}.
                   </p>
                 ) : null}
               </div>

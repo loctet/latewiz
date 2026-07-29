@@ -221,7 +221,14 @@ export function CampaignSlotCard({
           )}
           {deferredMode && (
             <p className="text-xs text-muted-foreground">
-              Final copy and media generate near publish time.
+              No content yet — cron generates near publish using your post prompt
+              and research depth
+              {slot.aiInstruction?.trim()
+                ? `, with focus: ${slot.aiInstruction.trim().slice(0, 72)}${
+                    slot.aiInstruction.trim().length > 72 ? "…" : ""
+                  }`
+                : ""}
+              .
             </p>
           )}
           {slot.lastError ? (

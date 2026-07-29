@@ -103,6 +103,29 @@ export function assignFallbackSlotBrief(
   };
 }
 
+/**
+ * Local brief for deferred campaigns — no AI outline.
+ * Subject is the campaign goal so cron generation uses prompt + goal
+ * (e.g. daily news roundup) without inventing a content arc upfront.
+ */
+export function assignDeferredGoalSlotBrief(
+  slotIndex: number,
+  totalPosts: number,
+  campaignGoal: string
+): CampaignSlotBrief {
+  const goal = campaignGoal.trim() || "Grow audience engagement";
+  const slotNum = slotIndex + 1;
+  return {
+    slotIndex,
+    phase: phaseForSlot(slotIndex, totalPosts),
+    beat: "deferred scheduled generation",
+    subtopic: goal,
+    angle: `Scheduled post ${slotNum}/${totalPosts} — follow the selected post prompt`,
+    keyPoint: `Produce fresh copy for this slot from the campaign goal using the selected prompt and research depth.`,
+    searchHint: goal.slice(0, 200),
+  };
+}
+
 export function outlineBeatToSlotBrief(
   slotIndex: number,
   totalPosts: number,
