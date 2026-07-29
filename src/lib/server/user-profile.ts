@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { getDb } from "@/db";
+import { dbReady } from "@/db";
 import { userProfiles } from "@/db/schema";
 import {
   defaultNicheProfile,
@@ -21,7 +21,7 @@ export type UserProfileRecord = {
 export async function getUserProfile(
   userId: string
 ): Promise<UserProfileRecord | null> {
-  const [row] = await getDb()
+  const [row] = await (await dbReady())
     .select()
     .from(userProfiles)
     .where(eq(userProfiles.userId, userId))
@@ -56,7 +56,7 @@ export async function upsertUserProfile(
     patch.onboardingCompleted ?? existing?.onboardingCompleted ?? false;
 
   if (existing) {
-    await getDb()
+    await (await dbReady())
       .update(userProfiles)
       .set({
         niche,
@@ -66,7 +66,7 @@ export async function upsertUserProfile(
       })
       .where(eq(userProfiles.userId, userId));
   } else {
-    await getDb().insert(userProfiles).values({
+    await (await dbReady()).insert(userProfiles).values({
       userId,
       niche,
       contentPrefs,

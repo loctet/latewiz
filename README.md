@@ -45,7 +45,23 @@ Open [http://localhost:3000](http://localhost:3000), sign up, complete onboardin
 
 **Recommended for SQLite:** Docker, Railway, a VPS, or any host with a **persistent disk**. Point cron at `/api/cron/campaigns` with `Authorization: Bearer $CRON_SECRET`.
 
-**Vercel note:** serverless disks are ephemeral. Without a mounted volume the DB resets between deploys (falls back to `/tmp/latewiz.db`). Prefer Docker/Railway if you need durable multi-user data with a simple SQLite file.
+**Vercel note:** serverless disks are ephemeral. Without a persistent DB, accounts are stored in `/tmp` and **login will fail** after signup (“Invalid email or password”). For Vercel you **must** use [Turso](https://turso.tech):
+
+```
+TURSO_DATABASE_URL=libsql://...
+TURSO_AUTH_TOKEN=...
+```
+
+Also set `BETTER_AUTH_URL` / `NEXT_PUBLIC_APP_URL` to your production URL (e.g. `https://latewiz.com`).
+
+Password reset needs email delivery:
+
+```
+RESEND_API_KEY=re_...
+EMAIL_FROM=LateWiz <noreply@yourdomain.com>
+```
+
+Prefer Docker/Railway/a VPS with a persistent disk if you want a simple local SQLite file instead of Turso.
 
 Optional Google OAuth:
 
@@ -79,7 +95,11 @@ NEXT_PUBLIC_GOOGLE_AUTH_ENABLED=true
 | `BETTER_AUTH_URL` | Yes | Public origin for auth callbacks |
 | `VAULT_MASTER_KEY` | Yes | 32-byte key as 64 hex chars or base64 |
 | `NEXT_PUBLIC_APP_URL` | Yes | Public app URL |
-| `SQLITE_PATH` | No | SQLite file path (default `./data/latewiz.db`) |
+| `TURSO_DATABASE_URL` | **Yes on Vercel** | Turso/libSQL URL (persistent SQLite) |
+| `TURSO_AUTH_TOKEN` | **Yes on Vercel** | Turso auth token |
+| `RESEND_API_KEY` | For password reset | Sends reset emails via [Resend](https://resend.com) |
+| `EMAIL_FROM` | With Resend | e.g. `LateWiz <noreply@yourdomain.com>` |
+| `SQLITE_PATH` | No | Local SQLite file path (default `./data/latewiz.db`) |
 | `CRON_SECRET` | Recommended | Protects deferred campaign cron |
 | `ALLOW_ENV_KEY_FALLBACK` | No | `true` allows `LATE_API_KEY` / `OPENAI_API_KEY` for solo local only |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | No | Google sign-in |

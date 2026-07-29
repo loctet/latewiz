@@ -2,7 +2,7 @@ import "server-only";
 
 import { createCipheriv, createDecipheriv, randomBytes, randomUUID } from "crypto";
 import { and, eq } from "drizzle-orm";
-import { getDb } from "@/db";
+import { dbReady } from "@/db";
 import {
   secretKindValues,
   userSecrets,
@@ -96,7 +96,7 @@ export type VaultStatus = {
 };
 
 export async function getVaultStatus(userId: string): Promise<VaultStatus> {
-  const rows = await getDb()
+  const rows = await (await dbReady())
     .select({
       kind: userSecrets.kind,
       keyHint: userSecrets.keyHint,
@@ -122,7 +122,7 @@ export async function getUserSecret(
   userId: string,
   kind: SecretKind
 ): Promise<string | null> {
-  const [row] = await getDb()
+  const [row] = await (await dbReady())
     .select()
     .from(userSecrets)
     .where(and(eq(userSecrets.userId, userId), eq(userSecrets.kind, kind)))
@@ -147,14 +147,14 @@ export async function upsertUserSecret(
   }
   const encrypted = encryptSecret(trimmed);
   const now = new Date();
-  const existing = await getDb()
+  const existing = await (await dbReady())
     .select({ id: userSecrets.id })
     .from(userSecrets)
     .where(and(eq(userSecrets.userId, userId), eq(userSecrets.kind, kind)))
     .limit(1);
 
   if (existing[0]) {
-    await getDb()
+    await (await dbReady())
       .update(userSecrets)
       .set({
         ciphertext: encrypted.ciphertext,
@@ -167,7 +167,7 @@ export async function upsertUserSecret(
     return;
   }
 
-  await getDb().insert(userSecrets).values({
+  await (await dbReady()).insert(userSecrets).values({
     id: randomUUID(),
     userId,
     kind,
@@ -184,7 +184,7 @@ export async function deleteUserSecret(
   userId: string,
   kind: SecretKind
 ): Promise<boolean> {
-  const result = await getDb()
+  const result = await (await dbReady())
     .delete(userSecrets)
     .where(and(eq(userSecrets.userId, userId), eq(userSecrets.kind, kind)))
     .returning({ id: userSecrets.id });

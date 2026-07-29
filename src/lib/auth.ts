@@ -45,6 +45,54 @@ function trustedOrigins(): string[] {
   return [...origins];
 }
 
+async function sendPasswordResetEmail(opts: {
+  to: string;
+  url: string;
+  name?: string;
+}) {
+  const apiKey = process.env.RESEND_API_KEY?.trim();
+  const from =
+    process.env.EMAIL_FROM?.trim() || "LateWiz <onboarding@resend.dev>";
+
+  if (!apiKey) {
+    console.error(
+      "[latewiz] Password reset requested but RESEND_API_KEY is not set.",
+      "Reset URL (dev only):",
+      opts.url
+    );
+    if (process.env.NODE_ENV !== "production") {
+      return;
+    }
+    throw new Error(
+      "Password reset email is not configured. Set RESEND_API_KEY and EMAIL_FROM."
+    );
+  }
+
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from,
+      to: opts.to,
+      subject: "Reset your LateWiz password",
+      html: `
+        <p>Hi${opts.name ? ` ${opts.name}` : ""},</p>
+        <p>Click the link below to reset your LateWiz password:</p>
+        <p><a href="${opts.url}">${opts.url}</a></p>
+        <p>If you did not request this, you can ignore this email.</p>
+      `,
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Failed to send reset email: ${text}`);
+  }
+}
+
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
     provider: "sqlite",
@@ -58,6 +106,7 @@ export const auth = betterAuth({
       "127.0.0.1:*",
       "latewiz.com",
       "www.latewiz.com",
+      "*.vercel.app",
       ...(process.env.BETTER_AUTH_ALLOWED_HOSTS?.split(",")
         .map((s) => s.trim())
         .filter(Boolean) ?? []),
@@ -69,6 +118,14 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: false,
+    sendResetPassword: async ({ user, url }) => {
+      await sendPasswordResetEmail({
+        to: user.email,
+        url,
+        name: user.name,
+      });
+    },
+    resetPasswordTokenExpiresIn: 60 * 60,
   },
   socialProviders: {
     ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET

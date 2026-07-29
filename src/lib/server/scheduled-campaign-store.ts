@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { and, desc, eq } from "drizzle-orm";
-import { getDb } from "@/db";
+import { dbReady } from "@/db";
 import { scheduledCampaigns } from "@/db/schema";
 import {
   type ScheduledCampaign,
@@ -171,14 +171,14 @@ export function computeCampaignStatus(
 
 async function persistCampaign(campaign: ScheduledCampaign): Promise<void> {
   const now = new Date();
-  const existing = await getDb()
+  const existing = await (await dbReady())
     .select({ id: scheduledCampaigns.id })
     .from(scheduledCampaigns)
     .where(eq(scheduledCampaigns.id, campaign.id))
     .limit(1);
 
   if (existing[0]) {
-    await getDb()
+    await (await dbReady())
       .update(scheduledCampaigns)
       .set({
         userId: campaign.userId,
@@ -190,7 +190,7 @@ async function persistCampaign(campaign: ScheduledCampaign): Promise<void> {
     return;
   }
 
-  await getDb().insert(scheduledCampaigns).values({
+  await (await dbReady()).insert(scheduledCampaigns).values({
     id: campaign.id,
     userId: campaign.userId,
     data: campaign,
@@ -204,12 +204,12 @@ export async function listScheduledCampaigns(
   userId?: string
 ): Promise<ScheduledCampaign[]> {
   const rows = userId
-    ? await getDb()
+    ? await (await dbReady())
         .select()
         .from(scheduledCampaigns)
         .where(eq(scheduledCampaigns.userId, userId))
         .orderBy(desc(scheduledCampaigns.updatedAt))
-    : await getDb()
+    : await (await dbReady())
         .select()
         .from(scheduledCampaigns)
         .orderBy(desc(scheduledCampaigns.updatedAt));
@@ -232,7 +232,7 @@ export async function getScheduledCampaign(
     ? and(eq(scheduledCampaigns.id, id), eq(scheduledCampaigns.userId, userId))
     : eq(scheduledCampaigns.id, id);
 
-  const [row] = await getDb()
+  const [row] = await (await dbReady())
     .select()
     .from(scheduledCampaigns)
     .where(conditions)
@@ -290,7 +290,7 @@ export async function deleteScheduledCampaign(
 ): Promise<boolean> {
   const existing = await getScheduledCampaign(id, userId);
   if (!existing) return false;
-  await getDb()
+  await (await dbReady())
     .delete(scheduledCampaigns)
     .where(eq(scheduledCampaigns.id, id));
   return true;
