@@ -7,7 +7,6 @@ import {
   useAccounts,
   useCreatePost,
   useCurrentProfileId,
-  useGenerateDraft,
   useGenerateCampaignSlot,
   useGenerateCampaignOutline,
   useGenerateImage,
@@ -104,7 +103,6 @@ export default function CampaignPlannerPage() {
   const videoConfigured = isVideoGenerationConfigured(videoProvider, status);
   const slotMutation = useGenerateCampaignSlot();
   const outlineMutation = useGenerateCampaignOutline();
-  const draftMutation = useGenerateDraft();
   const createPostMutation = useCreatePost();
   const imageMutation = useGenerateImage();
   const videoMutation = useGenerateVideo();
@@ -216,6 +214,20 @@ export default function CampaignPlannerPage() {
     setTrendBlock(campaign.trendBlock);
     setSelectedAccountIds(campaign.selectedAccountIds);
     setMediaMode(campaign.mediaMode);
+    // Restore AI prefs saved with the campaign so UI matches cron generation.
+    if (campaign.postPromptStyleId) {
+      useAiStore.getState().setPostPromptStyleId(campaign.postPromptStyleId);
+    }
+    if (campaign.researchDepthId) {
+      useAiStore
+        .getState()
+        .setResearchDepthId(
+          campaign.researchDepthId === "deep" ? "deep" : "standard"
+        );
+    }
+    if (campaign.imagePromptStyleId) {
+      useAiStore.getState().setImagePromptStyleId(campaign.imagePromptStyleId);
+    }
     setSlots(
       campaign.slots.map((slot) => ({
         ...slot,
@@ -804,35 +816,41 @@ export default function CampaignPlannerPage() {
     }
     setRegeneratingCopyIndex(index);
     try {
-      const instruction = slot.aiInstruction?.trim();
-      const prior = slots
-        .filter((_, i) => i !== index)
-        .map((s, i) => `Earlier slot ${i + 1}: ${s.title}`)
-        .join("\n");
+      const previousPosts = slots
+        .slice(0, index)
+        .filter((s) => s.body.trim())
+        .map((s) => ({
+          title: s.title,
+          body: s.body,
+          hashtags: s.hashtags,
+        }));
 
-      const hint = [
-        `Campaign goal: ${campaignGoal.trim() || "Engage audience"}`,
-        `Regenerate post for slot ${index + 1} of ${slots.length}.`,
-        prior ? `Other slots in this campaign:\n${prior}` : "",
-        `Current title: ${slot.title}`,
-        `Current body: ${slot.body}`,
-        slot.hashtags ? `Current hashtags: ${slot.hashtags}` : "",
-        instruction
-          ? `Specific instructions (follow closely): ${instruction}`
-          : "Improve clarity while advancing the campaign goal.",
-      ]
-        .filter(Boolean)
-        .join("\n");
+      const r = await slotMutation.mutateAsync({
+        campaignGoal: campaignGoal.trim() || "Engage audience",
+        slotIndex: index,
+        totalPosts: slots.length,
+        scheduledAt: slot.scheduled_at,
+        previousPosts,
+        campaignHint: campaignHint.trim() || undefined,
+        slotBrief: slot.brief,
+        coveredSubtopics: slots
+          .slice(0, index)
+          .map((s) => s.brief?.subtopic)
+          .filter((value): value is string => Boolean(value)),
+        postPromptStyleId,
+        aiInstruction: slot.aiInstruction,
+        isListMode: campaignMode === "list",
+        researchDepthId,
+      });
 
-      const r = await draftMutation.mutateAsync(hint);
-      const body = r.draft.body;
-      const hashtags = r.draft.hashtags;
+      const body = r.post.body;
+      const hashtags = r.post.hashtags;
       updateSlot(index, {
-        title: r.draft.title,
+        title: r.post.title,
         body,
         hashtags,
         content: [body, hashtags].filter(Boolean).join("\n\n"),
-        pdfUrl: r.draft.pdfUrl ?? null,
+        pdfUrl: r.post.pdfUrl ?? null,
       });
       if (r.source === "fallback" && r.detail) {
         toast.error(r.detail);

@@ -114,21 +114,20 @@ export async function generateDraft(
     depth,
     goal
   );
-  const usePostTemplate = postStyle.minBodyChars > 0;
+  // Always apply the selected post prompt (structure + expert role).
+  // minBodyChars only enforces length — it must not skip the template.
   const objectiveResearch =
     depthId === "deep" || isObjectiveResearchStyle(postStyle.id);
-  const structureBlock = usePostTemplate
-    ? buildPostPromptStructureBlock(
-        postStyle,
-        {
-          subject,
-          goal,
-          slotNum: 1,
-          totalPosts: 1,
-        },
-        postPromptTemplates?.[postStyle.id]
-      )
-    : "";
+  const structureBlock = buildPostPromptStructureBlock(
+    postStyle,
+    {
+      subject,
+      goal,
+      slotNum: 1,
+      totalPosts: 1,
+    },
+    postPromptTemplates?.[postStyle.id]
+  );
 
   const nicheContext = buildNicheUserContext(niche, { objectiveResearch });
 
@@ -140,25 +139,14 @@ export async function generateDraft(
         : `Generate one timely post aligned with this niche.`,
     structureBlock ? `\n${structureBlock}` : "",
     `\n${nicheContext}`,
-    usePostTemplate
-      ? "\nWrite ONE post following the structure above. Use web research for timely facts."
-      : "\nWrite one timely post grounded in current web research when available.",
+    "\nWrite ONE post following the structure above. Use web research for timely facts.",
   ]
     .filter(Boolean)
     .join("\n");
 
-  const taskInstructions = usePostTemplate
-    ? buildPostPromptTaskInstructions(postStyle)
-    : [
-        "You write concise, timely social media posts.",
-        "Return JSON with keys title, body, hashtags.",
-        "Prioritize recent developments from web research over generic or outdated claims.",
-        SOCIAL_POST_FORMAT_INSTRUCTIONS,
-      ].join(" ");
+  const taskInstructions = buildPostPromptTaskInstructions(postStyle);
 
-  const maxOutputTokens = usePostTemplate
-    ? postStyle.maxOutputTokens
-    : undefined;
+  const maxOutputTokens = postStyle.maxOutputTokens;
 
   const newsIntent = isNewsIntent(hintText, goal);
   const topicForSearch = (hintText || subject || topic).trim();
@@ -452,6 +440,8 @@ export async function generateCampaignSlot(
     postPromptStyleId?: string;
     postPromptTemplates?: Record<string, string> | null;
     customPostPromptStyles?: CustomPostPromptStyle[] | null;
+    /** Extra per-slot direction (UI "AI instructions"); supplements the post prompt. */
+    aiInstruction?: string;
     isListMode?: boolean;
     researchDepthId?: string | null;
     userId?: string | null;
@@ -508,8 +498,10 @@ export async function generateCampaignSlot(
     depth,
     goal
   );
-  const usePostTemplate =
-    constraints.format !== "micro" && postStyle.minBodyChars > 0;
+  // Micro goals keep a short format; otherwise always apply the selected post prompt.
+  // Previously minBodyChars > 0 gated this off, so Standard social / customized
+  // templates were ignored and only the slot brief drove copy.
+  const usePostTemplate = constraints.format !== "micro";
   const objectiveResearch =
     depthId === "deep" || isObjectiveResearchStyle(postStyle.id);
   const structureBlock = usePostTemplate
@@ -529,6 +521,7 @@ export async function generateCampaignSlot(
   const briefBlock = formatSlotBriefBlock(brief);
   const goalBlock = buildGoalPriorityInstructions(goal, constraints);
   const formatBlock = buildSlotFormatInstructions(constraints);
+  const slotInstruction = params.aiInstruction?.trim() || "";
 
   const trendLines = (params.trendSnippets ?? [])
     .map((s) => s.trim())
@@ -548,6 +541,9 @@ export async function generateCampaignSlot(
           : "",
       "",
       briefBlock,
+      slotInstruction
+        ? `\nSpecific slot instructions (follow closely):\n${slotInstruction}`
+        : "",
       formatBlock ? `\n${formatBlock}` : "",
       structureBlock ? `\n${structureBlock}` : "",
       "",
@@ -562,7 +558,9 @@ export async function generateCampaignSlot(
       "",
       constraints.format === "micro"
         ? "Write ONE unique micro-message matching the goal format. Never copy or paraphrase prior posts."
-        : "Write ONE post that delivers ONLY the assigned subtopic/angle. Never reuse opening lines, statistics, or arguments from prior posts.",
+        : usePostTemplate
+          ? "Write ONE post that follows the structure template above and delivers ONLY the assigned subtopic/angle. Never reuse opening lines, statistics, or arguments from prior posts."
+          : "Write ONE post that delivers ONLY the assigned subtopic/angle. Never reuse opening lines, statistics, or arguments from prior posts.",
       retryNote ?? "",
     ]
       .filter(Boolean)
@@ -578,24 +576,10 @@ export async function generateCampaignSlot(
           "Title can be short (e.g. day number) or empty string.",
           SOCIAL_POST_FORMAT_INSTRUCTIONS,
         ].join(" ")
-      : usePostTemplate
-        ? buildPostPromptTaskInstructions(postStyle)
-        : [
-            "You are an expert social media strategist.",
-            "Return JSON only: {\"title\":\"...\",\"body\":\"...\",\"hashtags\":\"#a #b\"}.",
-            "Write ONE post for a multi-part campaign — cover ONLY the assigned subtopic/angle.",
-            "Each post must add distinct knowledge; never repeat hooks, stats, or phrasing from earlier posts.",
-            "Do not start with the same opening pattern as prior posts in the series.",
-            "Use current web research for timely angles when relevant.",
-            SOCIAL_POST_FORMAT_INSTRUCTIONS,
-          ].join(" ");
+      : buildPostPromptTaskInstructions(postStyle);
 
   const maxOutputTokens =
-    constraints.format === "micro"
-      ? 512
-      : usePostTemplate
-        ? postStyle.maxOutputTokens
-        : 2048;
+    constraints.format === "micro" ? 512 : postStyle.maxOutputTokens;
 
   const researchSearchHint =
     brief.searchHint?.trim() ||

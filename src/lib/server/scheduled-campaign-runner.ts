@@ -450,6 +450,7 @@ async function processScheduledCampaignSlot(
         postPromptStyleId: campaign.postPromptStyleId,
         postPromptTemplates: campaign.postPromptTemplates,
         customPostPromptStyles: campaign.customPostPromptStyles,
+        aiInstruction: slot.aiInstruction,
         researchDepthId: campaign.researchDepthId,
         isListMode: campaign.campaignMode === "list",
         userId: campaign.userId,

@@ -313,6 +313,7 @@ export function useGenerateCampaignSlot() {
       };
       coveredSubtopics?: string[];
       postPromptStyleId?: string;
+      aiInstruction?: string;
       isListMode?: boolean;
       researchDepthId?: string;
     }) => {
@@ -334,6 +335,7 @@ export function useGenerateCampaignSlot() {
           post_prompt_style_id: params.postPromptStyleId,
           post_prompt_templates: postPromptTemplates,
           custom_post_prompt_styles: customPostPromptStyles,
+          ai_instruction: params.aiInstruction,
           is_list_mode: params.isListMode,
           research_depth_id: depth,
           niche,

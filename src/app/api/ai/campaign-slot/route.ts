@@ -129,6 +129,13 @@ export async function POST(request: NextRequest) {
       body.custom_post_prompt_styles ?? body.customPostPromptStyles
     );
 
+    const aiInstruction =
+      typeof body.ai_instruction === "string"
+        ? body.ai_instruction
+        : typeof body.aiInstruction === "string"
+          ? body.aiInstruction
+          : undefined;
+
     const result = await generateCampaignSlot(apiKey, niche, {
       campaignGoal,
       slotIndex,
@@ -152,6 +159,7 @@ export async function POST(request: NextRequest) {
       postPromptStyleId,
       postPromptTemplates,
       customPostPromptStyles,
+      aiInstruction,
       isListMode,
       researchDepthId,
       userId,
