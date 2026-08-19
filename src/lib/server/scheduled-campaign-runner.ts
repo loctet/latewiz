@@ -468,12 +468,14 @@ async function processScheduledCampaignSlot(
 
       generatedSlot = {
         ...slot,
-        title: generated.post.title,
-        body: generated.post.body,
-        hashtags: generated.post.hashtags,
-        content: [generated.post.body, generated.post.hashtags]
-          .filter(Boolean)
-          .join("\n\n"),
+        title: sanitizeSocialPostText(generated.post.title),
+        body: sanitizeSocialPostText(generated.post.body),
+        hashtags: sanitizeSocialPostText(generated.post.hashtags),
+        content: sanitizeSocialPostText(
+          [generated.post.body, generated.post.hashtags]
+            .filter(Boolean)
+            .join("\n\n")
+        ),
         source: generated.source,
         detail: generated.detail,
         pdfUrl: generated.post.pdfUrl ?? null,

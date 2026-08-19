@@ -39,10 +39,33 @@ export function foldAccentsForImagePrompt(text: string): string {
 /** Platform-safe copy rules injected into AI task instructions. */
 export const SOCIAL_POST_FORMAT_INSTRUCTIONS = [
   "Write plain text suitable for social platforms (LinkedIn, X, Instagram, etc.).",
-  "Never use Markdown bold (**text** or __text__).",
+  "Never use Markdown: no *italics*, no **bold**, no _italics_, no __bold__, no `code`, no [links](url).",
+  "For scannable bullets, write a plain lead-in then a colon (e.g. Catalyseur : ...) — never wrap the lead-in in asterisks.",
   "Never use Markdown links ([label](url)); if a source matters, name it in words without a URL.",
   "Do not invent raw URLs in title, body, or hashtags — the system may append an official Full report link after generation.",
 ].join(" ");
+
+/**
+ * Strip paired Markdown emphasis without touching list markers or math like 2 * 3.
+ * Matches *Catalyseur* and _Catalyseur_ lead-ins that read as AI-generated on social.
+ */
+function stripPairedMarkers(
+  text: string,
+  marker: "*" | "_"
+): string {
+  const escaped = marker === "*" ? "\\*" : "_";
+  const wordSafe = marker === "*" ? "\\w*" : "\\w_";
+  const pair = new RegExp(
+    `(^|[^${wordSafe}])${escaped}([^${escaped}\\n]+?)${escaped}(?=[^${wordSafe}]|$)`,
+    "g"
+  );
+  return text.replace(pair, (full, before: string, inner: string) => {
+    if (!inner.trim() || inner.startsWith(" ") || inner.endsWith(" ")) {
+      return full;
+    }
+    return `${before}${inner}`;
+  });
+}
 
 /**
  * Normalize model output for platforms that do not render Markdown well.
@@ -53,12 +76,27 @@ export function sanitizeSocialPostText(text: string): string {
   // [label](url) → label (drop URL)
   s = s.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1");
 
-  // **bold** and __bold__
-  s = s.replace(/\*\*([^*]+)\*\*/g, "$1");
-  s = s.replace(/__([^_]+)__/g, "$1");
+  // fenced / inline code — another AI tell on social
+  s = s.replace(/```[\w]*\n?([\s\S]*?)```/g, "$1");
+  s = s.replace(/`([^`]+)`/g, "$1");
 
-  // stray emphasis markers
-  s = s.replace(/\*\*/g, "");
+  // ***bold-italic***, **bold**, *italic* (order matters)
+  s = s.replace(/\*{3}([^*\n]+)\*{3}/g, "$1");
+  s = s.replace(/\*{2}([^*\n]+)\*{2}/g, "$1");
+  s = stripPairedMarkers(s, "*");
+
+  // ___ / __bold__ / _italic_
+  s = s.replace(/_{3}([^_\n]+)_{3}/g, "$1");
+  s = s.replace(/_{2}([^_\n]+)_{2}/g, "$1");
+  s = stripPairedMarkers(s, "_");
+
+  // leftover doubled markers after unpaired wraps
+  s = s.replace(/\*{2,}/g, "");
+  s = s.replace(/_{2,}/g, "");
+
+  // markdown headings and "* item" lists look generated
+  s = s.replace(/^#{1,6}\s+/gm, "");
+  s = s.replace(/^(\s*)\*\s+/gm, "$1- ");
 
   return s.replace(/\n{3,}/g, "\n\n").trim();
 }

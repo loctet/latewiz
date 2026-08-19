@@ -236,10 +236,21 @@ export default function CampaignPlannerPage() {
       useAiStore.getState().setImagePromptStyleId(campaign.imagePromptStyleId);
     }
     setSlots(
-      campaign.slots.map((slot) => ({
-        ...slot,
-        generationStatus: slot.status,
-      }))
+      campaign.slots.map((slot) => {
+        const title = sanitizeSocialPostText(slot.title);
+        const body = sanitizeSocialPostText(slot.body);
+        const hashtags = sanitizeSocialPostText(slot.hashtags);
+        return {
+          ...slot,
+          title,
+          body,
+          hashtags,
+          content: sanitizeSocialPostText(
+            slot.content || [body, hashtags].filter(Boolean).join("\n\n")
+          ),
+          generationStatus: slot.status,
+        };
+      })
     );
     setDraftRestored(true);
     setActiveScheduledId(campaign.id);
@@ -330,33 +341,40 @@ export default function CampaignPlannerPage() {
         accountId: account._id,
         platform: account.platform as Platform,
       })),
-      slots: slots.map((slot) => ({
-        id: "id" in slot && typeof slot.id === "string" ? slot.id : undefined,
-        scheduled_at: slot.scheduled_at,
-        status:
-          slot.generationStatus === "generated" ||
-          slot.generationStatus === "failed" ||
-          slot.generationStatus === "processing" ||
-          slot.generationStatus === "cancelled"
-            ? slot.generationStatus
-            : "pending_generation",
-        title: slot.title,
-        body: slot.body,
-        hashtags: slot.hashtags,
-        content: slot.content,
-        image_url: slot.image_url,
-        video_url: slot.video_url,
-        aiInstruction: slot.aiInstruction,
-        imagePromptStyleId: slot.imagePromptStyleId ?? imagePromptStyleId,
-        videoPromptStyleId:
-          slot.videoPromptStyleId ?? useAiStore.getState().videoPromptStyleId,
-        reference_image_url: slot.reference_image_url ?? null,
-        brief: slot.brief,
-        detail: slot.detail ?? null,
-        generatedAt: slot.generatedAt ?? null,
-        postId: slot.postId ?? null,
-        lastError: slot.lastError ?? null,
-      })),
+      slots: slots.map((slot) => {
+        const title = sanitizeSocialPostText(slot.title);
+        const body = sanitizeSocialPostText(slot.body);
+        const hashtags = sanitizeSocialPostText(slot.hashtags);
+        return {
+          id: "id" in slot && typeof slot.id === "string" ? slot.id : undefined,
+          scheduled_at: slot.scheduled_at,
+          status:
+            slot.generationStatus === "generated" ||
+            slot.generationStatus === "failed" ||
+            slot.generationStatus === "processing" ||
+            slot.generationStatus === "cancelled"
+              ? slot.generationStatus
+              : "pending_generation",
+          title,
+          body,
+          hashtags,
+          content: sanitizeSocialPostText(
+            slot.content || [body, hashtags].filter(Boolean).join("\n\n")
+          ),
+          image_url: slot.image_url,
+          video_url: slot.video_url,
+          aiInstruction: slot.aiInstruction,
+          imagePromptStyleId: slot.imagePromptStyleId ?? imagePromptStyleId,
+          videoPromptStyleId:
+            slot.videoPromptStyleId ?? useAiStore.getState().videoPromptStyleId,
+          reference_image_url: slot.reference_image_url ?? null,
+          brief: slot.brief,
+          detail: slot.detail ?? null,
+          generatedAt: slot.generatedAt ?? null,
+          postId: slot.postId ?? null,
+          lastError: slot.lastError ?? null,
+        };
+      }),
     }),
     [
       activeScheduledId,
@@ -546,7 +564,20 @@ export default function CampaignPlannerPage() {
       trendBlock,
       selectedAccountIds,
       mediaMode,
-      slots,
+      slots: slots.map((slot) => {
+        const title = sanitizeSocialPostText(slot.title);
+        const body = sanitizeSocialPostText(slot.body);
+        const hashtags = sanitizeSocialPostText(slot.hashtags);
+        return {
+          ...slot,
+          title,
+          body,
+          hashtags,
+          content: sanitizeSocialPostText(
+            slot.content || [body, hashtags].filter(Boolean).join("\n\n")
+          ),
+        };
+      }),
     });
     if (!ok) {
       toast.error("Could not save campaign draft (storage full). Media previews are not saved in draft.");

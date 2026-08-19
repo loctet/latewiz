@@ -194,7 +194,7 @@ Organize the roundup into this exact framework (plain-text section headings on t
 
 Formatting & quality requirements:
 - Enforce a minimum ~$100M market cap threshold for Gainers/Losers to filter out low-liquidity pumps and rugs.
-- Use bullet points with bold lead-ins for maximum scannability.
+- Use bullet points with a plain-text lead-in then a colon (e.g. Catalyseur : ...). Never wrap words in *asterisks* or **double asterisks**.
 - Maintain an objective, institutional, and concise tone.
 - Do NOT paste parenthetical source domains like (coindesk.com) in the body.
 - Do NOT invent unverified rumors or speculative price targets.
