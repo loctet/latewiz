@@ -132,3 +132,27 @@ export function isDeferredCampaign(
 ): boolean {
   return campaign.generationMode === "deferred";
 }
+
+export function isPendingCampaignSlot(
+  slot: Pick<ScheduledCampaignSlot, "status">
+): boolean {
+  return slot.status === "pending_generation" || slot.status === "processing";
+}
+
+export function pendingCampaignSlotCount(
+  campaign: Pick<ScheduledCampaign, "slots">
+): number {
+  return campaign.slots.filter(isPendingCampaignSlot).length;
+}
+
+export function nextPendingCampaignSlot(
+  campaign: Pick<ScheduledCampaign, "slots">
+): ScheduledCampaignSlot | undefined {
+  return campaign.slots
+    .filter(isPendingCampaignSlot)
+    .slice()
+    .sort(
+      (a, b) =>
+        new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()
+    )[0];
+}

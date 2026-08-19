@@ -108,7 +108,13 @@ export default function CampaignPlannerPage() {
   const imageMutation = useGenerateImage();
   const videoMutation = useGenerateVideo();
   const uploadMutation = useUploadMedia();
-  const { data: scheduledCampaignsData } = useScheduledCampaigns();
+  const {
+    data: scheduledCampaignsData,
+    isLoading: scheduledCampaignsLoading,
+    isError: scheduledCampaignsIsError,
+    error: scheduledCampaignsError,
+    refetch: refetchScheduledCampaigns,
+  } = useScheduledCampaigns();
   const saveScheduledCampaignMutation = useSaveScheduledCampaign();
   const deleteScheduledCampaignMutation = useDeleteScheduledCampaign();
   const runScheduledCampaignMutation = useRunScheduledCampaign();
@@ -474,20 +480,19 @@ export default function CampaignPlannerPage() {
     toast.success(`Opened "${campaign.name}"`);
   };
 
-  const handleDeleteSaved = async (id: string) => {
-    if (scheduledCampaigns.some((campaign) => campaign.id === id)) {
-      try {
-        await deleteScheduledCampaignMutation.mutateAsync(id);
-        if (activeScheduledId === id) setActiveScheduledId(null);
-        toast.success("Scheduled campaign removed");
-      } catch (e) {
-        toast.error(
-          e instanceof Error ? e.message : "Could not delete scheduled campaign"
-        );
-      }
-      return;
+  const handleDeleteScheduled = async (id: string) => {
+    try {
+      await deleteScheduledCampaignMutation.mutateAsync(id);
+      if (activeScheduledId === id) setActiveScheduledId(null);
+      toast.success("Deferred campaign stopped");
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : "Could not delete scheduled campaign"
+      );
     }
+  };
 
+  const handleDeleteSaved = async (id: string) => {
     if (!deleteSavedCampaign(id, profileKey)) return;
     if (activeSavedId === id) setActiveSavedId(null);
     refreshSavedList();
@@ -1159,7 +1164,12 @@ export default function CampaignPlannerPage() {
             aria-expanded={libraryOpen}
           >
             <FolderOpen className="mr-1.5 h-3.5 w-3.5" />
-            Library
+            Drafts
+            {savedCampaigns.length > 0 ? (
+              <span className="ml-1.5 rounded-full bg-muted px-1.5 text-[10px] font-medium text-muted-foreground">
+                {savedCampaigns.length}
+              </span>
+            ) : null}
             <ChevronDown
               className={cn(
                 "ml-1 h-3.5 w-3.5 transition-transform duration-200",
@@ -1180,48 +1190,63 @@ export default function CampaignPlannerPage() {
         </div>
       </div>
 
+      <div className="rounded-xl border border-border bg-card p-3 shadow-sm sm:p-4">
+        <ScheduledCampaignsPanel
+          campaigns={scheduledCampaigns}
+          activeId={activeScheduledId}
+          saveName={saveName}
+          saving={saveScheduledCampaignMutation.isPending}
+          runningId={runningCampaignId}
+          deletingId={
+            deleteScheduledCampaignMutation.isPending
+              ? (deleteScheduledCampaignMutation.variables ?? null)
+              : null
+          }
+          loading={scheduledCampaignsLoading}
+          error={
+            scheduledCampaignsIsError
+              ? scheduledCampaignsError instanceof Error
+                ? scheduledCampaignsError.message
+                : "Failed to load deferred campaigns"
+              : null
+          }
+          showSave={isDeferredMode}
+          onSaveNameChange={setSaveName}
+          onSave={() => {
+            void handleSaveForLater();
+          }}
+          onLoad={handleLoadScheduled}
+          onDelete={(id) => {
+            void handleDeleteScheduled(id);
+          }}
+          onRun={(id) => {
+            void handleRunScheduled(id);
+          }}
+          onRetry={() => {
+            void refetchScheduledCampaigns();
+          }}
+        />
+      </div>
+
       {libraryOpen && (
         <div className="rounded-xl border border-border bg-card p-3 shadow-sm animate-in fade-in-0 slide-in-from-top-1 duration-200 sm:p-4">
           <p className="mb-3 text-xs font-medium text-muted-foreground">
-            {isDeferredMode
-              ? "Server cron campaigns (generate near publish)"
-              : "Browser-saved drafts for this profile"}
+            Browser-saved drafts for this profile
           </p>
-          {isDeferredMode ? (
-            <ScheduledCampaignsPanel
-              campaigns={scheduledCampaigns}
-              activeId={activeScheduledId}
-              saveName={saveName}
-              saving={saveScheduledCampaignMutation.isPending}
-              runningId={runningCampaignId}
-              onSaveNameChange={setSaveName}
-              onSave={() => {
-                void handleSaveForLater();
-              }}
-              onLoad={handleLoadScheduled}
-              onDelete={(id) => {
-                void handleDeleteSaved(id);
-              }}
-              onRun={(id) => {
-                void handleRunScheduled(id);
-              }}
-            />
-          ) : (
-            <SavedCampaignsPanel
-              saved={savedCampaigns}
-              activeSavedId={activeSavedId}
-              saveName={saveName}
-              onSaveNameChange={setSaveName}
-              onSave={() => {
-                void handleSaveForLater();
-              }}
-              onLoad={handleLoadSaved}
-              onDelete={(id) => {
-                void handleDeleteSaved(id);
-              }}
-              onNew={handleNewCampaign}
-            />
-          )}
+          <SavedCampaignsPanel
+            saved={savedCampaigns}
+            activeSavedId={activeSavedId}
+            saveName={saveName}
+            onSaveNameChange={setSaveName}
+            onSave={() => {
+              void handleSaveForLater();
+            }}
+            onLoad={handleLoadSaved}
+            onDelete={(id) => {
+              void handleDeleteSaved(id);
+            }}
+            onNew={handleNewCampaign}
+          />
         </div>
       )}
 

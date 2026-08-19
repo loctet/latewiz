@@ -19,6 +19,7 @@ export function useScheduledCampaigns() {
       if (!res.ok) throw new Error("Failed to load scheduled campaigns");
       return (await res.json()) as { campaigns: ScheduledCampaign[] };
     },
+    refetchInterval: 20_000,
   });
 }
 
