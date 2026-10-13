@@ -124,6 +124,19 @@ const INIT_STATEMENTS = [
 )`,
   `CREATE INDEX IF NOT EXISTS "scheduled_campaigns_user_id_idx"
   ON "scheduled_campaigns" ("user_id")`,
+  `CREATE TABLE IF NOT EXISTS "generated_media" (
+  "id" text PRIMARY KEY NOT NULL,
+  "user_id" text NOT NULL REFERENCES "user"("id") ON DELETE cascade,
+  "filename" text NOT NULL,
+  "media_type" text NOT NULL,
+  "content_type" text NOT NULL,
+  "caption_digest" text DEFAULT '' NOT NULL,
+  "duration_seconds" text,
+  "bytes" blob NOT NULL,
+  "created_at" integer NOT NULL
+)`,
+  `CREATE INDEX IF NOT EXISTS "generated_media_user_created_idx"
+  ON "generated_media" ("user_id", "created_at")`,
 ];
 
 async function ensureLibsqlSchema(client: Client) {

@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { promises as fs } from "fs";
-import path from "path";
 import { getGeneratedMediaFile } from "@/lib/server/generated-media-files";
 import {
   SessionRequiredError,
@@ -23,23 +21,24 @@ export async function GET(
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const buffer = await fs.readFile(found.absolutePath);
-    const ext = path.extname(found.entry.filename).toLowerCase();
+    const ext = found.entry.filename.split(".").pop()?.toLowerCase();
     const contentType =
-      found.entry.type === "video" || ext === ".mp4"
+      found.contentType ||
+      (found.entry.type === "video" || ext === "mp4"
         ? "video/mp4"
-        : ext === ".jpg" || ext === ".jpeg"
+        : ext === "jpg" || ext === "jpeg"
           ? "image/jpeg"
-          : ext === ".webp"
+          : ext === "webp"
             ? "image/webp"
-            : "image/png";
+            : "image/png");
 
-    return new NextResponse(buffer, {
+    return new NextResponse(new Uint8Array(found.bytes), {
       status: 200,
       headers: {
         "Content-Type": contentType,
         "Cache-Control": "private, max-age=3600",
         "Content-Disposition": `inline; filename="${found.entry.filename}"`,
+        "Content-Length": String(found.bytes.length),
       },
     });
   } catch (err) {

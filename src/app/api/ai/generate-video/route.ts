@@ -82,13 +82,17 @@ export async function POST(request: NextRequest) {
       (videoUrl.startsWith("data:") || videoUrl.startsWith("http"))
     ) {
       const digest = (captionContext ?? prompt ?? "").slice(0, 120);
-      const entry = await saveGeneratedVideoFile(
-        userId,
-        videoUrl,
-        digest,
-        result.duration_seconds
-      );
-      videoUrl = entry.url;
+      try {
+        const entry = await saveGeneratedVideoFile(
+          userId,
+          videoUrl,
+          digest,
+          result.duration_seconds
+        );
+        videoUrl = entry.url;
+      } catch (saveError) {
+        console.error("Persist generated video failed:", saveError);
+      }
     }
 
     return NextResponse.json({

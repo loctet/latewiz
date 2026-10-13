@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generatePostImage, parseNicheFromBody } from "@/lib/openai";
-import { SessionRequiredError } from "@/lib/server/session";
 import { requireUserAiKeys } from "@/lib/server/ai-request-keys";
+import {
+  generatedMediaIdFromUrl,
+  materializeGeneratedMediaUrl,
+  saveGeneratedImageFile,
+} from "@/lib/server/generated-media-files";
+import { SessionRequiredError } from "@/lib/server/session";
+
+export const maxDuration = 120;
+
+const MAX_INLINE_IMAGE_URL = 3_500_000;
 
 function parseReferenceImageUrls(
   body: Record<string, unknown>
@@ -24,10 +33,35 @@ function parseReferenceImageUrls(
   return urls.length > 0 ? urls : undefined;
 }
 
+async function resolveReferenceImageUrls(
+  userId: string,
+  urls: string[] | undefined
+): Promise<string[] | undefined> {
+  if (!urls?.length) return undefined;
+  const resolved: string[] = [];
+  for (const url of urls) {
+    if (!generatedMediaIdFromUrl(url)) {
+      resolved.push(url);
+      continue;
+    }
+    const materialized = await materializeGeneratedMediaUrl(userId, url);
+    if (!materialized.startsWith("data:")) {
+      throw new Error(
+        "That reference image is no longer available. Generate it again."
+      );
+    }
+    resolved.push(materialized);
+  }
+  return resolved;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as Record<string, unknown>;
-    const { openaiApiKey: apiKey } = await requireUserAiKeys(request, body);
+    const { openaiApiKey: apiKey, userId } = await requireUserAiKeys(
+      request,
+      body
+    );
     if (!apiKey) {
       return NextResponse.json(
         {
@@ -67,7 +101,10 @@ export async function POST(request: NextRequest) {
           ? (body.promptTemplates as Record<string, string>)
           : undefined;
 
-    const referenceImageUrls = parseReferenceImageUrls(body);
+    const referenceImageUrls = await resolveReferenceImageUrls(
+      userId,
+      parseReferenceImageUrls(body)
+    );
 
     const result = await generatePostImage(
       apiKey,
@@ -84,6 +121,23 @@ export async function POST(request: NextRequest) {
       imageUrl = `data:image/png;base64,${result.b64_json}`;
     }
 
+    if (imageUrl) {
+      const digest = (captionContext ?? prompt ?? "").slice(0, 120);
+      try {
+        const saved = await saveGeneratedImageFile(userId, imageUrl, digest);
+        imageUrl = saved.url;
+      } catch (saveError) {
+        console.error("Persist generated image failed:", saveError);
+        if (imageUrl.length > MAX_INLINE_IMAGE_URL) {
+          const message =
+            saveError instanceof Error
+              ? saveError.message
+              : "Image was generated but could not be stored.";
+          return NextResponse.json({ error: message }, { status: 500 });
+        }
+      }
+    }
+
     return NextResponse.json({
       image_url: imageUrl,
       source: result.source,
@@ -94,9 +148,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: err.message }, { status: 401 });
     }
     console.error("AI image error:", err);
-    return NextResponse.json(
-      { error: "Failed to generate image" },
-      { status: 500 }
-    );
+    const message =
+      err instanceof Error &&
+      err.message.startsWith("That reference image")
+        ? err.message
+        : "Failed to generate image";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

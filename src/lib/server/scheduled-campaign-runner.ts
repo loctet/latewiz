@@ -17,7 +17,11 @@ import {
   sanitizeSocialPostText,
 } from "@/lib/openai";
 import { zernioRequest } from "@/lib/zernio-api";
-import { saveGeneratedImageFile, saveGeneratedVideoFile } from "@/lib/server/generated-media-files";
+import {
+  materializeGeneratedMediaUrl,
+  saveGeneratedImageFile,
+  saveGeneratedVideoFile,
+} from "@/lib/server/generated-media-files";
 import { uploadMediaFromUrl } from "@/lib/server/server-media-upload";
 import { getUserSecret, allowEnvKeyFallback } from "@/lib/server/vault";
 import { isPlausibleOpenAiApiKey } from "@/lib/openai/resolve-key";
@@ -159,7 +163,14 @@ async function maybeGenerateMedia(
       captionContext,
       slot.imagePromptStyleId ?? campaign.imagePromptStyleId,
       campaign.imagePromptTemplates,
-      slot.reference_image_url?.trim() ? [slot.reference_image_url.trim()] : undefined
+      slot.reference_image_url?.trim()
+        ? [
+            await materializeGeneratedMediaUrl(
+              userId,
+              slot.reference_image_url.trim()
+            ),
+          ]
+        : undefined
     );
     if (!imageResult.url && !imageResult.b64_json) {
       throw new Error(

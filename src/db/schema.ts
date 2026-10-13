@@ -1,4 +1,6 @@
 import {
+  blob,
+  index,
   integer,
   sqliteTable,
   text,
@@ -139,6 +141,28 @@ export const scheduledCampaigns = sqliteTable("scheduled_campaigns", {
     .notNull()
     .$defaultFn(() => new Date()),
 });
+
+export const generatedMedia = sqliteTable(
+  "generated_media",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    filename: text("filename").notNull(),
+    mediaType: text("media_type").$type<"image" | "video">().notNull(),
+    contentType: text("content_type").notNull(),
+    captionDigest: text("caption_digest").notNull().default(""),
+    durationSeconds: text("duration_seconds"),
+    bytes: blob("bytes", { mode: "buffer" }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [
+    index("generated_media_user_created_idx").on(table.userId, table.createdAt),
+  ]
+);
 
 export const authSchema = {
   user,

@@ -154,7 +154,9 @@ export function useGenerateImage() {
         source: string;
         detail?: string | null;
       };
-      if (data.image_url) {
+      if (data.image_url?.includes("/api/media/generated/file/")) {
+        queryClient.invalidateQueries({ queryKey: generatedMediaKeys.all });
+      } else if (data.image_url) {
         const digest = (params.captionContext ?? params.prompt ?? "")
           .slice(0, 120);
         try {
