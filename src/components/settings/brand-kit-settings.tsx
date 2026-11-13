@@ -15,6 +15,8 @@ import {
 } from "@/components/ui/select";
 import {
   BRAND_FONT_OPTIONS,
+  BRAND_ILLUSTRATION_STYLES,
+  BRAND_VOICES,
   BRAND_LOGO_CONTENT_TYPES,
   BRAND_LOGO_MAX_BYTES,
   BRAND_LOGO_POSITIONS,
@@ -378,7 +380,70 @@ export function BrandKitSettings() {
           </div>
         </div>
 
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Illustration style</Label>
+            <Select
+              value={kit.illustrationStyle}
+              onValueChange={(v) =>
+                update("illustrationStyle", v as BrandKit["illustrationStyle"])
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {BRAND_ILLUSTRATION_STYLES.map((s) => (
+                  <SelectItem key={s.value} value={s.value}>
+                    {s.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Narrator voice</Label>
+            <Select
+              value={kit.voice}
+              disabled={!kit.voiceoverEnabled}
+              onValueChange={(v) => update("voice", v as BrandKit["voice"])}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {BRAND_VOICES.map((v) => (
+                  <SelectItem key={v.value} value={v.value}>
+                    {v.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <p className="-mt-3 text-xs text-muted-foreground">
+          Explainer videos get an AI illustration per scene and a spoken
+          voiceover, generated with your OpenAI key: one image per scene
+          (usually 5–8) plus a short text-to-speech clip.
+        </p>
+
         <div className="grid gap-3 sm:grid-cols-2">
+          <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
+            <Label htmlFor="brand-voiceover">Voiceover</Label>
+            <Switch
+              id="brand-voiceover"
+              checked={kit.voiceoverEnabled}
+              onCheckedChange={(v) => update("voiceoverEnabled", v)}
+            />
+          </div>
+          <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
+            <Label htmlFor="brand-captions">Animated captions</Label>
+            <Switch
+              id="brand-captions"
+              checked={kit.captionsEnabled}
+              onCheckedChange={(v) => update("captionsEnabled", v)}
+            />
+          </div>
           <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
             <Label htmlFor="brand-intro">Logo intro</Label>
             <Switch

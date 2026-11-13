@@ -118,6 +118,14 @@ export function AiAssistPanel({
     useState<ExplainerProgress | null>(null);
   const explainerToastRef = useRef<string | number | null>(null);
   const explainerMutation = useGenerateExplainer({
+    onNotice: (detail) => {
+      toast.warning("Explainer will be basic", {
+        description: /credit|quota|429/i.test(detail)
+          ? "Your OpenAI account has no credits left, so there is no AI script, illustrations or voiceover. Add credits at platform.openai.com/settings/organization/billing."
+          : detail.slice(0, 220),
+        duration: 12000,
+      });
+    },
     onProgress: (progress) => {
       setExplainerProgress(progress);
       if (explainerToastRef.current != null) {

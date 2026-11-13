@@ -34,6 +34,15 @@ import { saveGeneratedVideoBuffer } from "@/lib/server/generated-media-files";
 import { updateScheduledCampaign } from "@/lib/server/scheduled-campaign-store";
 import type { ScheduledCampaignSlot } from "@/lib/scheduled-campaigns";
 import { STANDALONE_RENDER_CAMPAIGN_ID } from "@/lib/render-jobs";
+import { normalizeExplainerScript } from "@/lib/explainer-script";
+import { layoutExplainerTimeline } from "@/lib/explainer-timing";
+import { getUserSecret, allowEnvKeyFallback } from "@/lib/server/vault";
+import { isPlausibleOpenAiApiKey } from "@/lib/openai/resolve-key";
+import {
+  buildNarrationTrack,
+  generateSceneImages,
+  generateSceneVoiceover,
+} from "./explainer-assets";
 
 const TEMPLATE_DIR = path.join(process.cwd(), "video-templates", "explainer");
 const HYPERFRAMES = process.env.HYPERFRAMES_PACKAGE?.trim() || "hyperframes@0.9.41";
@@ -41,7 +50,7 @@ const QUALITY = process.env.RENDER_QUALITY?.trim() || "looks";
 // 24fps reads as smooth for text-and-shape motion and renders ~20% faster than 30.
 const FPS = process.env.RENDER_FPS?.trim() || "24";
 const POLL_MS = Math.max(5_000, Number(process.env.RENDER_POLL_MS) || 15_000);
-const RENDER_TIMEOUT_MS = 15 * 60 * 1000;
+const RENDER_TIMEOUT_MS = 20 * 60 * 1000;
 const WORKER_ID = `${os.hostname()}-${process.pid}-${randomUUID().slice(0, 8)}`;
 
 const LOGO_EXT: Record<string, string> = {
@@ -105,7 +114,21 @@ function runHyperframes(args: string[], cwd: string): Promise<{ code: number; ou
   });
 }
 
-async function prepareProject(job: RenderJob, dir: string) {
+async function resolveOpenAiKey(userId: string): Promise<string | null> {
+  const fromVault = await getUserSecret(userId, "openai");
+  if (fromVault && isPlausibleOpenAiApiKey(fromVault)) return fromVault;
+  if (allowEnvKeyFallback()) {
+    const env = process.env.OPENAI_API_KEY?.trim();
+    if (env && isPlausibleOpenAiApiKey(env)) return env;
+  }
+  return null;
+}
+
+/**
+ * Copy the template, generate illustrations + voiceover, lay out the
+ * timeline and write vars.json. Returns the video length in seconds.
+ */
+async function prepareProject(job: RenderJob, dir: string): Promise<number> {
   fs.cpSync(TEMPLATE_DIR, dir, {
     recursive: true,
     filter: (src) => !src.includes(`${path.sep}.hyperframes`),
@@ -121,8 +144,59 @@ async function prepareProject(job: RenderJob, dir: string) {
     }
   }
 
+  const script = normalizeExplainerScript(job.payload.script) ?? job.payload.script;
+  let scenes = script.scenes;
+  const apiKey = await resolveOpenAiKey(job.userId);
+  let voiceFiles: string[] | null = null;
+
+  if (apiKey) {
+    const t0 = Date.now();
+    const [withImages, voice] = await Promise.all([
+      generateSceneImages({ apiKey, scenes, kit, dir, log }),
+      kit.voiceoverEnabled
+        ? generateSceneVoiceover({ apiKey, scenes, voice: kit.voice, dir, log })
+        : Promise.resolve(null),
+    ]);
+    scenes = withImages.map((scene, i) => ({
+      ...scene,
+      audioDuration: voice?.scenes[i]?.audioDuration,
+    }));
+    voiceFiles = voice?.files ?? null;
+    log(
+      `Assets ready in ${Math.round((Date.now() - t0) / 1000)}s: ${scenes.filter((s) => s.image).length}/${scenes.length} illustrations, voiceover ${voiceFiles ? "on" : "off"}`
+    );
+  } else {
+    log("No OpenAI key for this user: rendering without illustrations or voiceover");
+  }
+
+  const layout = layoutExplainerTimeline(scenes, { outro: kit.showOutro });
+
+  if (voiceFiles) {
+    await buildNarrationTrack({
+      files: voiceFiles,
+      scenes: layout.scenes,
+      total: layout.total,
+      output: path.join(dir, "narration.mp3"),
+    });
+    const html = path.join(dir, "index.html");
+    const marker = "<!-- narration-audio -->";
+    const source = fs.readFileSync(html, "utf8");
+    if (!source.includes(marker)) throw new Error("Template is missing the narration marker");
+    fs.writeFileSync(
+      html,
+      source.replace(
+        marker,
+        `<audio id="narration" src="narration.mp3" data-start="0" data-duration="${layout.total.toFixed(2)}" data-track-index="9"></audio>`
+      )
+    );
+  }
+
   const variables = {
-    scenes: JSON.stringify(job.payload.script.scenes),
+    scenes: JSON.stringify(layout.scenes),
+    totalDuration: layout.total,
+    outroStart: layout.outroStart,
+    // Without voiceover, captions are how the video explains itself.
+    captions: voiceFiles ? kit.captionsEnabled : true,
     brandName: kit.brandName,
     primaryColor: kit.primaryColor,
     secondaryColor: kit.secondaryColor,
@@ -141,6 +215,7 @@ async function prepareProject(job: RenderJob, dir: string) {
     showOutro: kit.showOutro,
   };
   fs.writeFileSync(path.join(dir, "vars.json"), JSON.stringify(variables, null, 2));
+  return layout.total;
 }
 
 /** Remove temp project dirs from earlier renders that could not be deleted then. */
@@ -168,7 +243,7 @@ async function processJob(job: RenderJob) {
   const output = path.join(dir, "out.mp4");
   const started = Date.now();
   try {
-    await prepareProject(job, dir);
+    const totalSeconds = await prepareProject(job, dir);
     const result = await runHyperframes(
       [
         "render",
@@ -190,7 +265,6 @@ async function processJob(job: RenderJob) {
     }
 
     const bytes = fs.readFileSync(output);
-    const totalSeconds = job.payload.script.scenes.reduce((sum, s) => sum + s.duration, 0);
     const media = await saveGeneratedVideoBuffer(
       job.userId,
       bytes,

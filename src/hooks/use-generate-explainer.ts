@@ -18,6 +18,8 @@ export type ExplainerProgress =
  */
 export function useGenerateExplainer(options?: {
   onProgress?: (progress: ExplainerProgress) => void;
+  /** Called when the script fell back (e.g. OpenAI out of credits). */
+  onNotice?: (detail: string) => void;
 }) {
   const queryClient = useQueryClient();
 
@@ -41,6 +43,7 @@ export function useGenerateExplainer(options?: {
         throw new Error(created.error ?? "Could not queue the explainer video");
       }
 
+      if (created.detail) options?.onNotice?.(created.detail);
       options?.onProgress?.({ phase: "queued", ageSeconds: 0, workerOnline: true });
       const started = Date.now();
       let first = true;
@@ -82,7 +85,7 @@ export function describeExplainerProgress(progress: ExplainerProgress | null): s
   if (!progress) return "Generating explainer…";
   if (progress.phase === "scripting") return "Writing the scene script…";
   if (progress.phase === "rendering") {
-    return `Rendering your branded video… ${progress.ageSeconds}s (usually 1–3 min)`;
+    return `Creating illustrations, voiceover and rendering… ${progress.ageSeconds}s (usually 3–5 min)`;
   }
   if (!progress.workerOnline) {
     return "Render worker is offline: start it with `npm run render-worker`. Your video stays queued and renders as soon as it runs.";

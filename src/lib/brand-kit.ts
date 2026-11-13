@@ -34,6 +34,31 @@ export const BRAND_LOGO_POSITIONS = [
 
 export type BrandLogoPosition = (typeof BRAND_LOGO_POSITIONS)[number]["value"];
 
+/** OpenAI TTS voices used for explainer voiceover. */
+export const BRAND_VOICES = [
+  { value: "coral", label: "Coral (warm, friendly)" },
+  { value: "nova", label: "Nova (bright, upbeat)" },
+  { value: "sage", label: "Sage (calm, clear)" },
+  { value: "ash", label: "Ash (confident)" },
+  { value: "onyx", label: "Onyx (deep, authoritative)" },
+  { value: "echo", label: "Echo (neutral)" },
+  { value: "shimmer", label: "Shimmer (soft)" },
+  { value: "alloy", label: "Alloy (balanced)" },
+] as const;
+
+export type BrandVoice = (typeof BRAND_VOICES)[number]["value"];
+
+/** Look of the AI illustrations (b-roll) in explainer videos. */
+export const BRAND_ILLUSTRATION_STYLES = [
+  { value: "flat-vector", label: "Flat vector illustration", prompt: "modern flat vector illustration, clean shapes, subtle grain texture, soft shadows, editorial explainer style" },
+  { value: "3d-render", label: "3D render", prompt: "soft 3D render, clay-like materials, studio lighting, playful isometric explainer style" },
+  { value: "photo", label: "Cinematic photo", prompt: "cinematic photograph, natural light, shallow depth of field, authentic documentary b-roll" },
+  { value: "hand-drawn", label: "Hand-drawn sketch", prompt: "hand-drawn ink and marker sketch on off-white paper, whiteboard explainer style, confident lines" },
+] as const;
+
+export type BrandIllustrationStyle =
+  (typeof BRAND_ILLUSTRATION_STYLES)[number]["value"];
+
 export type BrandKit = {
   brandName: string;
   primaryColor: string;
@@ -52,6 +77,12 @@ export type BrandKit = {
   handle: string;
   showIntro: boolean;
   showOutro: boolean;
+  /** Spoken voiceover (OpenAI TTS) on explainer videos */
+  voiceoverEnabled: boolean;
+  voice: BrandVoice;
+  /** Word-by-word captions synced to the voiceover */
+  captionsEnabled: boolean;
+  illustrationStyle: BrandIllustrationStyle;
 };
 
 /** Brand kit as returned by the API: JSON fields plus logo metadata. */
@@ -86,6 +117,10 @@ export function defaultBrandKit(): BrandKit {
     handle: "",
     showIntro: true,
     showOutro: true,
+    voiceoverEnabled: true,
+    voice: "coral",
+    captionsEnabled: true,
+    illustrationStyle: "flat-vector",
   };
 }
 
@@ -137,6 +172,20 @@ export function normalizeBrandKit(partial?: Partial<BrandKit> | null): BrandKit 
       typeof partial.showIntro === "boolean" ? partial.showIntro : d.showIntro,
     showOutro:
       typeof partial.showOutro === "boolean" ? partial.showOutro : d.showOutro,
+    voiceoverEnabled:
+      typeof partial.voiceoverEnabled === "boolean"
+        ? partial.voiceoverEnabled
+        : d.voiceoverEnabled,
+    voice: oneOf(partial.voice, BRAND_VOICES, d.voice),
+    captionsEnabled:
+      typeof partial.captionsEnabled === "boolean"
+        ? partial.captionsEnabled
+        : d.captionsEnabled,
+    illustrationStyle: oneOf(
+      partial.illustrationStyle,
+      BRAND_ILLUSTRATION_STYLES,
+      d.illustrationStyle
+    ),
   };
 }
 
