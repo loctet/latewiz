@@ -4,7 +4,7 @@ import type { CampaignSlotBrief } from "@/lib/openai/campaign-arc";
  * Campaign-level media setting. "mix" lets each slot carry its own media
  * type (see SlotMediaType), chosen from the slot brief or by the user.
  */
-export type CampaignMediaMode = "none" | "image" | "video" | "mix";
+export type CampaignMediaMode = "none" | "image" | "video" | "explainer" | "mix";
 
 /**
  * Media produced for a single slot. "explainer" is a branded HyperFrames
@@ -24,7 +24,11 @@ export const SLOT_MEDIA_TYPES: { value: SlotMediaType; label: string }[] = [
 
 export function isCampaignMediaMode(value: unknown): value is CampaignMediaMode {
   return (
-    value === "none" || value === "image" || value === "video" || value === "mix"
+    value === "none" ||
+    value === "image" ||
+    value === "video" ||
+    value === "explainer" ||
+    value === "mix"
   );
 }
 

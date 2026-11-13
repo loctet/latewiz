@@ -8,6 +8,7 @@ const OPTIONS: { value: CampaignMediaMode; label: string }[] = [
   { value: "none", label: "Text only" },
   { value: "image", label: "Images" },
   { value: "video", label: "Videos" },
+  { value: "explainer", label: "Explainers" },
   { value: "mix", label: "Mix" },
 ];
 
@@ -65,6 +66,8 @@ export function CampaignMediaModeSelect({
               ? "Generate or attach images when scheduling."
               : value === "video"
                 ? "Generate short videos when scheduling (OpenAI Sora or Pika on fal.ai)."
+                : value === "explainer"
+                  ? "Every post gets a branded explainer video (illustrations, voiceover, captions), rendered by the render worker before posts go to Zernio."
                 : "Each post gets its own media type, suggested from its role in the campaign. Change it per post."}
         </p>
       )}

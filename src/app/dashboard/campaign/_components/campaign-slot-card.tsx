@@ -135,7 +135,8 @@ export function CampaignSlotCard({
               <Calendar className="h-3 w-3" />
               {scheduleDate} · {scheduleTime}
             </span>
-            {mediaMode === "mix" && slotMediaType !== "none" ? (
+            {(mediaMode === "mix" && slotMediaType !== "none") ||
+            slotMediaType === "explainer" ? (
               <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
                 {slotMediaType === "image" ? (
                   <ImageIcon className="h-3 w-3" />
@@ -394,8 +395,8 @@ export function CampaignSlotCard({
                   )}
                 >
                   {deferredMode
-                    ? "Branded explainer video, rendered on the server from this post with your brand kit before it goes out."
-                    : "Explainer videos render on the server: switch the campaign to deferred generation, or this post goes out without video."}
+                    ? "Branded explainer video, rendered by the render worker shortly before this post goes out."
+                    : "Branded explainer video, rendered by the render worker before Schedule sends it to Zernio."}
                   {slot.renderStatus === "queued" && " Status: queued for rendering."}
                   {slot.renderStatus === "rendering" && " Status: rendering…"}
                   {slot.renderStatus === "done" && " Status: rendered."}

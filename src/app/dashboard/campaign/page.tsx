@@ -66,6 +66,7 @@ import {
   VideoProviderSelect,
 } from "@/components/ai";
 import type { CampaignMediaMode } from "@/lib/campaign-media";
+import type { ExplainerJobStatus } from "@/lib/render-jobs";
 import {
   campaignUsesMedia,
   migrateCampaignMediaMode,
@@ -74,6 +75,7 @@ import {
 import { CampaignSlotCard } from "./_components/campaign-slot-card";
 import {
   CalendarClock,
+  Film,
   ImageIcon,
   Loader2,
   Sparkles,
@@ -159,6 +161,11 @@ export default function CampaignPlannerPage() {
   const [regeneratingVideoIndex, setRegeneratingVideoIndex] = useState<
     number | null
   >(null);
+  const [explainerBatch, setExplainerBatch] = useState<{
+    done: number;
+    total: number;
+    message: string;
+  } | null>(null);
   const [applyingWatermark, setApplyingWatermark] = useState(false);
   const [draftRestored, setDraftRestored] = useState(false);
   const [activeSavedId, setActiveSavedId] = useState<string | null>(null);
@@ -1044,6 +1051,118 @@ export default function CampaignPlannerPage() {
   const existingImageCount = slots.filter((s) => s.image_url).length;
   const usesImages = campaignUsesMedia(mediaMode, slots, "image");
   const usesVideos = campaignUsesMedia(mediaMode, slots, "video");
+  const usesExplainers = campaignUsesMedia(mediaMode, slots, "explainer");
+  const explainerSlotIndices = slots
+    .map((slot, index) => ({ slot, index }))
+    .filter(({ slot, index }) => resolveSlotMediaType(mediaMode, slot, index) === "explainer");
+  const missingExplainerCount = explainerSlotIndices.filter(({ slot }) => !slot.video_url).length;
+
+  /**
+   * Queue an explainer render for every explainer slot without a video and
+   * wait for the render worker. Returns rendered video URLs by slot index
+   * (state updates are async, so callers use this map, not `slots`).
+   */
+  const renderExplainerSlots = async (
+    regenerateExisting = false
+  ): Promise<{ urls: Map<number, string>; failed: number }> => {
+    const urls = new Map<number, string>();
+    const targets = explainerSlotIndices.filter(
+      ({ slot }) => regenerateExisting || !slot.video_url
+    );
+    if (targets.length === 0) return { urls, failed: 0 };
+
+    setExplainerBatch({ done: 0, total: targets.length, message: "Writing scene scripts…" });
+    const queued: Array<{ index: number; jobId: string }> = [];
+    let failed = 0;
+    let warned = false;
+
+    for (const { slot, index } of targets) {
+      try {
+        const res = await fetch("/api/ai/explainer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            caption_context: [slot.title, slot.body].filter(Boolean).join("\n"),
+            prompt: slot.aiInstruction?.trim() || undefined,
+          }),
+        });
+        const data = (await res.json().catch(() => ({}))) as {
+          job_id?: string;
+          detail?: string | null;
+          error?: string;
+        };
+        if (!res.ok || !data.job_id) throw new Error(data.error ?? "Could not queue explainer");
+        if (data.detail && !warned) {
+          warned = true;
+          toast.warning("Explainers will be basic", {
+            description: /credit|quota|429/i.test(data.detail)
+              ? "Your OpenAI account has no credits left: no AI script, illustrations or voiceover."
+              : data.detail.slice(0, 220),
+            duration: 12000,
+          });
+        }
+        queued.push({ index, jobId: data.job_id });
+        updateSlot(index, { renderStatus: "queued", video_url: null });
+      } catch (e) {
+        failed++;
+        toast.error(`Post #${index + 1}: ${e instanceof Error ? e.message : "could not queue explainer"}`);
+      }
+    }
+
+    const pending = new Map(queued.map((q) => [q.jobId, q.index]));
+    const started = Date.now();
+    while (pending.size > 0 && Date.now() - started < 90 * 60 * 1000) {
+      await new Promise((r) => setTimeout(r, 4000));
+      let workerOnline = true;
+      let rendering = false;
+      for (const [jobId, index] of [...pending]) {
+        const res = await fetch(`/api/ai/explainer/${jobId}`, { cache: "no-store" });
+        if (!res.ok) continue;
+        const job = (await res.json()) as ExplainerJobStatus;
+        if (job.status === "done" && job.video_url) {
+          urls.set(index, job.video_url);
+          updateSlot(index, { video_url: job.video_url, image_url: null, renderStatus: "done" });
+          pending.delete(jobId);
+        } else if (job.status === "failed") {
+          failed++;
+          updateSlot(index, { renderStatus: "failed", lastError: job.error });
+          toast.error(`Post #${index + 1}: ${job.error ?? "explainer render failed"}`);
+          pending.delete(jobId);
+        } else {
+          if (job.status === "rendering") {
+            rendering = true;
+            updateSlot(index, { renderStatus: "rendering" });
+          }
+          workerOnline = workerOnline && job.worker_online;
+        }
+      }
+      setExplainerBatch({
+        done: urls.size,
+        total: targets.length,
+        message: !workerOnline
+          ? "Render worker is offline: start it with npm run render-worker. Videos stay queued."
+          : rendering
+            ? "Rendering (about 3–5 min per video). Keep this tab open."
+            : "Queued for rendering…",
+      });
+    }
+
+    failed += pending.size;
+    setExplainerBatch(null);
+    if (urls.size > 0) {
+      toast.success(`${urls.size} explainer video${urls.size === 1 ? "" : "s"} ready`);
+    }
+    return { urls, failed };
+  };
+
+  const renderAllExplainers = async (regenerateExisting = false) => {
+    try {
+      await renderExplainerSlots(regenerateExisting);
+    } catch (e) {
+      setExplainerBatch(null);
+      toast.error(e instanceof Error ? e.message : "Explainer rendering failed");
+    }
+  };
 
   const regenerateSlotVideo = async (index: number) => {
     const slot = slots[index];
@@ -1108,13 +1227,33 @@ export default function CampaignPlannerPage() {
     let ok = 0;
     let fail = 0;
 
+    // Explainers render on the worker first, so Zernio gets finished videos
+    // and nothing depends on this computer being on at posting time.
+    let renderedExplainers = new Map<number, string>();
+    if (missingExplainerCount > 0) {
+      toast.message(
+        `Rendering ${missingExplainerCount} explainer video${missingExplainerCount === 1 ? "" : "s"} before scheduling…`
+      );
+      const result = await renderExplainerSlots();
+      renderedExplainers = result.urls;
+      if (result.failed > 0) {
+        setCommitting(false);
+        toast.error(
+          `${result.failed} explainer${result.failed === 1 ? "" : "s"} did not render. Fix or switch those posts, then schedule again (finished videos are kept).`
+        );
+        return;
+      }
+    }
+
     const platforms = selectedAccounts.map((account) => ({
       platform: account.platform as Platform,
       accountId: account._id,
     }));
 
     for (let i = 0; i < slots.length; i++) {
-      const slot = slots[i];
+      const slot = renderedExplainers.has(i)
+        ? { ...slots[i], video_url: renderedExplainers.get(i), image_url: null }
+        : slots[i];
       try {
         let mediaItems:
           | { type: "image" | "video"; url: string }[]
@@ -1707,6 +1846,49 @@ export default function CampaignPlannerPage() {
                 <div className="grid gap-2 sm:grid-cols-2">
                   <VideoProviderSelect compact />
                   <VideoPromptStyleSelect compact />
+                </div>
+              )}
+              {usesExplainers && (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="h-8 cursor-pointer"
+                      onClick={() => renderAllExplainers(false)}
+                      disabled={explainerBatch !== null || committing || missingExplainerCount === 0}
+                    >
+                      {explainerBatch ? (
+                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Film className="mr-1.5 h-3.5 w-3.5" />
+                      )}
+                      {explainerBatch
+                        ? `Explainers ${explainerBatch.done}/${explainerBatch.total}`
+                        : missingExplainerCount > 0
+                          ? `Render ${missingExplainerCount} explainer${missingExplainerCount === 1 ? "" : "s"}`
+                          : "All explainers rendered"}
+                    </Button>
+                    {explainerSlotIndices.length > missingExplainerCount && !explainerBatch && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 cursor-pointer"
+                        onClick={() => renderAllExplainers(true)}
+                        disabled={committing}
+                      >
+                        Re-render all
+                      </Button>
+                    )}
+                  </div>
+                  <p className="text-[11px] leading-snug text-muted-foreground">
+                    {explainerBatch?.message ??
+                      (isDeferredMode
+                        ? "Deferred: each explainer renders shortly before its post time, so the render worker must be running then. Or render them now."
+                        : "Videos render on the render worker (npm run render-worker), then Schedule uploads them to Zernio with your post times. Your computer can be off after that.")}
+                  </p>
                 </div>
               )}
             </div>
