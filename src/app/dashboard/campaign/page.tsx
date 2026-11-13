@@ -66,7 +66,11 @@ import {
   VideoProviderSelect,
 } from "@/components/ai";
 import type { CampaignMediaMode } from "@/lib/campaign-media";
-import { migrateCampaignMediaMode } from "@/lib/campaign-media";
+import {
+  campaignUsesMedia,
+  migrateCampaignMediaMode,
+  resolveSlotMediaType,
+} from "@/lib/campaign-media";
 import { CampaignSlotCard } from "./_components/campaign-slot-card";
 import {
   CalendarClock,
@@ -363,6 +367,7 @@ export default function CampaignPlannerPage() {
           ),
           image_url: slot.image_url,
           video_url: slot.video_url,
+          mediaType: slot.mediaType,
           aiInstruction: slot.aiInstruction,
           imagePromptStyleId: slot.imagePromptStyleId ?? imagePromptStyleId,
           videoPromptStyleId:
@@ -937,7 +942,11 @@ export default function CampaignPlannerPage() {
 
     const targets = slots
       .map((slot, index) => ({ slot, index }))
-      .filter(({ slot }) => regenerateExisting || !slot.image_url);
+      .filter(
+        ({ slot, index }) =>
+          resolveSlotMediaType(mediaMode, slot, index) === "image" &&
+          (regenerateExisting || !slot.image_url)
+      );
 
     if (targets.length === 0) {
       toast.message("All slots already have images");
@@ -1033,6 +1042,8 @@ export default function CampaignPlannerPage() {
   };
 
   const existingImageCount = slots.filter((s) => s.image_url).length;
+  const usesImages = campaignUsesMedia(mediaMode, slots, "image");
+  const usesVideos = campaignUsesMedia(mediaMode, slots, "video");
 
   const regenerateSlotVideo = async (index: number) => {
     const slot = slots[index];
@@ -1116,7 +1127,10 @@ export default function CampaignPlannerPage() {
           const file = await urlToFile(slot.image_url, `campaign-${i}.png`);
           const uploaded = await uploadMutation.mutateAsync(file);
           mediaItems = [{ type: "image", url: uploaded.url }];
-        } else if (mediaMode === "video" && videoConfigured) {
+        } else if (
+          resolveSlotMediaType(mediaMode, slot, i) === "video" &&
+          videoConfigured
+        ) {
           const r = await videoMutation.mutateAsync({
             captionContext: slot.content || slot.body,
             promptStyleId: slot.videoPromptStyleId,
@@ -1126,7 +1140,10 @@ export default function CampaignPlannerPage() {
             const uploaded = await uploadMutation.mutateAsync(file);
             mediaItems = [{ type: "video", url: uploaded.url }];
           }
-        } else if (mediaMode === "image" && status?.openai_configured) {
+        } else if (
+          resolveSlotMediaType(mediaMode, slot, i) === "image" &&
+          status?.openai_configured
+        ) {
           const r = await imageMutation.mutateAsync({
             captionContext: slot.content || slot.body,
             promptStyleId: slot.imagePromptStyleId ?? imagePromptStyleId,
@@ -1632,7 +1649,7 @@ export default function CampaignPlannerPage() {
                 applyingToExisting={applyingWatermark}
                 onApplyToExisting={applyWatermarkToExistingImages}
               />
-              {mediaMode === "image" && (
+              {usesImages && (
                 <div className="space-y-2">
                   <ImagePromptStyleSelect
                     compact
@@ -1686,7 +1703,7 @@ export default function CampaignPlannerPage() {
                   ) : null}
                 </div>
               )}
-              {mediaMode === "video" && (
+              {usesVideos && (
                 <div className="grid gap-2 sm:grid-cols-2">
                   <VideoProviderSelect compact />
                   <VideoPromptStyleSelect compact />
@@ -1723,10 +1740,12 @@ export default function CampaignPlannerPage() {
               selectedAccountIds={selectedAccountIds}
               onSelectionChange={setSelectedAccountIds}
               hasVideo={
-                mediaMode === "video" || slots.some((s) => s.video_url)
+                usesVideos ||
+                campaignUsesMedia(mediaMode, slots, "explainer") ||
+                slots.some((s) => s.video_url)
               }
               hasImages={
-                mediaMode === "image" || slots.some((s) => s.image_url)
+                usesImages || slots.some((s) => s.image_url)
               }
             />
             {selectedAccountIds.length === 0 && (

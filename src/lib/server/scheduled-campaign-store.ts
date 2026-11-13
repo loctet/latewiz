@@ -1,3 +1,5 @@
+import { isCampaignMediaMode, isSlotMediaType } from "@/lib/campaign-media";
+import { normalizeExplainerScript } from "@/lib/explainer-script";
 import { randomUUID } from "crypto";
 import { and, desc, eq } from "drizzle-orm";
 import { dbReady } from "@/db";
@@ -29,6 +31,11 @@ function normalizeSlot(
     content: String(slot.content ?? ""),
     image_url: slot.image_url ?? null,
     video_url: slot.video_url ?? null,
+    mediaType: isSlotMediaType(slot.mediaType) ? slot.mediaType : undefined,
+    explainerScript: slot.explainerScript
+      ? normalizeExplainerScript(slot.explainerScript) ?? undefined
+      : undefined,
+    renderStatus: slot.renderStatus ?? undefined,
     aiInstruction: slot.aiInstruction ?? undefined,
     imagePromptStyleId: slot.imagePromptStyleId ?? undefined,
     videoPromptStyleId: slot.videoPromptStyleId ?? undefined,
@@ -80,10 +87,9 @@ function normalizeCampaign(
     campaignHint: String(campaign.campaignHint ?? ""),
     trendBlock: String(campaign.trendBlock ?? ""),
     listItemsBlock: String(campaign.listItemsBlock ?? ""),
-    mediaMode:
-      campaign.mediaMode === "image" || campaign.mediaMode === "video"
-        ? campaign.mediaMode
-        : "none",
+    mediaMode: isCampaignMediaMode(campaign.mediaMode)
+      ? campaign.mediaMode
+      : "none",
     niche: { ...defaultNicheProfile(), ...(campaign.niche ?? {}) },
     postPromptStyleId: String(campaign.postPromptStyleId ?? "auto"),
     researchDepthId:

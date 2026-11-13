@@ -8,6 +8,7 @@ const OPTIONS: { value: CampaignMediaMode; label: string }[] = [
   { value: "none", label: "Text only" },
   { value: "image", label: "Images" },
   { value: "video", label: "Videos" },
+  { value: "mix", label: "Mix" },
 ];
 
 interface CampaignMediaModeSelectProps {
@@ -62,7 +63,9 @@ export function CampaignMediaModeSelect({
             ? "Posts will be text-only unless you add media per slot."
             : value === "image"
               ? "Generate or attach images when scheduling."
-              : "Generate short videos when scheduling (OpenAI Sora or Pika on fal.ai)."}
+              : value === "video"
+                ? "Generate short videos when scheduling (OpenAI Sora or Pika on fal.ai)."
+                : "Each post gets its own media type, suggested from its role in the campaign. Change it per post."}
         </p>
       )}
     </div>

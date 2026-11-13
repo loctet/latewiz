@@ -1,3 +1,6 @@
+import { generateExplainerScript } from "@/lib/openai/explainer-script";
+import { enqueueRenderJob, getRenderJobForSlot } from "@/lib/server/render-jobs";
+import { resolveSlotMediaType, type SlotMediaType } from "@/lib/campaign-media";
 import {
   acquireScheduledCampaignSlot,
   computeCampaignStatus,
@@ -138,7 +141,8 @@ async function maybeGenerateMedia(
   lateKey: string,
   openaiKey: string | null,
   falKey: string | null,
-  userId: string
+  userId: string,
+  mediaType: SlotMediaType
 ): Promise<{
   mediaItems?: Array<{ type: "image" | "video"; url: string }>;
   slotPatch: Partial<ScheduledCampaignSlot>;
@@ -149,7 +153,7 @@ async function maybeGenerateMedia(
     .join("\n\n");
   const digest = captionContext.slice(0, 120);
 
-  if (campaign.mediaMode === "image") {
+  if (mediaType === "image") {
     if (!openaiKey) {
       return {
         slotPatch: {},
@@ -206,7 +210,7 @@ async function maybeGenerateMedia(
     };
   }
 
-  if (campaign.mediaMode === "video") {
+  if (mediaType === "video") {
     const videoResult = await generatePostVideo(
       campaign.videoProvider,
       openaiKey,
@@ -247,6 +251,88 @@ async function maybeGenerateMedia(
   }
 
   return { slotPatch: {} };
+}
+
+type ExplainerMediaResult =
+  | { state: "pending"; slotPatch: Partial<ScheduledCampaignSlot> }
+  | {
+      state: "ready";
+      mediaItems: Array<{ type: "video"; url: string }>;
+      slotPatch: Partial<ScheduledCampaignSlot>;
+    };
+
+/**
+ * Explainer slots render out-of-band (scripts/render-worker.ts). First call
+ * writes the scene script and queues a job; later calls return "pending"
+ * until the worker finishes, then upload the MP4 for publishing.
+ */
+async function resolveExplainerMedia(
+  campaign: ScheduledCampaign,
+  slot: ScheduledCampaignSlot,
+  lateKey: string,
+  openaiKey: string | null,
+  userId: string
+): Promise<ExplainerMediaResult> {
+  const job = await getRenderJobForSlot(campaign.id, slot.id);
+
+  if (job?.status === "done" && job.mediaId) {
+    const appUrl = `/api/media/generated/file/${encodeURIComponent(job.mediaId)}`;
+    const dataUrl = await materializeGeneratedMediaUrl(userId, appUrl);
+    if (!dataUrl.startsWith("data:")) {
+      throw new Error("Rendered explainer video is missing from media storage.");
+    }
+    const uploaded = await uploadMediaFromUrl(
+      lateKey,
+      dataUrl,
+      "video",
+      `scheduled-campaign-${slot.id}`
+    );
+    return {
+      state: "ready",
+      mediaItems: [{ type: "video", url: uploaded.url }],
+      slotPatch: { video_url: appUrl, image_url: null, renderStatus: "done" },
+    };
+  }
+
+  if (job?.status === "failed") {
+    throw new Error(`Explainer render failed: ${job.error ?? "unknown error"}`);
+  }
+
+  if (job) {
+    return {
+      state: "pending",
+      slotPatch: { renderStatus: job.status === "rendering" ? "rendering" : "queued" },
+    };
+  }
+
+  const { script, detail } = slot.explainerScript
+    ? { script: slot.explainerScript, detail: null }
+    : await generateExplainerScript({
+        apiKey: openaiKey,
+        title: slot.title,
+        body: slot.body,
+        aiInstruction: slot.aiInstruction,
+      });
+
+  await enqueueRenderJob({
+    userId,
+    campaignId: campaign.id,
+    slotId: slot.id,
+    payload: {
+      template: "explainer",
+      script,
+      captionDigest: [slot.title, slot.body].filter(Boolean).join("\n").slice(0, 120),
+    },
+  });
+
+  return {
+    state: "pending",
+    slotPatch: {
+      explainerScript: script,
+      renderStatus: "queued",
+      ...(detail ? { detail } : {}),
+    },
+  };
 }
 
 function extractPostId(data: unknown): string | null {
@@ -519,9 +605,43 @@ async function processScheduledCampaignSlot(
 
     const existingImage = generatedSlot.image_url?.trim();
     const existingVideo = generatedSlot.video_url?.trim();
-    if (campaign.mediaMode === "image" && existingImage?.startsWith("http")) {
+    const slotMediaType = resolveSlotMediaType(
+      campaign.mediaMode,
+      generatedSlot,
+      slotIndex
+    );
+    if (slotMediaType === "explainer") {
+      const explainer = await resolveExplainerMedia(
+        campaign,
+        generatedSlot,
+        lateKey,
+        openaiKey,
+        userId
+      );
+      if (explainer.state === "pending") {
+        // Hand the slot back; the render worker fills video_url and the next
+        // cron run posts it. Copy is already saved, so nothing regenerates.
+        await updateScheduledCampaign(campaignId, (current) => ({
+          ...current,
+          slots: current.slots.map((currentSlot) =>
+            currentSlot.id === slotId
+              ? {
+                  ...currentSlot,
+                  ...explainer.slotPatch,
+                  status: "pending_generation",
+                  processingLeaseUntil: null,
+                  processingOwnerToken: null,
+                }
+              : currentSlot
+          ),
+        }));
+        return { status: "skipped" };
+      }
+      mediaItems = explainer.mediaItems;
+      mediaSlotPatch = explainer.slotPatch;
+    } else if (slotMediaType === "image" && existingImage?.startsWith("http")) {
       mediaItems = [{ type: "image", url: existingImage }];
-    } else if (campaign.mediaMode === "video" && existingVideo?.startsWith("http")) {
+    } else if (slotMediaType === "video" && existingVideo?.startsWith("http")) {
       mediaItems = [{ type: "video", url: existingVideo }];
     } else {
       const media = await maybeGenerateMedia(
@@ -530,7 +650,8 @@ async function processScheduledCampaignSlot(
         lateKey,
         openaiKey,
         falKey,
-        userId
+        userId,
+        slotMediaType
       );
       mediaItems = media.mediaItems;
       mediaSlotPatch = media.slotPatch;

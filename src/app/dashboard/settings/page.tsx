@@ -46,6 +46,7 @@ import {
   ImageIcon,
   Film,
   Stamp,
+  Palette,
   Shield,
   FileText,
   Sparkles,
@@ -60,6 +61,7 @@ import {
   PostPromptTemplatesEditor,
   VideoPromptTemplatesEditor,
   ImageWatermarkSettings,
+  BrandKitSettings,
 } from "@/components/settings";
 
 type VaultStatus = {
@@ -614,6 +616,14 @@ export default function SettingsPage() {
               <h2 className="text-sm font-semibold">Image watermark</h2>
             </div>
             <ImageWatermarkSettings />
+          </div>
+
+          <div className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5">
+            <div className="mb-3 flex items-center gap-2">
+              <Palette className="h-4 w-4 text-muted-foreground" />
+              <h2 className="text-sm font-semibold">Brand kit</h2>
+            </div>
+            <BrandKitSettings />
           </div>
         </TabsContent>
 

@@ -85,7 +85,40 @@ NEXT_PUBLIC_GOOGLE_AUTH_ENABLED=true
 - **Niche-first AI** — Biology, SaaS, Fitness, Crypto presets (or custom)
 - **13 Platforms** — Instagram, TikTok, YouTube, LinkedIn, and more via Zernio
 - **Campaign planner** — Deferred slots run with the campaign owner’s vault keys
+- **Mixed-media campaigns** — Per-post text, image, AI video (Sora/Pika) or branded explainer
+- **Brand kit** — Logo, colors, font, theme and signature applied to explainer videos
 - **Open Source** — MIT licensed
+
+## Explainer videos (render worker)
+
+Explainer posts are rendered from HTML with [HyperFrames](https://hyperframes.heygen.com)
+by a separate worker process. Vercel functions cannot run Chrome or FFmpeg, so the
+worker runs on any machine with **Node.js 22+**, **FFmpeg** on `PATH`, and access
+to the app database (local SQLite, or Turso with `USE_TURSO=true`). No HyperFrames
+account is needed.
+
+```bash
+npm run render-worker            # poll forever
+npm run render-worker -- --once  # handle at most one job
+```
+
+Flow, for deferred campaigns only:
+
+1. The cron runner reaches an explainer slot, writes its copy, asks OpenAI for a scene
+   script, and queues a row in `render_jobs`.
+2. The worker renders `video-templates/explainer` with the user's brand kit and stores
+   the MP4 in `generated_media`.
+3. The next cron run publishes the post with the video.
+
+Give deferred campaigns enough `generationLeadMinutes` for a render (about 1–3 minutes
+per video). Edit the template in `video-templates/explainer/`, then check it with
+`npx hyperframes check` from that folder.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `RENDER_QUALITY` | `looks` | `draft`, `looks` or `delivery` |
+| `RENDER_POLL_MS` | `15000` | Poll interval when the queue is empty |
+| `HYPERFRAMES_PACKAGE` | `hyperframes@0.9.41` | CLI package passed to `npx` |
 
 ## Configuration
 

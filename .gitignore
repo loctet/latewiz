@@ -54,3 +54,5 @@ next-env.d.ts
 /data/generated-reports/
 
 /hostinger-cron
+# HyperFrames local artifacts
+.hyperframes/

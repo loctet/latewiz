@@ -11,7 +11,11 @@ import {
   VideoPromptStyleSelect,
   VideoProviderSelect,
 } from "@/components/ai";
-import type { CampaignMediaMode } from "@/lib/campaign-media";
+import {
+  resolveSlotMediaType,
+  SLOT_MEDIA_TYPES,
+  type CampaignMediaMode,
+} from "@/lib/campaign-media";
 import {
   isoToLocalDateInput,
   isoToLocalTimeInput,
@@ -98,8 +102,9 @@ export function CampaignSlotCard({
     onUpdate({ scheduled_at: iso });
   };
 
-  const showImageMedia = mediaMode === "image" || Boolean(slot.image_url);
-  const showVideoMedia = mediaMode === "video" || Boolean(slot.video_url);
+  const slotMediaType = resolveSlotMediaType(mediaMode, slot, index);
+  const showImageMedia = slotMediaType === "image" || Boolean(slot.image_url);
+  const showVideoMedia = slotMediaType === "video" || Boolean(slot.video_url);
 
   const preview =
     slot.body?.trim() ||
@@ -130,6 +135,24 @@ export function CampaignSlotCard({
               <Calendar className="h-3 w-3" />
               {scheduleDate} · {scheduleTime}
             </span>
+            {mediaMode === "mix" && slotMediaType !== "none" ? (
+              <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                {slotMediaType === "image" ? (
+                  <ImageIcon className="h-3 w-3" />
+                ) : (
+                  <Film className="h-3 w-3" />
+                )}
+                {slotMediaType === "video"
+                  ? "Video"
+                  : slotMediaType === "explainer"
+                    ? slot.renderStatus === "rendering"
+                      ? "Explainer · rendering"
+                      : slot.renderStatus === "queued"
+                        ? "Explainer · queued"
+                        : "Explainer"
+                    : "Image"}
+              </span>
+            ) : null}
             {slot.generationStatus ? (
               <Badge
                 variant={
@@ -337,6 +360,50 @@ export function CampaignSlotCard({
               </Button>
             ) : null}
           </div>
+
+          {mediaMode === "mix" && (
+            <div className="space-y-1.5">
+              <Label className="text-xs">Media for this post</Label>
+              <div className="flex flex-wrap gap-1">
+                {SLOT_MEDIA_TYPES.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => onUpdate({ mediaType: opt.value })}
+                    className={cn(
+                      "cursor-pointer rounded-md border px-2.5 py-1 text-xs font-medium transition-colors duration-200",
+                      slotMediaType === opt.value
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-input bg-background hover:bg-muted"
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              {!slot.mediaType && (
+                <p className="text-[11px] text-muted-foreground">
+                  Suggested from this post&apos;s role in the campaign.
+                </p>
+              )}
+              {slotMediaType === "explainer" && (
+                <p
+                  className={cn(
+                    "text-[11px]",
+                    deferredMode ? "text-muted-foreground" : "text-amber-600 dark:text-amber-400"
+                  )}
+                >
+                  {deferredMode
+                    ? "Branded explainer video, rendered on the server from this post with your brand kit before it goes out."
+                    : "Explainer videos render on the server: switch the campaign to deferred generation, or this post goes out without video."}
+                  {slot.renderStatus === "queued" && " Status: queued for rendering."}
+                  {slot.renderStatus === "rendering" && " Status: rendering…"}
+                  {slot.renderStatus === "done" && " Status: rendered."}
+                  {slot.renderStatus === "failed" && " Status: render failed (see error)."}
+                </p>
+              )}
+            </div>
+          )}
 
           {showImageMedia && (
             <div className="space-y-2 rounded-md border border-dashed p-2.5">

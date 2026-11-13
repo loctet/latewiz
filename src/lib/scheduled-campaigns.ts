@@ -1,4 +1,6 @@
-import type { CampaignMediaMode } from "@/lib/campaign-media";
+import type { CampaignMediaMode, SlotMediaType } from "@/lib/campaign-media";
+import type { ExplainerScript } from "@/lib/explainer-script";
+import type { SlotRenderStatus } from "@/lib/render-jobs";
 import type { ImageWatermarkSettings } from "@/lib/image-watermark";
 import type { Platform } from "@/lib/late-api";
 import type { CampaignPlanningMode } from "@/lib/campaign-draft-storage";
@@ -39,6 +41,12 @@ export type ScheduledCampaignSlot = {
   content: string;
   image_url?: string | null;
   video_url?: string | null;
+  /** Per-slot media choice; only used when the campaign mediaMode is "mix" */
+  mediaType?: SlotMediaType;
+  /** Scene script for "explainer" slots, generated before rendering */
+  explainerScript?: ExplainerScript;
+  /** Server render state for "explainer" slots */
+  renderStatus?: SlotRenderStatus;
   aiInstruction?: string;
   imagePromptStyleId?: string;
   videoPromptStyleId?: string;

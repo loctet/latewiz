@@ -1,0 +1,467 @@
+<!doctype html>
+<html
+  lang="en"
+  data-composition-variables='[
+    {"id":"scenes","type":"string","label":"Scenes (JSON)","default":"[{\"type\":\"title\",\"heading\":\"3 ways to grow your audience\",\"sub\":\"A 30-second explainer\",\"duration\":4},{\"type\":\"bullets\",\"heading\":\"Post with a plan\",\"items\":[\"Pick one core topic\",\"Publish on a fixed rhythm\",\"Reuse your best ideas\"],\"duration\":6},{\"type\":\"stat\",\"value\":\"3x\",\"label\":\"more reach for consistent creators\",\"duration\":4},{\"type\":\"steps\",\"heading\":\"Start this week\",\"items\":[\"Write 5 hooks\",\"Schedule 3 posts\",\"Review what worked\"],\"duration\":6},{\"type\":\"quote\",\"text\":\"Consistency beats intensity.\",\"author\":\"Every growth chart\",\"duration\":4}]"},
+    {"id":"brandName","type":"string","label":"Brand name","default":"Acme Studio"},
+    {"id":"primaryColor","type":"color","label":"Primary","default":"#1E3A5F"},
+    {"id":"secondaryColor","type":"color","label":"Secondary","default":"#4A6FA5"},
+    {"id":"accentColor","type":"color","label":"Accent","default":"#F2A541"},
+    {"id":"backgroundColor","type":"color","label":"Background","default":"#0F172A"},
+    {"id":"textColor","type":"color","label":"Text","default":"#F8FAFC"},
+    {"id":"fontFamily","type":"enum","label":"Font","default":"Inter","options":[{"value":"Inter","label":"Inter"},{"value":"Poppins","label":"Poppins"},{"value":"Montserrat","label":"Montserrat"},{"value":"Space Grotesk","label":"Space Grotesk"},{"value":"DM Sans","label":"DM Sans"},{"value":"Playfair Display","label":"Playfair Display"}]},
+    {"id":"videoTheme","type":"enum","label":"Theme","default":"bold","options":[{"value":"minimal","label":"Minimal"},{"value":"bold","label":"Bold"},{"value":"gradient","label":"Gradient"},{"value":"editorial","label":"Editorial"}]},
+    {"id":"logoPosition","type":"enum","label":"Logo position","default":"top-right","options":[{"value":"top-left","label":"Top left"},{"value":"top-right","label":"Top right"},{"value":"bottom-left","label":"Bottom left"},{"value":"bottom-right","label":"Bottom right"}]},
+    {"id":"logo","type":"string","label":"Logo file","default":""},
+    {"id":"signature","type":"string","label":"Signature","default":"— The Acme team"},
+    {"id":"ctaText","type":"string","label":"Call to action","default":"Follow for more"},
+    {"id":"website","type":"string","label":"Website","default":"acme.studio"},
+    {"id":"handle","type":"string","label":"Handle","default":"@acmestudio"},
+    {"id":"showIntro","type":"boolean","label":"Logo intro","default":true},
+    {"id":"showOutro","type":"boolean","label":"Signature outro","default":true}
+  ]'
+>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <title>Branded Explainer</title>
+    <script src="gsap.min.js"></script>
+    <style>
+      @font-face { font-family: "Inter"; src: url("fonts/inter-latin-400-normal.woff2") format("woff2"); font-weight: 400; }
+      @font-face { font-family: "Inter"; src: url("fonts/inter-latin-700-normal.woff2") format("woff2"); font-weight: 700; }
+      @font-face { font-family: "Poppins"; src: url("fonts/poppins-latin-400-normal.woff2") format("woff2"); font-weight: 400; }
+      @font-face { font-family: "Poppins"; src: url("fonts/poppins-latin-700-normal.woff2") format("woff2"); font-weight: 700; }
+      @font-face { font-family: "Montserrat"; src: url("fonts/montserrat-latin-400-normal.woff2") format("woff2"); font-weight: 400; }
+      @font-face { font-family: "Montserrat"; src: url("fonts/montserrat-latin-700-normal.woff2") format("woff2"); font-weight: 700; }
+      @font-face { font-family: "Space Grotesk"; src: url("fonts/space-grotesk-latin-400-normal.woff2") format("woff2"); font-weight: 400; }
+      @font-face { font-family: "Space Grotesk"; src: url("fonts/space-grotesk-latin-700-normal.woff2") format("woff2"); font-weight: 700; }
+      @font-face { font-family: "DM Sans"; src: url("fonts/dm-sans-latin-400-normal.woff2") format("woff2"); font-weight: 400; }
+      @font-face { font-family: "DM Sans"; src: url("fonts/dm-sans-latin-700-normal.woff2") format("woff2"); font-weight: 700; }
+      @font-face { font-family: "Playfair Display"; src: url("fonts/playfair-display-latin-400-normal.woff2") format("woff2"); font-weight: 400; }
+      @font-face { font-family: "Playfair Display"; src: url("fonts/playfair-display-latin-700-normal.woff2") format("woff2"); font-weight: 700; }
+
+      html, body { margin: 0; padding: 0; }
+      body { background: #000; }
+
+      #root {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        /* Theme tokens; init() overrides these per theme. */
+        --bg: var(--backgroundColor, #0F172A);
+        --fg: var(--textColor, #F8FAFC);
+        --muted: rgba(248, 250, 252, 0.72);
+        --accent: var(--accentColor, #F2A541);
+        --primary: var(--primaryColor, #1E3A5F);
+        --secondary: var(--secondaryColor, #4A6FA5);
+        --font: "Inter", sans-serif;
+        --display-font: var(--font);
+        background: var(--bg);
+        color: var(--fg);
+        font-family: var(--font);
+      }
+
+      .bg-layer { position: absolute; inset: 0; }
+      #bg-blob-a, #bg-blob-b {
+        position: absolute;
+        width: 900px;
+        height: 900px;
+        border-radius: 50%;
+        filter: blur(140px);
+        opacity: 0.45;
+      }
+      #bg-blob-a { left: -300px; top: -200px; background: var(--primary); }
+      #bg-blob-b { right: -360px; bottom: -260px; background: var(--secondary); }
+
+      .scene {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: 0 110px;
+        box-sizing: border-box;
+        opacity: 0;
+      }
+      .rule {
+        width: 140px;
+        height: 12px;
+        border-radius: 6px;
+        background: var(--accent);
+        margin-bottom: 56px;
+        transform-origin: left center;
+      }
+      .heading {
+        font-family: var(--display-font);
+        font-weight: 700;
+        font-size: 104px;
+        line-height: 1.05;
+        letter-spacing: -0.02em;
+        margin: 0;
+        max-width: 860px;
+        overflow-wrap: break-word;
+      }
+      .sub {
+        margin: 40px 0 0;
+        font-size: 46px;
+        line-height: 1.3;
+        color: var(--muted);
+        max-width: 860px;
+      }
+      .list { margin: 72px 0 0; padding: 0; list-style: none; }
+      .list li {
+        display: flex;
+        align-items: flex-start;
+        gap: 36px;
+        font-size: 54px;
+        line-height: 1.25;
+        margin-bottom: 52px;
+        max-width: 860px;
+      }
+      .list .marker {
+        flex: 0 0 auto;
+        width: 76px;
+        height: 76px;
+        border-radius: 22px;
+        background: var(--accent);
+        color: var(--bg);
+        font-weight: 700;
+        font-size: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .list.bullets .marker { width: 28px; height: 28px; border-radius: 50%; margin-top: 22px; }
+      .stat-value {
+        font-family: var(--display-font);
+        font-weight: 700;
+        font-size: 300px;
+        line-height: 1;
+        color: var(--accent);
+        letter-spacing: -0.04em;
+      }
+      .stat-label { margin-top: 36px; font-size: 60px; line-height: 1.2; max-width: 860px; }
+      .quote-mark {
+        font-family: "Playfair Display", serif;
+        font-size: 260px;
+        line-height: 0.6;
+        color: var(--accent);
+        height: 140px;
+      }
+      .quote-text {
+        font-family: var(--display-font);
+        font-weight: 700;
+        font-size: 86px;
+        line-height: 1.12;
+        max-width: 860px;
+      }
+      .quote-author { margin-top: 48px; font-size: 44px; color: var(--muted); }
+
+      .center { align-items: center; text-align: center; }
+      .center .rule { transform-origin: center center; }
+
+      #logo-corner {
+        position: absolute;
+        height: 96px;
+        max-width: 320px;
+        object-fit: contain;
+        opacity: 0;
+      }
+      #logo-corner.top-left { left: 72px; top: 96px; }
+      #logo-corner.top-right { right: 72px; top: 96px; }
+      #logo-corner.bottom-left { left: 72px; bottom: 120px; }
+      #logo-corner.bottom-right { right: 72px; bottom: 120px; }
+
+      .intro-logo { max-width: 620px; max-height: 360px; object-fit: contain; }
+      .intro-name {
+        font-family: var(--display-font);
+        font-weight: 700;
+        font-size: 110px;
+        letter-spacing: -0.02em;
+      }
+      .outro-cta {
+        font-family: var(--display-font);
+        font-weight: 700;
+        font-size: 92px;
+        line-height: 1.08;
+        max-width: 880px;
+      }
+      .outro-handle {
+        margin-top: 56px;
+        padding: 22px 48px;
+        border-radius: 999px;
+        background: var(--accent);
+        color: var(--bg);
+        font-size: 50px;
+        font-weight: 700;
+      }
+      .outro-sign { margin-top: 64px; font-size: 46px; color: var(--muted); }
+      .outro-site { margin-top: 18px; font-size: 40px; color: var(--muted); }
+      .outro-logo { max-width: 420px; max-height: 200px; object-fit: contain; margin-bottom: 64px; }
+
+      #progress-track {
+        position: absolute;
+        left: 72px;
+        right: 72px;
+        bottom: 64px;
+        height: 8px;
+        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.14);
+        overflow: hidden;
+      }
+      #progress-fill {
+        width: 100%;
+        height: 100%;
+        background: var(--accent);
+        transform-origin: left center;
+      }
+
+      /* Editorial theme: thin rules, serif display type, no blobs. */
+      .theme-editorial .bg-layer { display: none; }
+      .theme-editorial .rule { height: 4px; width: 100%; max-width: 860px; border-radius: 0; }
+      .theme-editorial .list .marker { border-radius: 0; }
+      /* Minimal theme: no blobs, calm accent. */
+      .theme-minimal .bg-layer { display: none; }
+      .theme-minimal #progress-track { background: rgba(0, 0, 0, 0.08); }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="explainer"
+      data-start="0"
+      data-width="1080"
+      data-height="1920"
+    >
+      <div class="bg-layer" id="bg-layer">
+        <div id="bg-blob-a" data-layout-allow-overflow></div>
+        <div id="bg-blob-b" data-layout-allow-overflow></div>
+      </div>
+      <div id="scenes"></div>
+      <img id="logo-corner" alt="" />
+      <div id="progress-track"><div id="progress-fill"></div></div>
+    </div>
+
+    <script>
+      (function () {
+        const v = window.__hyperframes.getVariables();
+        const root = document.getElementById("root");
+        const host = document.getElementById("scenes");
+
+        // ---- Theme ----------------------------------------------------
+        const theme = ["minimal", "bold", "gradient", "editorial"].includes(v.videoTheme)
+          ? v.videoTheme
+          : "bold";
+        root.classList.add("theme-" + theme);
+        const font = String(v.fontFamily || "Inter");
+        root.style.setProperty("--font", '"' + font + '", sans-serif');
+        if (theme === "editorial") {
+          root.style.setProperty("--display-font", '"Playfair Display", serif');
+        }
+        if (theme === "minimal") {
+          root.style.setProperty("--bg", "#FAFAF7");
+          root.style.setProperty("--fg", "#111111");
+          root.style.setProperty("--muted", "rgba(17, 17, 17, 0.62)");
+        } else if (theme === "gradient") {
+          root.style.background =
+            "linear-gradient(160deg, " + v.primaryColor + ", " + v.secondaryColor + ")";
+        } else if (theme === "editorial") {
+          root.style.setProperty("--bg", "#F4EFE6");
+          root.style.setProperty("--fg", "#1A1A1A");
+          root.style.setProperty("--muted", "rgba(26, 26, 26, 0.62)");
+        }
+
+        // ---- Scene data ----------------------------------------------
+        function text(value, max) {
+          return String(value == null ? "" : value).trim().slice(0, max);
+        }
+        function clampDuration(d, fallback) {
+          const n = Number(d);
+          if (!isFinite(n)) return fallback;
+          return Math.min(10, Math.max(2.5, n));
+        }
+        let scenes = [];
+        try {
+          const parsed = JSON.parse(v.scenes || "[]");
+          if (Array.isArray(parsed)) scenes = parsed.slice(0, 8);
+        } catch (e) {
+          scenes = [];
+        }
+        if (scenes.length === 0) {
+          scenes = [{ type: "title", heading: text(v.brandName, 60) || "Explainer", duration: 4 }];
+        }
+
+        const logo = text(v.logo, 500);
+        const brand = text(v.brandName, 60);
+
+        function el(tag, className, content) {
+          const node = document.createElement(tag);
+          if (className) node.className = className;
+          if (content != null) node.textContent = content;
+          return node;
+        }
+        function img(className, src) {
+          const node = document.createElement("img");
+          node.className = className;
+          node.src = src;
+          node.alt = "";
+          return node;
+        }
+
+        // Each entry: { node, duration, build(tl, start) }
+        const plan = [];
+
+        if (v.showIntro && (logo || brand)) {
+          const node = el("section", "scene center");
+          if (logo) node.appendChild(img("intro-logo", logo));
+          else node.appendChild(el("div", "intro-name", brand));
+          plan.push({ node, duration: 2.2, kind: "intro" });
+        }
+
+        scenes.forEach(function (s) {
+          const type = String(s && s.type);
+          const node = el("section", "scene");
+          node.appendChild(el("div", "rule"));
+          let duration = clampDuration(s.duration, 5);
+
+          if (type === "stat") {
+            node.appendChild(el("div", "stat-value", text(s.value, 12)));
+            node.appendChild(el("div", "stat-label", text(s.label, 90)));
+          } else if (type === "quote") {
+            node.appendChild(el("div", "quote-mark", "“"));
+            node.appendChild(el("div", "quote-text", text(s.text, 140)));
+            if (s.author) node.appendChild(el("div", "quote-author", "— " + text(s.author, 60)));
+          } else if (type === "bullets" || type === "steps") {
+            node.appendChild(el("h1", "heading", text(s.heading, 70)));
+            const list = el("ul", "list " + type);
+            const items = Array.isArray(s.items) ? s.items.slice(0, 4) : [];
+            items.forEach(function (item, i) {
+              const li = el("li");
+              li.appendChild(el("span", "marker", type === "steps" ? String(i + 1) : ""));
+              li.appendChild(el("span", "", text(item, 80)));
+              list.appendChild(li);
+            });
+            node.appendChild(list);
+            duration = Math.max(duration, 2.5 + items.length * 1.1);
+          } else {
+            node.appendChild(el("h1", "heading", text(s.heading, 80)));
+            if (s.sub) node.appendChild(el("p", "sub", text(s.sub, 140)));
+          }
+          plan.push({ node, duration, kind: type });
+        });
+
+        if (v.showOutro) {
+          const node = el("section", "scene center");
+          if (logo) node.appendChild(img("outro-logo", logo));
+          node.appendChild(el("div", "outro-cta", text(v.ctaText, 60) || "Follow for more"));
+          if (v.handle) node.appendChild(el("div", "outro-handle", text(v.handle, 60)));
+          if (v.signature) node.appendChild(el("div", "outro-sign", text(v.signature, 80)));
+          if (v.website) node.appendChild(el("div", "outro-site", text(v.website, 120)));
+          plan.push({ node, duration: 3.6, kind: "outro" });
+        }
+
+        plan.forEach(function (p) { host.appendChild(p.node); });
+
+        const corner = document.getElementById("logo-corner");
+        if (logo) {
+          corner.src = logo;
+          corner.classList.add(
+            ["top-left", "top-right", "bottom-left", "bottom-right"].includes(v.logoPosition)
+              ? v.logoPosition
+              : "top-right"
+          );
+        } else {
+          corner.remove();
+        }
+
+        // ---- Timeline -------------------------------------------------
+        function build() {
+          const tl = gsap.timeline({ paused: true });
+          const FADE = 0.45;
+          let t = 0;
+
+          plan.forEach(function (p, index) {
+            const node = p.node;
+            const start = t;
+            const end = start + p.duration;
+            const isLast = index === plan.length - 1;
+
+            // First scene is fully composed at t=0: frame 0 is the social thumbnail.
+            if (index === 0) {
+              tl.set(node, { opacity: 1 }, 0);
+              if (!isLast) tl.to(node, { opacity: 0, duration: FADE, ease: "power1.in" }, end - FADE);
+              t = isLast ? end : end - FADE * 0.5;
+              return;
+            }
+            tl.fromTo(node, { opacity: 0 }, { opacity: 1, duration: FADE, ease: "power1.out" }, start);
+
+            const rule = node.querySelector(".rule");
+            if (rule) {
+              tl.fromTo(rule, { scaleX: 0 }, { scaleX: 1, duration: 0.6, ease: "power3.out" }, start + 0.1);
+            }
+            const lead = node.querySelectorAll(
+              ".heading, .sub, .stat-value, .stat-label, .quote-mark, .quote-text, .quote-author, .intro-logo, .intro-name, .outro-logo, .outro-cta, .outro-handle, .outro-sign, .outro-site"
+            );
+            if (lead.length) {
+              tl.fromTo(
+                lead,
+                { y: 60, opacity: 0 },
+                { y: 0, opacity: 1, duration: 0.7, ease: "power3.out", stagger: 0.14 },
+                start + 0.15
+              );
+            }
+            const items = node.querySelectorAll(".list li");
+            if (items.length) {
+              tl.fromTo(
+                items,
+                { x: -50, opacity: 0 },
+                { x: 0, opacity: 1, duration: 0.55, ease: "power2.out", stagger: 1.0 },
+                start + 0.9
+              );
+            }
+            const stat = node.querySelector(".stat-value");
+            if (stat) {
+              tl.fromTo(stat, { scale: 0.85 }, { scale: 1, duration: 0.9, ease: "back.out(1.6)" }, start + 0.15);
+            }
+
+            if (!isLast) {
+              tl.to(node, { opacity: 0, duration: FADE, ease: "power1.in" }, end - FADE);
+              t = end - FADE * 0.5;
+            } else {
+              t = end;
+            }
+          });
+
+          const total = t;
+
+          // Corner logo shows during content scenes (not over intro/outro logo).
+          if (corner.isConnected) {
+            const introEnd = plan[0] && plan[0].kind === "intro" ? plan[0].duration : 0;
+            const outro = plan[plan.length - 1] && plan[plan.length - 1].kind === "outro";
+            const outroStart = outro ? total - plan[plan.length - 1].duration : total;
+            if (outroStart > introEnd) {
+              tl.fromTo(corner, { opacity: 0 }, { opacity: 0.92, duration: 0.5 }, introEnd);
+              tl.to(corner, { opacity: 0, duration: 0.4 }, Math.max(introEnd + 0.5, outroStart - 0.4));
+            }
+          }
+
+          tl.fromTo("#progress-fill", { scaleX: 0 }, { scaleX: 1, duration: total, ease: "none" }, 0);
+
+          if (theme === "bold" || theme === "gradient") {
+            tl.fromTo("#bg-blob-a", { x: 0, y: 0 }, { x: 260, y: 420, duration: total, ease: "sine.inOut" }, 0);
+            tl.fromTo("#bg-blob-b", { x: 0, y: 0 }, { x: -240, y: -380, duration: total, ease: "sine.inOut" }, 0);
+          }
+
+          window.__timelines["explainer"] = tl;
+        }
+
+        if (document.fonts && document.fonts.ready) {
+          document.fonts.ready.then(build);
+        } else {
+          build();
+        }
+      })();
+    </script>
+  </body>
+</html>

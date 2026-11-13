@@ -164,6 +164,61 @@ export const generatedMedia = sqliteTable(
   ]
 );
 
+export const brandKits = sqliteTable("brand_kits", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  data: text("data", { mode: "json" })
+    .$type<import("@/lib/brand-kit").BrandKit>()
+    .notNull(),
+  logoBytes: blob("logo_bytes", { mode: "buffer" }),
+  logoContentType: text("logo_content_type"),
+  logoUpdatedAt: integer("logo_updated_at", { mode: "timestamp_ms" }),
+  createdAt: integer("created_at", { mode: "timestamp_ms" })
+    .notNull()
+    .$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+    .notNull()
+    .$defaultFn(() => new Date()),
+});
+
+export type RenderJobStatus = "queued" | "rendering" | "done" | "failed";
+
+/** Explainer video renders, picked up by scripts/render-worker.ts. */
+export const renderJobs = sqliteTable(
+  "render_jobs",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    campaignId: text("campaign_id").notNull(),
+    slotId: text("slot_id").notNull(),
+    status: text("status").$type<RenderJobStatus>().notNull().default("queued"),
+    payload: text("payload", { mode: "json" })
+      .$type<import("@/lib/render-jobs").RenderJobPayload>()
+      .notNull(),
+    mediaId: text("media_id"),
+    error: text("error"),
+    attempts: integer("attempts").notNull().default(0),
+    leaseUntil: integer("lease_until", { mode: "timestamp_ms" }),
+    workerId: text("worker_id"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [
+    uniqueIndex("render_jobs_campaign_slot_idx").on(
+      table.campaignId,
+      table.slotId
+    ),
+    index("render_jobs_status_idx").on(table.status, table.createdAt),
+  ]
+);
+
 export const authSchema = {
   user,
   session,

@@ -137,6 +137,34 @@ const INIT_STATEMENTS = [
 )`,
   `CREATE INDEX IF NOT EXISTS "generated_media_user_created_idx"
   ON "generated_media" ("user_id", "created_at")`,
+  `CREATE TABLE IF NOT EXISTS "brand_kits" (
+  "user_id" text PRIMARY KEY NOT NULL REFERENCES "user"("id") ON DELETE cascade,
+  "data" text NOT NULL,
+  "logo_bytes" blob,
+  "logo_content_type" text,
+  "logo_updated_at" integer,
+  "created_at" integer NOT NULL,
+  "updated_at" integer NOT NULL
+)`,
+  `CREATE TABLE IF NOT EXISTS "render_jobs" (
+  "id" text PRIMARY KEY NOT NULL,
+  "user_id" text NOT NULL REFERENCES "user"("id") ON DELETE cascade,
+  "campaign_id" text NOT NULL,
+  "slot_id" text NOT NULL,
+  "status" text DEFAULT 'queued' NOT NULL,
+  "payload" text NOT NULL,
+  "media_id" text,
+  "error" text,
+  "attempts" integer DEFAULT 0 NOT NULL,
+  "lease_until" integer,
+  "worker_id" text,
+  "created_at" integer NOT NULL,
+  "updated_at" integer NOT NULL
+)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "render_jobs_campaign_slot_idx"
+  ON "render_jobs" ("campaign_id", "slot_id")`,
+  `CREATE INDEX IF NOT EXISTS "render_jobs_status_idx"
+  ON "render_jobs" ("status", "created_at")`,
 ];
 
 async function ensureLibsqlSchema(client: Client) {

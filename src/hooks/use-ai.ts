@@ -1,3 +1,4 @@
+import type { SlotMediaType } from "@/lib/campaign-media";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAiStore } from "@/stores/ai-store";
 import type { DraftResult, NicheProfile } from "@/lib/openai/types";
@@ -272,6 +273,10 @@ export interface CampaignSlot {
   generationStatus?: "pending_generation" | "processing" | "generated" | "failed" | "cancelled";
   image_url?: string | null;
   video_url?: string | null;
+  /** Per-slot media choice; only used when the campaign mediaMode is "mix" */
+  mediaType?: SlotMediaType;
+  /** Server render state for "explainer" slots */
+  renderStatus?: "queued" | "rendering" | "done" | "failed";
   /** Appended to AI prompt when regenerating this slot */
   aiInstruction?: string;
   /** Image style for this slot's image generation */

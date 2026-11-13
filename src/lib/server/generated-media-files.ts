@@ -242,6 +242,23 @@ export async function saveGeneratedVideoFile(
   });
 }
 
+/** Store an already-rendered video (e.g. from the explainer render worker). */
+export async function saveGeneratedVideoBuffer(
+  userId: string,
+  buffer: Buffer,
+  captionDigest: string,
+  durationSeconds?: string
+): Promise<GeneratedMediaEntry> {
+  return insertMedia({
+    userId,
+    buffer,
+    contentType: "video/mp4",
+    kind: "video",
+    captionDigest,
+    durationSeconds,
+  });
+}
+
 export async function listGeneratedMediaFiles(
   userId: string
 ): Promise<GeneratedMediaEntry[]> {
