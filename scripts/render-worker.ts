@@ -46,6 +46,10 @@ import {
 
 const TEMPLATE_DIR = path.join(process.cwd(), "video-templates", "explainer");
 const HYPERFRAMES = process.env.HYPERFRAMES_PACKAGE?.trim() || "hyperframes@0.9.41";
+// In containers the CLI is installed in the image; call it directly instead of npx.
+const HYPERFRAMES_BIN = process.env.HYPERFRAMES_BIN?.trim() || "";
+// Parallel Chrome capture workers (~256 MB+ each). Unset = HyperFrames "auto".
+const RENDER_WORKERS = process.env.RENDER_WORKERS?.trim() || "";
 const QUALITY = process.env.RENDER_QUALITY?.trim() || "looks";
 // 24fps reads as smooth for text-and-shape motion and renders ~20% faster than 30.
 const FPS = process.env.RENDER_FPS?.trim() || "24";
@@ -88,8 +92,12 @@ async function patchSlot(
 
 function runHyperframes(args: string[], cwd: string): Promise<{ code: number; output: string }> {
   return new Promise((resolve) => {
-    const child = spawn("npx", ["-y", HYPERFRAMES, ...args], {
+    const [cmd, cmdArgs] = HYPERFRAMES_BIN
+      ? [HYPERFRAMES_BIN, args]
+      : ["npx", ["-y", HYPERFRAMES, ...args]];
+    const child = spawn(cmd, cmdArgs, {
       cwd,
+      // npx is a .cmd shim on Windows and needs a shell there.
       shell: process.platform === "win32",
       env: { ...process.env, HYPERFRAMES_NON_INTERACTIVE: "1", CI: "1" },
     });
@@ -253,6 +261,7 @@ async function processJob(job: RenderJob) {
         QUALITY,
         "--fps",
         FPS,
+        ...(RENDER_WORKERS ? ["--workers", RENDER_WORKERS] : []),
         "--output",
         output,
       ],

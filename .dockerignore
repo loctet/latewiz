@@ -1,0 +1,18 @@
+# Keep host-built and secret files out of every image (both Dockerfiles).
+node_modules
+.next
+.git
+.vercel
+coverage
+data
+*.db
+*.db-*
+.env
+.env.*
+!.env.example
+.hyperframes
+**/.hyperframes
+renders
+snapshots
+npm-debug.log*
+.DS_Store

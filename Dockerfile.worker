@@ -1,0 +1,56 @@
+# Explainer render worker (scripts/render-worker.ts) for Render, Railway,
+# Fly.io or any Docker host. The Next.js app stays on Vercel; both share the
+# Turso database. See README "Explainer videos (render worker)".
+#
+#   docker build -f Dockerfile.worker -t latewiz-render-worker .
+#   docker run --env-file .env.worker latewiz-render-worker
+
+# Debian, not Alpine: headless Chrome needs glibc. Node 22+ for HyperFrames.
+FROM node:22-bookworm-slim
+
+# FFmpeg for encoding and the narration mix, plus the shared libraries
+# HyperFrames' pinned headless Chrome needs. Fonts cover emoji/CJK fallbacks.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    ffmpeg ca-certificates tini \
+    libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
+    libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
+    libgbm1 libasound2 libpango-1.0-0 libcairo2 libx11-xcb1 libxshmfence1 \
+    fonts-liberation fonts-noto-color-emoji fonts-noto-cjk \
+  && rm -rf /var/lib/apt/lists/*
+
+# Pinned HyperFrames CLI, installed once so jobs never download it.
+ARG HYPERFRAMES_VERSION=0.9.41
+RUN npm install -g "hyperframes@${HYPERFRAMES_VERSION}" && npm cache clean --force
+
+ENV NODE_ENV=production \
+    HYPERFRAMES_BIN=hyperframes \
+    HYPERFRAMES_NON_INTERACTIVE=1 \
+    HYPERFRAMES_TELEMETRY_DISABLED=1 \
+    USE_TURSO=true \
+    RENDER_WORKERS=1 \
+    RENDER_FPS=24 \
+    RENDER_QUALITY=looks
+
+WORKDIR /app
+
+# Run as an unprivileged user; Chrome is cached in its home directory.
+RUN useradd --create-home --uid 10001 worker && chown worker:worker /app
+USER worker
+
+# Download HyperFrames' pinned Chrome at build time, not on the first job.
+RUN hyperframes browser ensure
+
+# The worker runs TypeScript through tsx (a dev dependency), so install all deps.
+COPY --chown=worker:worker package.json package-lock.json ./
+RUN npm ci --include=dev --ignore-scripts=false && npm cache clean --force
+
+COPY --chown=worker:worker tsconfig.json ./
+COPY --chown=worker:worker src ./src
+COPY --chown=worker:worker scripts ./scripts
+COPY --chown=worker:worker video-templates ./video-templates
+
+# tini reaps Chrome child processes and forwards SIGTERM so the worker can
+# finish its current job on redeploy.
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["npm", "run", "render-worker"]
