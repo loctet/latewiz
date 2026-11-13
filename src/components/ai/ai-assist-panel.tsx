@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -9,6 +9,9 @@ import {
   useGenerateDraft,
   useGenerateImage,
   useGenerateVideo,
+  useGenerateExplainer,
+  describeExplainerProgress,
+  type ExplainerProgress,
   useOpenAiStatus,
   isVideoGenerationConfigured,
   useUploadMedia,
@@ -111,6 +114,19 @@ export function AiAssistPanel({
   const draftMutation = useGenerateDraft();
   const imageMutation = useGenerateImage();
   const videoMutation = useGenerateVideo();
+  const [explainerProgress, setExplainerProgress] =
+    useState<ExplainerProgress | null>(null);
+  const explainerToastRef = useRef<string | number | null>(null);
+  const explainerMutation = useGenerateExplainer({
+    onProgress: (progress) => {
+      setExplainerProgress(progress);
+      if (explainerToastRef.current != null) {
+        toast.loading(describeExplainerProgress(progress), {
+          id: explainerToastRef.current,
+        });
+      }
+    },
+  });
   const uploadMutation = useUploadMedia();
 
   const configured = status?.openai_configured ?? false;
@@ -146,7 +162,37 @@ export function AiAssistPanel({
     }
   };
 
+  const generateExplainer = async () => {
+    const captionContext = content.trim() || undefined;
+    const prompt = researchTopic.trim() || hint;
+    if (!captionContext && !prompt) {
+      toast.error("Write the post first: the explainer is built from it.");
+      return;
+    }
+    const toastId = toast.loading(describeExplainerProgress(null));
+    explainerToastRef.current = toastId;
+    try {
+      const r = await explainerMutation.mutateAsync({ captionContext, prompt });
+      toast.loading("Adding video to post…", { id: toastId });
+      const file = await urlToFile(r.video_url, "explainer.mp4");
+      const uploaded = await uploadMutation.mutateAsync(file);
+      onMediaChange([...media.filter((m) => m.type !== "video"), uploaded]);
+      toast.success("Explainer video added to post", { id: toastId });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Explainer generation failed", {
+        id: toastId,
+      });
+    } finally {
+      explainerToastRef.current = null;
+      setExplainerProgress(null);
+    }
+  };
+
   const generateMedia = async () => {
+    if (aiMediaKind === "explainer") {
+      await generateExplainer();
+      return;
+    }
     if (aiMediaKind === "video") {
       if (!videoConfigured) {
         toast.error(
@@ -205,6 +251,7 @@ export function AiAssistPanel({
   const mediaPending =
     imageMutation.isPending ||
     videoMutation.isPending ||
+    explainerMutation.isPending ||
     uploadMutation.isPending;
 
   return (
@@ -255,17 +302,25 @@ export function AiAssistPanel({
               onClick={generateMedia}
               disabled={
                 mediaPending ||
-                (aiMediaKind === "video" ? !videoConfigured : !configured)
+                (aiMediaKind === "video"
+                  ? !videoConfigured
+                  : aiMediaKind === "image"
+                    ? !configured
+                    : false)
               }
             >
               {mediaPending ? (
                 <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
-              ) : aiMediaKind === "video" ? (
-                <Film className="mr-1.5 h-3 w-3" />
-              ) : (
+              ) : aiMediaKind === "image" ? (
                 <ImageIcon className="mr-1.5 h-3 w-3" />
+              ) : (
+                <Film className="mr-1.5 h-3 w-3" />
               )}
-              {aiMediaKind === "video" ? "Generate video" : "Generate image"}
+              {aiMediaKind === "video"
+                ? "Generate video"
+                : aiMediaKind === "explainer"
+                  ? "Generate explainer"
+                  : "Generate image"}
             </Button>
             <Button
               type="button"
@@ -296,6 +351,13 @@ export function AiAssistPanel({
           </div>
         )}
       </div>
+
+      {assistEnabled && explainerMutation.isPending && (
+        <p className="flex items-center gap-1.5 px-3 pb-2 text-[11px] text-muted-foreground">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          {describeExplainerProgress(explainerProgress)}
+        </p>
+      )}
 
       {assistEnabled && lastSource && (
         <div className="space-y-1.5 px-3 pb-2">
@@ -375,11 +437,20 @@ export function AiAssistPanel({
                 mediaSources={media}
               />
             </div>
-          ) : (
+          ) : aiMediaKind === "video" ? (
             <div className="grid gap-3 sm:grid-cols-2">
               <VideoProviderSelect compact />
               <VideoPromptStyleSelect compact />
             </div>
+          ) : (
+            <p className="text-[11px] leading-snug text-muted-foreground">
+              Turns this post into a short branded video (9:16) using your{" "}
+              <Link href="/dashboard/settings" className="underline text-primary">
+                brand kit
+              </Link>
+              . Rendered by the render worker, usually 1–3 minutes. The research
+              topic, if set, is used as extra direction.
+            </p>
           )}
         </div>
       )}

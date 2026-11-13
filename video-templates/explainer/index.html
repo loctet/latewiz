@@ -63,16 +63,24 @@
       }
 
       .bg-layer { position: absolute; inset: 0; }
+      /* Soft glows via radial gradients: same look as a blurred circle, but
+         no per-frame filter cost during capture. */
       #bg-blob-a, #bg-blob-b {
         position: absolute;
-        width: 900px;
-        height: 900px;
-        border-radius: 50%;
-        filter: blur(140px);
-        opacity: 0.45;
+        width: 1300px;
+        height: 1300px;
+        opacity: 0.55;
       }
-      #bg-blob-a { left: -300px; top: -200px; background: var(--primary); }
-      #bg-blob-b { right: -360px; bottom: -260px; background: var(--secondary); }
+      #bg-blob-a {
+        left: -500px;
+        top: -400px;
+        background: radial-gradient(circle, var(--primary) 0%, transparent 65%);
+      }
+      #bg-blob-b {
+        right: -560px;
+        bottom: -460px;
+        background: radial-gradient(circle, var(--secondary) 0%, transparent 65%);
+      }
 
       .scene {
         position: absolute;

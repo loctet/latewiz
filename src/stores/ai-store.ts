@@ -379,7 +379,10 @@ export const useAiStore = create<AiState>()(
           videoProvider:
             p?.videoProvider === "fal-pika" ? "fal-pika" : DEFAULT_VIDEO_PROVIDER,
           falApiKey: p?.falApiKey ?? null,
-          aiMediaKind: p?.aiMediaKind === "video" ? "video" : "image",
+          aiMediaKind:
+            p?.aiMediaKind === "video" || p?.aiMediaKind === "explainer"
+              ? p.aiMediaKind
+              : "image",
           imagePromptTemplates: p?.imagePromptTemplates ?? {},
           postPromptTemplates: p?.postPromptTemplates ?? {},
           customPostPromptStyles: normalizeCustomPostPromptStyles(

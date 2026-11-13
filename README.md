@@ -117,6 +117,7 @@ per video). Edit the template in `video-templates/explainer/`, then check it wit
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `RENDER_QUALITY` | `looks` | `draft`, `looks` or `delivery` |
+| `RENDER_FPS` | `24` | Frames per second (`30` is about 20% slower to render) |
 | `RENDER_POLL_MS` | `15000` | Poll interval when the queue is empty |
 | `HYPERFRAMES_PACKAGE` | `hyperframes@0.9.41` | CLI package passed to `npx` |
 

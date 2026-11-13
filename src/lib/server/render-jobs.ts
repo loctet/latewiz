@@ -1,9 +1,13 @@
 import "server-only";
 
 import { randomUUID } from "crypto";
-import { and, asc, eq, lt, or } from "drizzle-orm";
+import { and, asc, eq, gt, lt, or } from "drizzle-orm";
 import { dbReady } from "@/db";
-import { renderJobs, type RenderJobStatus } from "@/db/schema";
+import {
+  renderJobs,
+  renderWorkerHeartbeats,
+  type RenderJobStatus,
+} from "@/db/schema";
 import {
   RENDER_JOB_LEASE_MS,
   RENDER_JOB_MAX_ATTEMPTS,
@@ -20,6 +24,57 @@ export async function getRenderJobForSlot(
     .select()
     .from(renderJobs)
     .where(and(eq(renderJobs.campaignId, campaignId), eq(renderJobs.slotId, slotId)))
+    .limit(1);
+  return row ?? null;
+}
+
+/** A worker counts as online if it checked in within this window. */
+const WORKER_ONLINE_WINDOW_MS = 60_000;
+
+export async function recordWorkerHeartbeat(workerId: string): Promise<void> {
+  const db = await dbReady();
+  const now = new Date();
+  await db
+    .insert(renderWorkerHeartbeats)
+    .values({ workerId, lastSeenAt: now })
+    .onConflictDoUpdate({
+      target: renderWorkerHeartbeats.workerId,
+      set: { lastSeenAt: now },
+    });
+  // Keep the table small: forget workers silent for a day.
+  await db
+    .delete(renderWorkerHeartbeats)
+    .where(lt(renderWorkerHeartbeats.lastSeenAt, new Date(now.getTime() - 86_400_000)));
+}
+
+export async function removeWorkerHeartbeat(workerId: string): Promise<void> {
+  await (await dbReady())
+    .delete(renderWorkerHeartbeats)
+    .where(eq(renderWorkerHeartbeats.workerId, workerId));
+}
+
+export async function isRenderWorkerOnline(): Promise<boolean> {
+  const [row] = await (await dbReady())
+    .select({ workerId: renderWorkerHeartbeats.workerId })
+    .from(renderWorkerHeartbeats)
+    .where(
+      gt(
+        renderWorkerHeartbeats.lastSeenAt,
+        new Date(Date.now() - WORKER_ONLINE_WINDOW_MS)
+      )
+    )
+    .limit(1);
+  return Boolean(row);
+}
+
+export async function getRenderJobForUser(
+  userId: string,
+  jobId: string
+): Promise<RenderJob | null> {
+  const [row] = await (await dbReady())
+    .select()
+    .from(renderJobs)
+    .where(and(eq(renderJobs.id, jobId), eq(renderJobs.userId, userId)))
     .limit(1);
   return row ?? null;
 }

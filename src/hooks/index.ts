@@ -97,6 +97,12 @@ export {
 } from "./use-ai";
 
 export {
+  useGenerateExplainer,
+  describeExplainerProgress,
+  type ExplainerProgress,
+} from "./use-generate-explainer";
+
+export {
   useImageWatermarkSettings,
   watermarkImageIfEnabled,
 } from "./use-image-watermark";

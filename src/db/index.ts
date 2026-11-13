@@ -165,6 +165,10 @@ const INIT_STATEMENTS = [
   ON "render_jobs" ("campaign_id", "slot_id")`,
   `CREATE INDEX IF NOT EXISTS "render_jobs_status_idx"
   ON "render_jobs" ("status", "created_at")`,
+  `CREATE TABLE IF NOT EXISTS "render_worker_heartbeats" (
+  "worker_id" text PRIMARY KEY NOT NULL,
+  "last_seen_at" integer NOT NULL
+)`,
 ];
 
 async function ensureLibsqlSchema(client: Client) {

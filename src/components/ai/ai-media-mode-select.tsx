@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 const OPTIONS: { value: AiMediaKind; label: string }[] = [
   { value: "image", label: "Image" },
   { value: "video", label: "Video" },
+  { value: "explainer", label: "Explainer" },
 ];
 
 interface AiMediaModeSelectProps {

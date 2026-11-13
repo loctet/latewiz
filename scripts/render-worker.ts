@@ -26,15 +26,20 @@ import {
   claimNextRenderJob,
   completeRenderJob,
   failRenderJob,
+  recordWorkerHeartbeat,
+  removeWorkerHeartbeat,
   type RenderJob,
 } from "@/lib/server/render-jobs";
 import { saveGeneratedVideoBuffer } from "@/lib/server/generated-media-files";
 import { updateScheduledCampaign } from "@/lib/server/scheduled-campaign-store";
 import type { ScheduledCampaignSlot } from "@/lib/scheduled-campaigns";
+import { STANDALONE_RENDER_CAMPAIGN_ID } from "@/lib/render-jobs";
 
 const TEMPLATE_DIR = path.join(process.cwd(), "video-templates", "explainer");
 const HYPERFRAMES = process.env.HYPERFRAMES_PACKAGE?.trim() || "hyperframes@0.9.41";
 const QUALITY = process.env.RENDER_QUALITY?.trim() || "looks";
+// 24fps reads as smooth for text-and-shape motion and renders ~20% faster than 30.
+const FPS = process.env.RENDER_FPS?.trim() || "24";
 const POLL_MS = Math.max(5_000, Number(process.env.RENDER_POLL_MS) || 15_000);
 const RENDER_TIMEOUT_MS = 15 * 60 * 1000;
 const WORKER_ID = `${os.hostname()}-${process.pid}-${randomUUID().slice(0, 8)}`;
@@ -57,6 +62,8 @@ async function patchSlot(
   slotId: string,
   patch: Partial<ScheduledCampaignSlot>
 ) {
+  // On-demand renders (Compose / AI Studio) have no campaign slot to update.
+  if (campaignId === STANDALONE_RENDER_CAMPAIGN_ID) return;
   try {
     await updateScheduledCampaign(campaignId, (campaign) => ({
       ...campaign,
@@ -136,7 +143,24 @@ async function prepareProject(job: RenderJob, dir: string) {
   fs.writeFileSync(path.join(dir, "vars.json"), JSON.stringify(variables, null, 2));
 }
 
+/** Remove temp project dirs from earlier renders that could not be deleted then. */
+function sweepStaleTempDirs() {
+  const cutoff = Date.now() - 30 * 60 * 1000;
+  for (const name of fs.readdirSync(os.tmpdir())) {
+    if (!name.startsWith("latewiz-render-")) continue;
+    const full = path.join(os.tmpdir(), name);
+    try {
+      if (fs.statSync(full).mtimeMs < cutoff) {
+        fs.rmSync(full, { recursive: true, force: true });
+      }
+    } catch {
+      /* still locked; try again next job */
+    }
+  }
+}
+
 async function processJob(job: RenderJob) {
+  sweepStaleTempDirs();
   log(`Rendering job ${job.id} (slot ${job.slotId}, attempt ${job.attempts})`);
   await patchSlot(job.campaignId, job.slotId, { renderStatus: "rendering" });
 
@@ -146,7 +170,17 @@ async function processJob(job: RenderJob) {
   try {
     await prepareProject(job, dir);
     const result = await runHyperframes(
-      ["render", "--variables-file", "vars.json", "--quality", QUALITY, "--output", output],
+      [
+        "render",
+        "--variables-file",
+        "vars.json",
+        "--quality",
+        QUALITY,
+        "--fps",
+        FPS,
+        "--output",
+        output,
+      ],
       dir
     );
     if (result.code !== 0 || !fs.existsSync(output) || fs.statSync(output).size === 0) {
@@ -185,7 +219,13 @@ async function processJob(job: RenderJob) {
       await patchSlot(job.campaignId, job.slotId, { renderStatus: "queued" });
     }
   } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
+    // On Windows, Chrome can hold files briefly after the render exits.
+    // Retry, and never let cleanup crash the worker loop.
+    try {
+      fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 });
+    } catch (error) {
+      log(`Could not remove temp dir ${dir}`, (error as Error).message);
+    }
   }
 }
 
@@ -194,7 +234,15 @@ async function main() {
   if (!fs.existsSync(path.join(TEMPLATE_DIR, "index.html"))) {
     throw new Error(`Template not found at ${TEMPLATE_DIR}. Run from the repo root.`);
   }
-  log(`Worker ${WORKER_ID} started (quality=${QUALITY}, poll=${POLL_MS}ms)`);
+  log(`Worker ${WORKER_ID} started (quality=${QUALITY}, fps=${FPS}, poll=${POLL_MS}ms)`);
+
+  // Heartbeat on a timer so the app knows a worker is alive, even mid-render.
+  const beat = () =>
+    recordWorkerHeartbeat(WORKER_ID).catch((error: Error) =>
+      log("Heartbeat failed", error.message)
+    );
+  await beat();
+  const heartbeat = setInterval(beat, 20_000);
 
   let stopping = false;
   const stop = () => {
@@ -219,6 +267,9 @@ async function main() {
     if (once) break;
     if (!job) await new Promise((r) => setTimeout(r, POLL_MS));
   }
+
+  clearInterval(heartbeat);
+  await removeWorkerHeartbeat(WORKER_ID).catch(() => undefined);
 }
 
 main().catch((error) => {

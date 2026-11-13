@@ -12,7 +12,8 @@ export type CampaignMediaMode = "none" | "image" | "video" | "mix";
  */
 export type SlotMediaType = "none" | "image" | "video" | "explainer";
 
-export type AiMediaKind = "image" | "video";
+/** Media type picked in Compose / AI Studio. */
+export type AiMediaKind = "image" | "video" | "explainer";
 
 export const SLOT_MEDIA_TYPES: { value: SlotMediaType; label: string }[] = [
   { value: "none", label: "Text only" },

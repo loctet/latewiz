@@ -8,6 +8,9 @@ import {
   useGenerateDraft,
   useGenerateImage,
   useGenerateVideo,
+  useGenerateExplainer,
+  describeExplainerProgress,
+  type ExplainerProgress,
   useOpenAiStatus,
   isVideoGenerationConfigured,
   useImageWatermarkSettings,
@@ -70,6 +73,11 @@ export default function AiStudioPage() {
   const draftMutation = useGenerateDraft();
   const imageMutation = useGenerateImage();
   const videoMutation = useGenerateVideo();
+  const [explainerProgress, setExplainerProgress] =
+    useState<ExplainerProgress | null>(null);
+  const explainerMutation = useGenerateExplainer({
+    onProgress: setExplainerProgress,
+  });
   const aiMediaKind = useAiStore((s) => s.aiMediaKind);
   const setAiMediaKind = useAiStore((s) => s.setAiMediaKind);
   const videoProvider = useAiStore((s) => s.videoProvider);
@@ -115,7 +123,10 @@ export default function AiStudioPage() {
   const hasCopy = Boolean(generatedTitle.trim() || generatedBody.trim());
   const hasMedia = Boolean(imageUrl || videoUrl);
   const hasOutput = hasCopy || hasMedia;
-  const mediaPending = imageMutation.isPending || videoMutation.isPending;
+  const mediaPending =
+    imageMutation.isPending ||
+    videoMutation.isPending ||
+    explainerMutation.isPending;
 
   const handleGenerate = async () => {
     if (!topic.trim()) {
@@ -141,6 +152,25 @@ export default function AiStudioPage() {
   };
 
   const handleGenerateMedia = async () => {
+    if (aiMediaKind === "explainer") {
+      const ctx = captionContext || undefined;
+      const prompt = topic.trim() || undefined;
+      if (!ctx && !prompt) {
+        toast.error("Enter a topic or generate a caption first");
+        return;
+      }
+      try {
+        const r = await explainerMutation.mutateAsync({ captionContext: ctx, prompt });
+        setVideoUrl(r.video_url);
+        setImageUrl("");
+        toast.success("Explainer ready — saved to your media library.");
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Explainer generation failed");
+      } finally {
+        setExplainerProgress(null);
+      }
+      return;
+    }
     if (aiMediaKind === "video") {
       if (!videoConfigured) {
         toast.error(
@@ -380,11 +410,17 @@ export default function AiStudioPage() {
                       existingImageUrl={imageUrl || null}
                     />
                   </>
-                ) : (
+                ) : aiMediaKind === "video" ? (
                   <>
                     <VideoProviderSelect compact />
                     <VideoPromptStyleSelect compact />
                   </>
+                ) : (
+                  <p className="text-[11px] leading-snug text-muted-foreground">
+                    Short branded 9:16 video from your caption and topic, styled
+                    with your brand kit (Settings → Content). Rendered by the
+                    render worker.
+                  </p>
                 )}
               </div>
             )}
@@ -407,25 +443,35 @@ export default function AiStudioPage() {
               onClick={handleGenerateMedia}
               disabled={
                 mediaPending ||
-                (aiMediaKind === "video" ? !videoConfigured : !configured)
+                (aiMediaKind === "video"
+                  ? !videoConfigured
+                  : aiMediaKind === "image"
+                    ? !configured
+                    : false)
               }
               variant="secondary"
               className="w-full"
             >
               {mediaPending ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : aiMediaKind === "video" ? (
-                <Film className="mr-2 h-4 w-4" />
-              ) : (
+              ) : aiMediaKind === "image" ? (
                 <ImageIcon className="mr-2 h-4 w-4" />
+              ) : (
+                <Film className="mr-2 h-4 w-4" />
               )}
-              {aiMediaKind === "video" ? "Generate video" : "Generate image"}
+              {aiMediaKind === "video"
+                ? "Generate video"
+                : aiMediaKind === "explainer"
+                  ? "Generate explainer"
+                  : "Generate image"}
             </Button>
             <p className="text-[11px] leading-relaxed text-muted-foreground">
               Uses your topic, caption (if any), and niche profile.
               {aiMediaKind === "video"
                 ? " Video can take several minutes."
-                : " Notebook infographic is the default image style."}
+                : aiMediaKind === "explainer"
+                  ? " Explainer renders in 1–3 minutes on the render worker."
+                  : " Notebook infographic is the default image style."}
             </p>
           </div>
         </aside>
@@ -490,8 +536,9 @@ export default function AiStudioPage() {
                   {mediaPending ? (
                     <div className="flex aspect-video items-center justify-center gap-2 text-sm text-muted-foreground">
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      Generating{" "}
-                      {aiMediaKind === "video" ? "video" : "image"}…
+                      {aiMediaKind === "explainer"
+                        ? describeExplainerProgress(explainerProgress)
+                        : `Generating ${aiMediaKind === "video" ? "video" : "image"}…`}
                     </div>
                   ) : videoUrl ? (
                     <video

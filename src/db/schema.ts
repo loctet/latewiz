@@ -219,6 +219,12 @@ export const renderJobs = sqliteTable(
   ]
 );
 
+/** Liveness of render workers, so the UI can tell "queued" from "no worker". */
+export const renderWorkerHeartbeats = sqliteTable("render_worker_heartbeats", {
+  workerId: text("worker_id").primaryKey(),
+  lastSeenAt: integer("last_seen_at", { mode: "timestamp_ms" }).notNull(),
+});
+
 export const authSchema = {
   user,
   session,
