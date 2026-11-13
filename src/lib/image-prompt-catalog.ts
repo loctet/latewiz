@@ -95,12 +95,12 @@ Style requirements:
 • include comparison boxes and visual storytelling
 • minimalist but information dense
 • infographic poster layout
-• portrait composition
+• square 1:1 composition
 • neat margins and aligned sections
 
 Structure: large handwritten title at top, main illustrations in center, comparison table, small diagrams at bottom, conclusion sentence.
 
-Rendering: ultra sharp focus, even lighting, full notebook page visible, portrait-oriented.
+Rendering: ultra sharp focus, even lighting, square notebook page fully visible, 1:1 framing.
 
 Final detail: tiny neat handwritten credit in bottom margin: {{credit}}`,
   },
@@ -115,7 +115,7 @@ Final detail: tiny neat handwritten credit in bottom margin: {{credit}}`,
 Content to visualize:
 {{subject}}
 
-Style: minimal layout, soft gradient or solid background, large bold headline, one short supporting line, plenty of whitespace, modern sans-serif typography, Instagram-ready 4:5 portrait, no clutter, no stock photo borders, high contrast readable text.`,
+Style: minimal layout, soft gradient or solid background, large bold headline, one short supporting line, plenty of whitespace, modern sans-serif typography, Instagram-ready 1:1 square, no clutter, no stock photo borders, high contrast readable text.`,
   },
   {
     id: "flat-vector-infographic",
@@ -128,7 +128,7 @@ Style: minimal layout, soft gradient or solid background, large bold headline, o
 Topic:
 {{subject}}
 
-Style: bright but professional color palette, simple geometric icons, 3–5 labeled sections, arrows and connectors, clean grid layout, no photorealism, vector illustration look, portrait poster format, shareable educational aesthetic.`,
+Style: bright but professional color palette, simple geometric icons, 3–5 labeled sections, arrows and connectors, clean grid layout, no photorealism, vector illustration look, square 1:1 format, shareable educational aesthetic.`,
   },
   {
     id: "photo-realistic",
@@ -141,13 +141,13 @@ Style: bright but professional color palette, simple geometric icons, 3–5 labe
 Scene should illustrate:
 {{subject}}
 
-Style: natural lighting, shallow depth of field, authentic lifestyle or workplace context, no text overlays, no watermarks, aspirational but believable, vertical 4:5 crop suitable for Instagram feed.`,
+Style: natural lighting, shallow depth of field, authentic lifestyle or workplace context, no text overlays, no watermarks, aspirational but believable, square 1:1 crop suitable for Instagram feed.`,
   },
   {
     id: "carousel-slide",
     label: "Carousel slide",
     description: "Single carousel slide with title and three bullet points.",
-    template: `Design one Instagram carousel slide (portrait).
+    template: `Design one Instagram carousel slide (square 1:1).
 
 {{langNote}}
 
@@ -167,7 +167,7 @@ Layout: bold title at top, exactly three short bullet points with icons, brand-n
 Concept:
 {{subject}}
 
-Style: deep charcoal background, subtle grid or glow, neon blue or purple accents, abstract UI elements or code hints, futuristic but clean, portrait format, crisp typography, no cluttered screenshots.`,
+Style: deep charcoal background, subtle grid or glow, neon blue or purple accents, abstract UI elements or code hints, futuristic but clean, square 1:1 format, crisp typography, no cluttered screenshots.`,
   },
   {
     id: "watercolor",
@@ -180,7 +180,7 @@ Style: deep charcoal background, subtle grid or glow, neon blue or purple accent
 Subject:
 {{subject}}
 
-Style: soft washes, paper texture, gentle edges, artistic not childish, limited text (title only if needed), dreamy cohesive palette, portrait composition, gallery-quality illustration.`,
+Style: soft washes, paper texture, gentle edges, artistic not childish, limited text (title only if needed), dreamy cohesive palette, square 1:1 composition, gallery-quality illustration.`,
   },
   {
     id: "data-dashboard",
@@ -193,7 +193,7 @@ Style: soft washes, paper texture, gentle edges, artistic not childish, limited 
 Message to convey:
 {{subject}}
 
-Style: clean dashboard mockup, 2–3 simple charts (bar, line, or donut), fictional but realistic metrics, light UI chrome, professional B2B look, portrait layout, readable labels, no real brand logos.`,
+Style: clean dashboard mockup, 2–3 simple charts (bar, line, or donut), fictional but realistic metrics, light UI chrome, professional B2B look, square 1:1 layout, readable labels, no real brand logos.`,
   },
   {
     id: "product-hero",
@@ -206,7 +206,7 @@ Style: clean dashboard mockup, 2–3 simple charts (bar, line, or donut), fictio
 Offer or concept:
 {{subject}}
 
-Style: studio lighting, centered hero object or abstract product stand-in, premium e-commerce aesthetic, soft shadow, minimal props, space for implied headline, portrait 4:5, no busy background.`,
+Style: studio lighting, centered hero object or abstract product stand-in, premium e-commerce aesthetic, soft shadow, minimal props, space for implied headline, square 1:1, no busy background.`,
   },
   {
     id: "motivational-poster",
@@ -219,7 +219,7 @@ Style: studio lighting, centered hero object or abstract product stand-in, premi
 Theme:
 {{subject}}
 
-Style: dramatic sky or landscape background, strong central message area, bold condensed typography, high energy, portrait orientation, inspirational Instagram/TikTok aesthetic, text legible on mobile.`,
+Style: dramatic sky or landscape background, strong central message area, bold condensed typography, high energy, square 1:1 format, inspirational Instagram/TikTok aesthetic, text legible on mobile.`,
   },
   {
     id: "comic-panel",
@@ -232,7 +232,7 @@ Style: dramatic sky or landscape background, strong central message area, bold c
 Story idea:
 {{subject}}
 
-Style: clean line art, light cel shading, expressive simple characters, speech bubble with short dialogue, humorous or relatable tone, portrait panel, readable on small screens.`,
+Style: clean line art, light cel shading, expressive simple characters, speech bubble with short dialogue, humorous or relatable tone, square 1:1 panel, readable on small screens.`,
   },
   {
     id: "checklist-visual",
@@ -245,7 +245,7 @@ Style: clean line art, light cel shading, expressive simple characters, speech b
 Content:
 {{subject}}
 
-Style: numbered list 1–5 with checkmark icons, clear hierarchy, friendly colors, notepad or sticky-note motif optional, portrait layout, scannable in 2 seconds, professional tips aesthetic.`,
+Style: numbered list 1–5 with checkmark icons, clear hierarchy, friendly colors, notepad or sticky-note motif optional, square 1:1 layout, scannable in 2 seconds, professional tips aesthetic.`,
   },
 ];
 

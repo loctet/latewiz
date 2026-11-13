@@ -41,6 +41,7 @@ import {
   type CustomPostPromptStyle,
 } from "@/lib/post-prompt-catalog";
 import { isNewsIntent } from "@/lib/web-search/build-query";
+import { toSquarePostImage } from "@/lib/server/square-image";
 import {
   applyResearchDepthToPostStyle,
   getResearchDepth,
@@ -884,20 +885,28 @@ export async function generatePostImage(
     lower.includes("gpt_image") ||
     lower.includes("chatgpt-image");
 
-  let defaultSize = "1024x1792";
-  if (isGptImage) defaultSize = "1024x1536";
-  else if (isDalle2) defaultSize = "1024x1024";
-
+  // Square by default: models generate 1024x1024, then we resize the
+  // result to exactly 1080x1080. OPENAI_IMAGE_SIZE can still force another
+  // shape, in which case the result is returned as generated.
+  const defaultSize = "1024x1024";
   let size = process.env.OPENAI_IMAGE_SIZE?.trim() || defaultSize;
   if (isDalle3) {
     const allowed = ["1024x1024", "1792x1024", "1024x1792"];
-    if (!allowed.includes(size)) size = "1024x1792";
+    if (!allowed.includes(size)) size = defaultSize;
   } else if (isDalle2) {
     const allowed = ["256x256", "512x512", "1024x1024"];
-    if (!allowed.includes(size)) size = "1024x1024";
+    if (!allowed.includes(size)) size = defaultSize;
   } else if (isGptImage && !/^[1-9]\d*x[1-9]\d*$/.test(size)) {
-    size = "1024x1536";
+    size = defaultSize;
   }
+  const [sizeW, sizeH] = size.split("x").map(Number);
+  const isSquare = sizeW > 0 && sizeW === sizeH;
+
+  const finish = async (parsed: { url: string | null; b64_json: string | null }) => {
+    if (!isSquare) return parsed;
+    const b64 = await toSquarePostImage(parsed);
+    return b64 ? { url: null, b64_json: b64 } : parsed;
+  };
 
   const postText = resolvePostTextForBoard(captionContext, explicitPrompt, niche);
   const nicheLines: string[] = [];
@@ -908,12 +917,15 @@ export async function generatePostImage(
     nicheLines.length > 0
       ? `${postText}\n\n${nicheLines.join("\n")}`
       : postText;
-  const brief = buildImagePromptFromStyle(
+  const styleBrief = buildImagePromptFromStyle(
     promptStyleId,
     boardText,
     niche,
     templateOverrides
   );
+  const brief = isSquare
+    ? `${styleBrief}\n\nFormat: square 1:1 canvas (1080x1080 social feed post). Compose for a square frame: keep all text and key elements inside the square with comfortable margins. Not portrait, not A4.`
+    : styleBrief;
 
   const refs = (referenceImageUrls ?? [])
     .map((u) => u.trim())
@@ -985,8 +997,7 @@ export async function generatePostImage(
       const parsed = parseOpenAiImageResponse(bodyRaw);
       if (parsed.url || parsed.b64_json) {
         return {
-          url: parsed.url,
-          b64_json: parsed.b64_json,
+          ...(await finish(parsed)),
           source: "openai",
           detail: null,
         };
@@ -1042,8 +1053,7 @@ export async function generatePostImage(
     const parsed = parseOpenAiImageResponse(bodyRaw);
     if (parsed.url || parsed.b64_json) {
       return {
-        url: parsed.url,
-        b64_json: parsed.b64_json,
+        ...(await finish(parsed)),
         source: "openai",
         detail: null,
       };
