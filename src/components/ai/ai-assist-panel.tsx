@@ -39,6 +39,8 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { AiMediaModeSelect } from "./ai-media-mode-select";
 import { ExplainerLengthSelect } from "./explainer-length-select";
+import { ExplainerStyleSelect } from "./explainer-style-select";
+import type { VideoStyle } from "@/lib/brand-kit";
 import { AiImageReferencePicker } from "./ai-image-reference-picker";
 import { ImagePromptStyleSelect } from "./image-prompt-style-select";
 import { VideoPromptStyleSelect } from "./video-prompt-style-select";
@@ -116,6 +118,7 @@ export function AiAssistPanel({
   const imageMutation = useGenerateImage();
   const videoMutation = useGenerateVideo();
   const [explainerSeconds, setExplainerSeconds] = useState<number | undefined>();
+  const [explainerStyle, setExplainerStyle] = useState<VideoStyle | undefined>();
   const [explainerProgress, setExplainerProgress] =
     useState<ExplainerProgress | null>(null);
   const explainerToastRef = useRef<string | number | null>(null);
@@ -186,6 +189,7 @@ export function AiAssistPanel({
         captionContext,
         prompt,
         durationSeconds: explainerSeconds,
+        videoStyle: explainerStyle,
       });
       toast.loading("Adding video to post…", { id: toastId });
       const file = await urlToFile(r.video_url, "explainer.mp4");
@@ -458,6 +462,11 @@ export function AiAssistPanel({
             </div>
           ) : (
 <div className="space-y-2">
+              <ExplainerStyleSelect
+                compact
+                value={explainerStyle}
+                onValueChange={setExplainerStyle}
+              />
               <ExplainerLengthSelect
                 compact
                 value={explainerSeconds}

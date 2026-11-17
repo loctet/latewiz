@@ -93,6 +93,9 @@ export type ScheduledCampaign = {
   trendBlock: string;
   listItemsBlock: string;
   mediaMode: CampaignMediaMode;
+  /** Explainer look and length for this campaign; undefined = brand kit defaults */
+  explainerVideoStyle?: "whiteboard" | "motion";
+  explainerSeconds?: number;
   niche: NicheProfile;
   postPromptStyleId: string;
   researchDepthId: string;

@@ -7,6 +7,8 @@ export type RenderJobPayload = {
   captionDigest: string;
   /** Workspace whose OpenAI key pays for voiceover / images */
   workspaceId?: string | null;
+  /** Per-video look; falls back to the brand kit's video style */
+  videoStyle?: "whiteboard" | "motion";
 };
 
 export type SlotRenderStatus = "queued" | "rendering" | "done" | "failed";

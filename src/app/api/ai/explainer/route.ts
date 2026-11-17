@@ -67,6 +67,10 @@ export async function POST(request: NextRequest) {
         script,
         captionDigest: source.slice(0, 120),
         workspaceId,
+        videoStyle:
+          body.video_style === "whiteboard" || body.video_style === "motion"
+            ? body.video_style
+            : undefined,
       },
     });
 

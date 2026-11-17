@@ -74,6 +74,8 @@ import {
 } from "@/lib/campaign-media";
 import { CampaignSlotCard } from "./_components/campaign-slot-card";
 import { ExplainerLengthSelect } from "@/components/ai/explainer-length-select";
+import { ExplainerStyleSelect } from "@/components/ai/explainer-style-select";
+import type { VideoStyle } from "@/lib/brand-kit";
 import {
   CalendarClock,
   Film,
@@ -163,6 +165,7 @@ export default function CampaignPlannerPage() {
     number | null
   >(null);
   const [explainerSeconds, setExplainerSeconds] = useState<number | undefined>();
+  const [explainerStyle, setExplainerStyle] = useState<VideoStyle | undefined>();
   const [explainerBatch, setExplainerBatch] = useState<{
     done: number;
     total: number;
@@ -234,6 +237,8 @@ export default function CampaignPlannerPage() {
     setTrendBlock(campaign.trendBlock);
     setSelectedAccountIds(campaign.selectedAccountIds);
     setMediaMode(campaign.mediaMode);
+    setExplainerStyle(campaign.explainerVideoStyle);
+    setExplainerSeconds(campaign.explainerSeconds);
     // Restore AI prefs saved with the campaign so UI matches cron generation.
     if (campaign.postPromptStyleId) {
       useAiStore.getState().setPostPromptStyleId(campaign.postPromptStyleId);
@@ -338,6 +343,8 @@ export default function CampaignPlannerPage() {
       trendBlock,
       listItemsBlock,
       mediaMode,
+      explainerVideoStyle: explainerStyle,
+      explainerSeconds,
       niche: useAiStore.getState().niche,
       postPromptStyleId,
       researchDepthId,
@@ -395,6 +402,8 @@ export default function CampaignPlannerPage() {
       campaignGoal,
       campaignHint,
       campaignMode,
+      explainerSeconds,
+      explainerStyle,
       imagePromptStyleId,
       imageWatermarkSettings,
       listItemsBlock,
@@ -1087,6 +1096,7 @@ export default function CampaignPlannerPage() {
             caption_context: [slot.title, slot.body].filter(Boolean).join("\n"),
             prompt: slot.aiInstruction?.trim() || undefined,
             duration_seconds: explainerSeconds,
+            video_style: explainerStyle,
           }),
         });
         const data = (await res.json().catch(() => ({}))) as {
@@ -1853,6 +1863,11 @@ export default function CampaignPlannerPage() {
               )}
               {usesExplainers && (
                 <div className="space-y-2">
+                  <ExplainerStyleSelect
+                    compact
+                    value={explainerStyle}
+                    onValueChange={setExplainerStyle}
+                  />
                   <ExplainerLengthSelect
                     compact
                     value={explainerSeconds}

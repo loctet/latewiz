@@ -29,6 +29,8 @@ export function useGenerateExplainer(options?: {
       prompt?: string;
       /** Video length; undefined = brand kit default */
       durationSeconds?: number;
+      /** Video look; undefined = brand kit default */
+      videoStyle?: "whiteboard" | "motion";
     }) => {
       options?.onProgress?.({ phase: "scripting" });
       const res = await fetch("/api/ai/explainer", {
@@ -38,6 +40,7 @@ export function useGenerateExplainer(options?: {
           caption_context: params.captionContext,
           prompt: params.prompt,
           duration_seconds: params.durationSeconds,
+          video_style: params.videoStyle,
         }),
       });
       const created = (await res.json().catch(() => ({}))) as {

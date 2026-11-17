@@ -17,6 +17,8 @@ import {
   watermarkImageIfEnabled,
 } from "@/hooks";
 import { ExplainerLengthSelect } from "@/components/ai/explainer-length-select";
+import { ExplainerStyleSelect } from "@/components/ai/explainer-style-select";
+import type { VideoStyle } from "@/lib/brand-kit";
 import {
   notifyDraftGenerationResult,
 } from "@/lib/ai-draft-feedback";
@@ -75,6 +77,7 @@ export default function AiStudioPage() {
   const imageMutation = useGenerateImage();
   const videoMutation = useGenerateVideo();
   const [explainerSeconds, setExplainerSeconds] = useState<number | undefined>();
+  const [explainerStyle, setExplainerStyle] = useState<VideoStyle | undefined>();
   const [explainerProgress, setExplainerProgress] =
     useState<ExplainerProgress | null>(null);
   const explainerMutation = useGenerateExplainer({
@@ -174,6 +177,7 @@ export default function AiStudioPage() {
           captionContext: ctx,
           prompt,
           durationSeconds: explainerSeconds,
+          videoStyle: explainerStyle,
         });
         setVideoUrl(r.video_url);
         setImageUrl("");
@@ -430,11 +434,18 @@ export default function AiStudioPage() {
                     <VideoPromptStyleSelect compact />
                   </>
                 ) : (
-                  <ExplainerLengthSelect
-                    compact
-                    value={explainerSeconds}
-                    onValueChange={setExplainerSeconds}
-                  />
+                  <>
+                    <ExplainerStyleSelect
+                      compact
+                      value={explainerStyle}
+                      onValueChange={setExplainerStyle}
+                    />
+                    <ExplainerLengthSelect
+                      compact
+                      value={explainerSeconds}
+                      onValueChange={setExplainerSeconds}
+                    />
+                  </>
                 )}
               </div>
             )}

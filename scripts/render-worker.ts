@@ -148,7 +148,9 @@ async function resolveOpenAiKey(
  */
 async function prepareProject(job: RenderJob, dir: string): Promise<number> {
   const kit = await getBrandKit(job.userId);
-  const whiteboard = kit.videoStyle === "whiteboard";
+  // The video's own style wins (picked in Compose / AI Studio / campaign), else the brand kit default.
+  const style = job.payload.videoStyle ?? kit.videoStyle;
+  const whiteboard = style === "whiteboard";
   fs.cpSync(whiteboard ? WHITEBOARD_DIR : TEMPLATE_DIR, dir, {
     recursive: true,
     filter: (src) => !src.includes(`${path.sep}.hyperframes`),
@@ -186,7 +188,7 @@ async function prepareProject(job: RenderJob, dir: string): Promise<number> {
   }
   // Optional AI background images (motion-graphics style only).
   if (!whiteboard && apiKey && kit.aiBackgroundImages) scenes = await generateSceneImages({ apiKey, scenes, kit, dir, log });
-  log(`Assets ready in ${Math.round((Date.now() - t0) / 1000)}s: style ${kit.videoStyle}, voice ${voiceFiles ? kit.voiceEngine : "off"}`);
+  log(`Assets ready in ${Math.round((Date.now() - t0) / 1000)}s: style ${style}, voice ${voiceFiles ? kit.voiceEngine : "off"}`);
 
   const layout = layoutExplainerTimeline(scenes, {
     outro: kit.showOutro,

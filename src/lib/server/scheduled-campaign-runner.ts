@@ -322,7 +322,7 @@ async function resolveExplainerMedia(
         title: slot.title,
         body: slot.body,
         aiInstruction: slot.aiInstruction,
-        targetSeconds: (await getBrandKit(userId)).explainerSeconds,
+        targetSeconds: campaign.explainerSeconds ?? (await getBrandKit(userId)).explainerSeconds,
       });
 
   await enqueueRenderJob({
@@ -335,6 +335,7 @@ async function resolveExplainerMedia(
       captionDigest: [slot.title, slot.body].filter(Boolean).join("\n").slice(0, 120),
       // Pay for voiceover with the campaign's workspace keys.
       workspaceId: campaign.workspaceId ?? null,
+      videoStyle: campaign.explainerVideoStyle,
     },
   });
 

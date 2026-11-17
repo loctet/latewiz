@@ -95,6 +95,12 @@ function normalizeCampaign(
     mediaMode: isCampaignMediaMode(campaign.mediaMode)
       ? campaign.mediaMode
       : "none",
+    explainerVideoStyle:
+      campaign.explainerVideoStyle === "whiteboard" || campaign.explainerVideoStyle === "motion"
+        ? campaign.explainerVideoStyle
+        : undefined,
+    explainerSeconds:
+      Number(campaign.explainerSeconds) > 0 ? Number(campaign.explainerSeconds) : undefined,
     niche: { ...defaultNicheProfile(), ...(campaign.niche ?? {}) },
     postPromptStyleId: String(campaign.postPromptStyleId ?? "auto"),
     researchDepthId:
