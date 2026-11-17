@@ -73,6 +73,7 @@ import {
   resolveSlotMediaType,
 } from "@/lib/campaign-media";
 import { CampaignSlotCard } from "./_components/campaign-slot-card";
+import { ExplainerLengthSelect } from "@/components/ai/explainer-length-select";
 import {
   CalendarClock,
   Film,
@@ -161,6 +162,7 @@ export default function CampaignPlannerPage() {
   const [regeneratingVideoIndex, setRegeneratingVideoIndex] = useState<
     number | null
   >(null);
+  const [explainerSeconds, setExplainerSeconds] = useState<number | undefined>();
   const [explainerBatch, setExplainerBatch] = useState<{
     done: number;
     total: number;
@@ -1084,6 +1086,7 @@ export default function CampaignPlannerPage() {
           body: JSON.stringify({
             caption_context: [slot.title, slot.body].filter(Boolean).join("\n"),
             prompt: slot.aiInstruction?.trim() || undefined,
+            duration_seconds: explainerSeconds,
           }),
         });
         const data = (await res.json().catch(() => ({}))) as {
@@ -1850,6 +1853,11 @@ export default function CampaignPlannerPage() {
               )}
               {usesExplainers && (
                 <div className="space-y-2">
+                  <ExplainerLengthSelect
+                    compact
+                    value={explainerSeconds}
+                    onValueChange={setExplainerSeconds}
+                  />
                   <div className="flex flex-wrap items-center gap-2">
                     <Button
                       type="button"

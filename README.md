@@ -110,9 +110,26 @@ Flow, for deferred campaigns only:
    the MP4 in `generated_media`.
 3. The next cron run publishes the post with the video.
 
-Give deferred campaigns enough `generationLeadMinutes` for a render (about 1–3 minutes
-per video). Edit the template in `video-templates/explainer/`, then check it with
-`npx hyperframes check` from that folder.
+Immediate campaigns can render every explainer first (campaign page → Render explainers),
+then send all posts with finished videos to Zernio. Give deferred campaigns enough
+`generationLeadMinutes` for a render (about 2–3 minutes per minute of video).
+
+What an explainer is made of:
+
+- **Script**: OpenAI writes a beginner-first teaching arc (hook, why it matters, simple
+  definition and analogy, step by step, worked example, myth, recap, try it today) sized
+  to the chosen length (default 1:30, set in the brand kit or per generation).
+  Narration is cleaned for speech: no URLs, @handles, hashtags or emojis.
+- **Visuals**: each scene picks one of 18 animated visual kinds (icon hero, flow,
+  cycle, compare, equation, analogy, bar/line chart, stat, pictogram, checklist,
+  timeline, chat, phone mockup, code, definition, quote) drawn with HTML/SVG and
+  ~240 Lucide icons in the brand colors. AI background images are optional (brand kit).
+- **Audio**: OpenAI TTS voiceover with word-synced captions, plus synthesized whoosh /
+  pop / chime sound effects.
+
+Template files: `video-templates/explainer/` (`explainer.js` scenes and timeline,
+`visuals.js` visual kinds, `explainer.css`). After editing, run `npx hyperframes check`
+from that folder. Regenerate the icon set with `node scripts/build-explainer-icons.mjs`.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -120,6 +137,8 @@ per video). Edit the template in `video-templates/explainer/`, then check it wit
 | `RENDER_FPS` | `24` | Frames per second (`30` is about 20% slower to render) |
 | `RENDER_POLL_MS` | `15000` | Poll interval when the queue is empty |
 | `HYPERFRAMES_PACKAGE` | `hyperframes@0.9.41` | CLI package passed to `npx` |
+| `OPENAI_EXPLAINER_MODEL` | `gpt-4.1` | Model that writes explainer scripts (app and cron) |
+| `OPENAI_TTS_MODEL` | `gpt-4o-mini-tts` | Voiceover model (worker) |
 
 ## Configuration
 

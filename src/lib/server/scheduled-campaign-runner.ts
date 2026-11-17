@@ -1,3 +1,4 @@
+import { getBrandKit } from "@/lib/server/brand-kit";
 import { generateExplainerScript } from "@/lib/openai/explainer-script";
 import { enqueueRenderJob, getRenderJobForSlot } from "@/lib/server/render-jobs";
 import { resolveSlotMediaType, type SlotMediaType } from "@/lib/campaign-media";
@@ -321,6 +322,7 @@ async function resolveExplainerMedia(
         title: slot.title,
         body: slot.body,
         aiInstruction: slot.aiInstruction,
+        targetSeconds: (await getBrandKit(userId)).explainerSeconds,
       });
 
   await enqueueRenderJob({
@@ -331,6 +333,8 @@ async function resolveExplainerMedia(
       template: "explainer",
       script,
       captionDigest: [slot.title, slot.body].filter(Boolean).join("\n").slice(0, 120),
+      // Pay for voiceover with the campaign's workspace keys.
+      workspaceId: campaign.workspaceId ?? null,
     },
   });
 

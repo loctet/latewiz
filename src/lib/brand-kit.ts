@@ -1,3 +1,8 @@
+import {
+  DEFAULT_EXPLAINER_SECONDS,
+  clampExplainerSeconds,
+} from "@/lib/explainer-script";
+
 /**
  * Per-user brand kit used to theme generated videos (and, later, images).
  * Shared by client and server. The logo bytes live in the `brand_kits`
@@ -82,7 +87,14 @@ export type BrandKit = {
   voice: BrandVoice;
   /** Word-by-word captions synced to the voiceover */
   captionsEnabled: boolean;
+  /** Style of optional AI background images */
   illustrationStyle: BrandIllustrationStyle;
+  /** Dimmed AI-generated backgrounds behind the animated visuals (off by default) */
+  aiBackgroundImages: boolean;
+  /** Subtle whooshes and pops on transitions and reveals */
+  soundEffects: boolean;
+  /** Default explainer length in seconds */
+  explainerSeconds: number;
 };
 
 /** Brand kit as returned by the API: JSON fields plus logo metadata. */
@@ -121,6 +133,9 @@ export function defaultBrandKit(): BrandKit {
     voice: "coral",
     captionsEnabled: true,
     illustrationStyle: "flat-vector",
+    aiBackgroundImages: false,
+    soundEffects: true,
+    explainerSeconds: DEFAULT_EXPLAINER_SECONDS,
   };
 }
 
@@ -186,6 +201,13 @@ export function normalizeBrandKit(partial?: Partial<BrandKit> | null): BrandKit 
       BRAND_ILLUSTRATION_STYLES,
       d.illustrationStyle
     ),
+    aiBackgroundImages:
+      typeof partial.aiBackgroundImages === "boolean"
+        ? partial.aiBackgroundImages
+        : d.aiBackgroundImages,
+    soundEffects:
+      typeof partial.soundEffects === "boolean" ? partial.soundEffects : d.soundEffects,
+    explainerSeconds: clampExplainerSeconds(partial.explainerSeconds ?? d.explainerSeconds),
   };
 }
 

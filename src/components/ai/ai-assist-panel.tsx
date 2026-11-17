@@ -38,6 +38,7 @@ import {
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { AiMediaModeSelect } from "./ai-media-mode-select";
+import { ExplainerLengthSelect } from "./explainer-length-select";
 import { AiImageReferencePicker } from "./ai-image-reference-picker";
 import { ImagePromptStyleSelect } from "./image-prompt-style-select";
 import { VideoPromptStyleSelect } from "./video-prompt-style-select";
@@ -114,6 +115,7 @@ export function AiAssistPanel({
   const draftMutation = useGenerateDraft();
   const imageMutation = useGenerateImage();
   const videoMutation = useGenerateVideo();
+  const [explainerSeconds, setExplainerSeconds] = useState<number | undefined>();
   const [explainerProgress, setExplainerProgress] =
     useState<ExplainerProgress | null>(null);
   const explainerToastRef = useRef<string | number | null>(null);
@@ -180,7 +182,11 @@ export function AiAssistPanel({
     const toastId = toast.loading(describeExplainerProgress(null));
     explainerToastRef.current = toastId;
     try {
-      const r = await explainerMutation.mutateAsync({ captionContext, prompt });
+      const r = await explainerMutation.mutateAsync({
+        captionContext,
+        prompt,
+        durationSeconds: explainerSeconds,
+      });
       toast.loading("Adding video to post…", { id: toastId });
       const file = await urlToFile(r.video_url, "explainer.mp4");
       const uploaded = await uploadMutation.mutateAsync(file);
@@ -451,14 +457,21 @@ export function AiAssistPanel({
               <VideoPromptStyleSelect compact />
             </div>
           ) : (
-            <p className="text-[11px] leading-snug text-muted-foreground">
-              Turns this post into a short branded video (9:16) using your{" "}
-              <Link href="/dashboard/settings" className="underline text-primary">
-                brand kit
-              </Link>
-              . Rendered by the render worker, usually 1–3 minutes. The research
-              topic, if set, is used as extra direction.
-            </p>
+<div className="space-y-2">
+              <ExplainerLengthSelect
+                compact
+                value={explainerSeconds}
+                onValueChange={setExplainerSeconds}
+              />
+              <p className="text-[11px] leading-snug text-muted-foreground">
+                A narrated beginner explainer (9:16) built from animated icons,
+                diagrams and charts in your{" "}
+                <Link href="/dashboard/settings" className="underline text-primary">
+                  brand kit
+                </Link>
+                . Rendered by the render worker. The research topic, if set, is used as extra direction.
+              </p>
+            </div>
           )}
         </div>
       )}

@@ -25,6 +25,7 @@ import {
   type BrandKit,
   type BrandKitResponse,
 } from "@/lib/brand-kit";
+import { EXPLAINER_DURATIONS } from "@/lib/explainer-script";
 import { cn } from "@/lib/utils";
 import { Loader2, Trash2, Upload } from "lucide-react";
 
@@ -382,9 +383,28 @@ export function BrandKitSettings() {
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
-            <Label>Illustration style</Label>
+            <Label>Explainer length</Label>
+            <Select
+              value={String(kit.explainerSeconds)}
+              onValueChange={(v) => update("explainerSeconds", Number(v))}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {EXPLAINER_DURATIONS.map((d) => (
+                  <SelectItem key={d.value} value={String(d.value)}>
+                    {d.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>AI background style</Label>
             <Select
               value={kit.illustrationStyle}
+              disabled={!kit.aiBackgroundImages}
               onValueChange={(v) =>
                 update("illustrationStyle", v as BrandKit["illustrationStyle"])
               }
@@ -422,12 +442,29 @@ export function BrandKitSettings() {
           </div>
         </div>
         <p className="-mt-3 text-xs text-muted-foreground">
-          Explainer videos get an AI illustration per scene and a spoken
-          voiceover, generated with your OpenAI key: one image per scene
-          (usually 5–8) plus a short text-to-speech clip.
+          Explainers are built from animated icons, diagrams, charts and app
+          mockups in your brand colors. The script and voiceover use your
+          OpenAI key. AI background images are optional and add one image
+          generation per scene.
         </p>
 
         <div className="grid gap-3 sm:grid-cols-2">
+          <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
+            <Label htmlFor="brand-sfx">Sound effects</Label>
+            <Switch
+              id="brand-sfx"
+              checked={kit.soundEffects}
+              onCheckedChange={(v) => update("soundEffects", v)}
+            />
+          </div>
+          <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
+            <Label htmlFor="brand-ai-bg">AI background images</Label>
+            <Switch
+              id="brand-ai-bg"
+              checked={kit.aiBackgroundImages}
+              onCheckedChange={(v) => update("aiBackgroundImages", v)}
+            />
+          </div>
           <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
             <Label htmlFor="brand-voiceover">Voiceover</Label>
             <Switch

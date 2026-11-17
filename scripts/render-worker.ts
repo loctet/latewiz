@@ -39,9 +39,12 @@ import { layoutExplainerTimeline } from "@/lib/explainer-timing";
 import { getUserSecret, allowEnvKeyFallback } from "@/lib/server/vault";
 import { isPlausibleOpenAiApiKey } from "@/lib/openai/resolve-key";
 import {
-  buildNarrationTrack,
+  buildAudioTrack,
   generateSceneImages,
   generateSceneVoiceover,
+  narrationCues,
+  synthesizeSfx,
+  type AudioCue,
 } from "./explainer-assets";
 
 const TEMPLATE_DIR = path.join(process.cwd(), "video-templates", "explainer");
@@ -122,8 +125,11 @@ function runHyperframes(args: string[], cwd: string): Promise<{ code: number; ou
   });
 }
 
-async function resolveOpenAiKey(userId: string): Promise<string | null> {
-  const fromVault = await getUserSecret(userId, "openai");
+async function resolveOpenAiKey(
+  userId: string,
+  workspaceId: string | null | undefined
+): Promise<string | null> {
+  const fromVault = await getUserSecret(userId, "openai", workspaceId ?? null);
   if (fromVault && isPlausibleOpenAiApiKey(fromVault)) return fromVault;
   if (allowEnvKeyFallback()) {
     const env = process.env.OPENAI_API_KEY?.trim();
@@ -133,8 +139,9 @@ async function resolveOpenAiKey(userId: string): Promise<string | null> {
 }
 
 /**
- * Copy the template, generate illustrations + voiceover, lay out the
- * timeline and write vars.json. Returns the video length in seconds.
+ * Copy the template, generate voiceover (and optional AI backgrounds), lay
+ * out the timeline, mix narration + sound effects, and write vars.json.
+ * Returns the video length in seconds.
  */
 async function prepareProject(job: RenderJob, dir: string): Promise<number> {
   fs.cpSync(TEMPLATE_DIR, dir, {
@@ -154,13 +161,15 @@ async function prepareProject(job: RenderJob, dir: string): Promise<number> {
 
   const script = normalizeExplainerScript(job.payload.script) ?? job.payload.script;
   let scenes = script.scenes;
-  const apiKey = await resolveOpenAiKey(job.userId);
+  const apiKey = await resolveOpenAiKey(job.userId, job.payload.workspaceId);
   let voiceFiles: string[] | null = null;
 
   if (apiKey) {
     const t0 = Date.now();
     const [withImages, voice] = await Promise.all([
-      generateSceneImages({ apiKey, scenes, kit, dir, log }),
+      kit.aiBackgroundImages
+        ? generateSceneImages({ apiKey, scenes, kit, dir, log })
+        : Promise.resolve(scenes),
       kit.voiceoverEnabled
         ? generateSceneVoiceover({ apiKey, scenes, voice: kit.voice, dir, log })
         : Promise.resolve(null),
@@ -171,21 +180,29 @@ async function prepareProject(job: RenderJob, dir: string): Promise<number> {
     }));
     voiceFiles = voice?.files ?? null;
     log(
-      `Assets ready in ${Math.round((Date.now() - t0) / 1000)}s: ${scenes.filter((s) => s.image).length}/${scenes.length} illustrations, voiceover ${voiceFiles ? "on" : "off"}`
+      `Assets ready in ${Math.round((Date.now() - t0) / 1000)}s: voiceover ${voiceFiles ? "on" : "off"}, AI backgrounds ${scenes.filter((s) => s.image).length}/${scenes.length}`
     );
   } else {
-    log("No OpenAI key for this user: rendering without illustrations or voiceover");
+    log("No OpenAI key for this workspace: rendering without voiceover");
   }
 
-  const layout = layoutExplainerTimeline(scenes, { outro: kit.showOutro });
+  const layout = layoutExplainerTimeline(scenes, {
+    outro: kit.showOutro,
+    targetSeconds: script.targetSeconds ?? kit.explainerSeconds,
+  });
 
-  if (voiceFiles) {
-    await buildNarrationTrack({
-      files: voiceFiles,
-      scenes: layout.scenes,
-      total: layout.total,
-      output: path.join(dir, "narration.mp3"),
+  const cues: AudioCue[] = voiceFiles ? narrationCues(voiceFiles, layout.scenes) : [];
+  if (kit.soundEffects) {
+    const sfx = await synthesizeSfx(dir);
+    layout.scenes.forEach((scene, i) => {
+      if (i > 0) cues.push({ file: sfx.whoosh, at: Math.max(0, scene.start - 0.12), volume: 0.22 });
+      cues.push({ file: sfx.pop, at: scene.start + 0.75, volume: 0.18 });
     });
+    if (kit.showOutro) cues.push({ file: sfx.chime, at: layout.outroStart + 0.35, volume: 0.25 });
+  }
+
+  if (cues.length > 0) {
+    await buildAudioTrack({ cues, total: layout.total, output: path.join(dir, "narration.mp3") });
     const html = path.join(dir, "index.html");
     const marker = "<!-- narration-audio -->";
     const source = fs.readFileSync(html, "utf8");

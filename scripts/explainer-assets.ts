@@ -111,6 +111,7 @@ export async function generateSceneImages(params: {
   log: Log;
 }): Promise<ExplainerScene[]> {
   return mapLimit(params.scenes, IMAGE_CONCURRENCY, async (scene, i) => {
+    if (!scene.imagePrompt) return scene;
     const name = `scene-${i}.png`;
     try {
       const ok = await generateImage(
@@ -174,37 +175,63 @@ export async function generateSceneVoiceover(params: {
   }
 }
 
-/** Place each scene's voiceover at its scene start and mix into one track. */
-export async function buildNarrationTrack(params: {
-  files: string[];
-  scenes: TimedScene[];
+export type AudioCue = { file: string; at: number; volume?: number };
+
+/**
+ * Synthesize the sound effects used on transitions and reveals with ffmpeg
+ * (no audio assets to license): a soft whoosh, a pop and an outro chime.
+ */
+export async function synthesizeSfx(dir: string): Promise<{ whoosh: string; pop: string; chime: string }> {
+  const out = {
+    whoosh: path.join(dir, "sfx-whoosh.wav"),
+    pop: path.join(dir, "sfx-pop.wav"),
+    chime: path.join(dir, "sfx-chime.wav"),
+  };
+  const jobs: Array<[string, string[]]> = [
+    [out.whoosh, ["-f", "lavfi", "-i", "anoisesrc=color=pink:duration=0.55:amplitude=0.5:seed=7",
+      "-af", "highpass=f=400,lowpass=f=5000,afade=t=in:d=0.22,afade=t=out:st=0.25:d=0.3"]],
+    [out.pop, ["-f", "lavfi", "-i", "sine=frequency=740:duration=0.14",
+      "-af", "afade=t=in:d=0.005,afade=t=out:st=0.02:d=0.12"]],
+    [out.chime, ["-f", "lavfi", "-i", "sine=frequency=659:duration=0.9", "-f", "lavfi", "-i", "sine=frequency=988:duration=0.9",
+      "-filter_complex", "[0][1]amix=inputs=2,afade=t=in:d=0.01,afade=t=out:st=0.1:d=0.8[a]", "-map", "[a]"]],
+  ];
+  for (const [file, args] of jobs) {
+    const r = await runFfmpeg(["-y", "-v", "error", ...args, "-ar", "44100", "-ac", "2", file]);
+    if (r.code !== 0) throw new Error(`ffmpeg sfx failed: ${r.stderr.slice(-200)}`);
+  }
+  return out;
+}
+
+/** Narration cues: each scene's voiceover at its scene start + lead. */
+export function narrationCues(files: string[], scenes: TimedScene[]): AudioCue[] {
+  return files.map((file, i) => ({ file, at: scenes[i].start + NARRATION_LEAD, volume: 1 }));
+}
+
+/** Mix cues into one soundtrack of exactly `total` seconds. */
+export async function buildAudioTrack(params: {
+  cues: AudioCue[];
   total: number;
   output: string;
 }): Promise<void> {
-  const inputs = params.files.flatMap((f) => ["-i", f]);
-  const delayed = params.files.map((_, i) => {
-    const ms = Math.round((params.scenes[i].start + NARRATION_LEAD) * 1000);
-    return `[${i}:a]aresample=44100,adelay=${ms}|${ms}[a${i}]`;
+  const cues = params.cues.filter((c) => c.at < params.total);
+  if (cues.length === 0) throw new Error("No audio cues");
+  const inputs = cues.flatMap((c) => ["-i", c.file]);
+  const delayed = cues.map((c, i) => {
+    const ms = Math.max(0, Math.round(c.at * 1000));
+    return `[${i}:a]aresample=44100,aformat=channel_layouts=stereo,volume=${(c.volume ?? 1).toFixed(2)},adelay=${ms}|${ms}[a${i}]`;
   });
   const mix =
-    params.files.map((_, i) => `[a${i}]`).join("") +
-    `amix=inputs=${params.files.length}:normalize=0:dropout_transition=0,apad[out]`;
+    cues.map((_, i) => `[a${i}]`).join("") +
+    `amix=inputs=${cues.length}:normalize=0:dropout_transition=0,alimiter=limit=0.95,apad[out]`;
   const r = await runFfmpeg([
-    "-y",
-    "-v",
-    "error",
+    "-y", "-v", "error",
     ...inputs,
-    "-filter_complex",
-    [...delayed, mix].join(";"),
-    "-map",
-    "[out]",
-    "-t",
-    params.total.toFixed(2),
-    "-ac",
-    "2",
-    "-b:a",
-    "160k",
+    "-filter_complex", [...delayed, mix].join(";"),
+    "-map", "[out]",
+    "-t", params.total.toFixed(2),
+    "-ac", "2",
+    "-b:a", "160k",
     params.output,
   ]);
-  if (r.code !== 0) throw new Error(`ffmpeg narration mix failed: ${r.stderr.slice(-300)}`);
+  if (r.code !== 0) throw new Error(`ffmpeg audio mix failed: ${r.stderr.slice(-300)}`);
 }

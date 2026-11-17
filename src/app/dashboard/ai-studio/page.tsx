@@ -16,6 +16,7 @@ import {
   useImageWatermarkSettings,
   watermarkImageIfEnabled,
 } from "@/hooks";
+import { ExplainerLengthSelect } from "@/components/ai/explainer-length-select";
 import {
   notifyDraftGenerationResult,
 } from "@/lib/ai-draft-feedback";
@@ -73,6 +74,7 @@ export default function AiStudioPage() {
   const draftMutation = useGenerateDraft();
   const imageMutation = useGenerateImage();
   const videoMutation = useGenerateVideo();
+  const [explainerSeconds, setExplainerSeconds] = useState<number | undefined>();
   const [explainerProgress, setExplainerProgress] =
     useState<ExplainerProgress | null>(null);
   const explainerMutation = useGenerateExplainer({
@@ -168,7 +170,11 @@ export default function AiStudioPage() {
         return;
       }
       try {
-        const r = await explainerMutation.mutateAsync({ captionContext: ctx, prompt });
+        const r = await explainerMutation.mutateAsync({
+          captionContext: ctx,
+          prompt,
+          durationSeconds: explainerSeconds,
+        });
         setVideoUrl(r.video_url);
         setImageUrl("");
         toast.success("Explainer ready — saved to your media library.");
@@ -424,11 +430,11 @@ export default function AiStudioPage() {
                     <VideoPromptStyleSelect compact />
                   </>
                 ) : (
-                  <p className="text-[11px] leading-snug text-muted-foreground">
-                    Short branded 9:16 video from your caption and topic, styled
-                    with your brand kit (Settings → Content). Rendered by the
-                    render worker.
-                  </p>
+                  <ExplainerLengthSelect
+                    compact
+                    value={explainerSeconds}
+                    onValueChange={setExplainerSeconds}
+                  />
                 )}
               </div>
             )}

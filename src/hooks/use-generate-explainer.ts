@@ -24,7 +24,12 @@ export function useGenerateExplainer(options?: {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (params: { captionContext?: string; prompt?: string }) => {
+    mutationFn: async (params: {
+      captionContext?: string;
+      prompt?: string;
+      /** Video length; undefined = brand kit default */
+      durationSeconds?: number;
+    }) => {
       options?.onProgress?.({ phase: "scripting" });
       const res = await fetch("/api/ai/explainer", {
         method: "POST",
@@ -32,6 +37,7 @@ export function useGenerateExplainer(options?: {
         body: JSON.stringify({
           caption_context: params.captionContext,
           prompt: params.prompt,
+          duration_seconds: params.durationSeconds,
         }),
       });
       const created = (await res.json().catch(() => ({}))) as {
@@ -85,7 +91,7 @@ export function describeExplainerProgress(progress: ExplainerProgress | null): s
   if (!progress) return "Generating explainer…";
   if (progress.phase === "scripting") return "Writing the scene script…";
   if (progress.phase === "rendering") {
-    return `Creating illustrations, voiceover and rendering… ${progress.ageSeconds}s (usually 3–5 min)`;
+    return `Creating voiceover and rendering… ${progress.ageSeconds}s (about 2–3 min per minute of video)`;
   }
   if (!progress.workerOnline) {
     return "Render worker is offline: start it with `npm run render-worker`. Your video stays queued and renders as soon as it runs.";

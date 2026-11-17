@@ -1,18 +1,20 @@
 import {
+  DEFAULT_EXPLAINER_SECONDS,
   EXPLAINER_MIN_SECONDS,
+  clampExplainerSeconds,
   type ExplainerScene,
 } from "@/lib/explainer-script";
 
 /** Seconds two scenes overlap during a transition. */
 export const SCENE_OVERLAP = 0.5;
 /** Voiceover starts this long after its scene starts. */
-export const NARRATION_LEAD = 0.3;
+export const NARRATION_LEAD = 0.35;
 /** Brand outro length (no voiceover from the script). */
-export const OUTRO_SECONDS = 3.6;
+export const OUTRO_SECONDS = 4;
 
-const MIN_SCENE_SECONDS = 3.4;
+const MIN_SCENE_SECONDS = 4;
 /** Spoken pace used when there is no voiceover to measure. */
-const WORDS_PER_SECOND = 2.5;
+const WORDS_PER_SECOND = 2.4;
 
 export function estimateNarrationSeconds(text: string): number {
   const words = text.trim().split(/\s+/).filter(Boolean).length;
@@ -27,13 +29,15 @@ export type TimedScene = ExplainerScene & {
 
 /**
  * Lay scenes out on the timeline. Each scene lasts its voiceover plus a lead,
- * a tail and the transition overlap. If the whole video (with outro) is
- * shorter than EXPLAINER_MIN_SECONDS, scenes are stretched evenly.
+ * a breathing pause and the transition overlap. Scenes are stretched evenly
+ * so the video reaches at least 90% of the target length (and never less
+ * than EXPLAINER_MIN_SECONDS).
  */
 export function layoutExplainerTimeline(
   scenes: ExplainerScene[],
-  options: { outro: boolean }
+  options: { outro: boolean; targetSeconds?: number }
 ): { scenes: TimedScene[]; total: number; outroStart: number } {
+  const target = clampExplainerSeconds(options.targetSeconds ?? DEFAULT_EXPLAINER_SECONDS);
   const base = scenes.map((scene) => {
     const audio =
       scene.audioDuration && scene.audioDuration > 0
@@ -41,14 +45,17 @@ export function layoutExplainerTimeline(
         : estimateNarrationSeconds(scene.narration);
     return {
       audio,
-      duration: Math.max(MIN_SCENE_SECONDS, NARRATION_LEAD + audio + 0.45 + SCENE_OVERLAP),
+      duration: Math.max(MIN_SCENE_SECONDS, NARRATION_LEAD + audio + 0.7 + SCENE_OVERLAP),
     };
   });
 
   const outroLength = options.outro ? OUTRO_SECONDS : 0;
   const naturalTotal =
     base.reduce((sum, s) => sum + s.duration - SCENE_OVERLAP, 0) + SCENE_OVERLAP + outroLength;
-  const shortfall = Math.max(0, EXPLAINER_MIN_SECONDS - naturalTotal);
+  // Hold visuals a little longer when the narration came out short, so the
+  // video stays close to the length the user picked.
+  const floor = Math.max(EXPLAINER_MIN_SECONDS, target * 0.97);
+  const shortfall = Math.max(0, floor - naturalTotal);
   const stretch = base.length > 0 ? shortfall / base.length : 0;
 
   let t = 0;

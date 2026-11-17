@@ -5,6 +5,8 @@ export type RenderJobPayload = {
   script: ExplainerScript;
   /** Short text used as the generated media caption digest */
   captionDigest: string;
+  /** Workspace whose OpenAI key pays for voiceover / images */
+  workspaceId?: string | null;
 };
 
 export type SlotRenderStatus = "queued" | "rendering" | "done" | "failed";

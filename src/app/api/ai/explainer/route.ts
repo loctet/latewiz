@@ -4,6 +4,9 @@ import { generateExplainerScript } from "@/lib/openai/explainer-script";
 import { STANDALONE_RENDER_CAMPAIGN_ID } from "@/lib/render-jobs";
 import { requireUserAiKeys } from "@/lib/server/ai-request-keys";
 import { enqueueRenderJob } from "@/lib/server/render-jobs";
+import { getBrandKit } from "@/lib/server/brand-kit";
+import { getActiveWorkspaceId } from "@/lib/server/workspaces";
+import { clampExplainerSeconds } from "@/lib/explainer-script";
 import { SessionRequiredError } from "@/lib/server/session";
 
 /** Split compose text into a title (first line) and body (the rest). */
@@ -41,12 +44,19 @@ export async function POST(request: NextRequest) {
     }
 
     const { title, body: postBody } = splitPostText(source);
+    const targetSeconds =
+      body.duration_seconds != null
+        ? clampExplainerSeconds(body.duration_seconds)
+        : (await getBrandKit(userId)).explainerSeconds;
     const { script, detail } = await generateExplainerScript({
       apiKey: openaiApiKey,
       title: title || prompt,
       body: postBody,
       aiInstruction: captionContext && prompt ? prompt : undefined,
+      targetSeconds,
     });
+    // Voiceover / images are paid with the keys of the workspace active now.
+    const workspaceId = await getActiveWorkspaceId(userId);
 
     const job = await enqueueRenderJob({
       userId,
@@ -56,6 +66,7 @@ export async function POST(request: NextRequest) {
         template: "explainer",
         script,
         captionDigest: source.slice(0, 120),
+        workspaceId,
       },
     });
 
@@ -63,6 +74,7 @@ export async function POST(request: NextRequest) {
       job_id: job.id,
       status: job.status,
       scenes: script.scenes.length,
+      target_seconds: targetSeconds,
       detail,
     });
   } catch (error) {
