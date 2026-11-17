@@ -142,3 +142,15 @@ export {
   useRunAutoReplyScan,
   useAutoReplyScanner,
 } from "./use-auto-reply";
+
+// LateWiz workspaces (key set + niche per brand)
+export {
+  useWorkspaces,
+  useActivateWorkspace,
+  useCreateWorkspace,
+  useRenameWorkspace,
+  useDeleteWorkspace,
+  reloadIntoWorkspace,
+  workspaceKeys,
+  type Workspace,
+} from "./use-workspaces";

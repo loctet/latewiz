@@ -91,6 +91,8 @@ export const userSecrets = sqliteTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
+    /** Owning workspace. Legacy rows (null) are claimed by the user's first workspace. */
+    workspaceId: text("workspace_id"),
     kind: text("kind").$type<SecretKind>().notNull(),
     ciphertext: text("ciphertext").notNull(),
     iv: text("iv").notNull(),
@@ -104,8 +106,39 @@ export const userSecrets = sqliteTable(
       .$defaultFn(() => new Date()),
   },
   (table) => [
-    uniqueIndex("user_secrets_user_kind_idx").on(table.userId, table.kind),
+    uniqueIndex("user_secrets_ws_kind_idx").on(
+      table.userId,
+      table.workspaceId,
+      table.kind
+    ),
   ]
+);
+
+/**
+ * A LateWiz workspace: one Zernio/OpenAI/fal key set plus one niche.
+ * Users can hold several and switch between them; exactly one is active.
+ */
+export const workspaces = sqliteTable(
+  "workspaces",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    niche: text("niche", { mode: "json" }).$type<NicheProfile>().notNull(),
+    contentPrefs: text("content_prefs", { mode: "json" }).$type<
+      import("@/lib/content-prefs").ContentPrefs
+    >(),
+    isActive: integer("is_active", { mode: "boolean" }).notNull().default(false),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [index("workspaces_user_idx").on(table.userId, table.createdAt)]
 );
 
 export const userProfiles = sqliteTable("user_profiles", {

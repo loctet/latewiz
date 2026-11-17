@@ -10,6 +10,10 @@ import {
   normalizeContentPrefs,
   type ContentPrefs,
 } from "@/lib/content-prefs";
+import {
+  getActiveWorkspace,
+  updateActiveWorkspaceProfile,
+} from "@/lib/server/workspaces";
 
 export type UserProfileRecord = {
   userId: string;
@@ -27,10 +31,12 @@ export async function getUserProfile(
     .where(eq(userProfiles.userId, userId))
     .limit(1);
   if (!row) return null;
+  // Niche and content prefs live on the active workspace; onboarding is per user.
+  const workspace = await getActiveWorkspace(userId);
   return {
     userId: row.userId,
-    niche: { ...defaultNicheProfile(), ...(row.niche ?? {}) },
-    contentPrefs: normalizeContentPrefs(row.contentPrefs),
+    niche: workspace.niche,
+    contentPrefs: workspace.contentPrefs,
     onboardingCompleted: row.onboardingCompleted,
   };
 }
@@ -75,6 +81,8 @@ export async function upsertUserProfile(
       updatedAt: now,
     });
   }
+
+  await updateActiveWorkspaceProfile(userId, { niche, contentPrefs });
 
   return { userId, niche, contentPrefs, onboardingCompleted };
 }

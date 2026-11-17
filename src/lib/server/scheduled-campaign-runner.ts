@@ -31,8 +31,11 @@ import { isPlausibleOpenAiApiKey } from "@/lib/openai/resolve-key";
 import { isPlausibleFalApiKey } from "@/lib/fal/resolve-key";
 import { isPlausibleZernioKey } from "@/lib/server/resolve-user-keys";
 
-async function resolveCampaignOpenAiKey(userId: string): Promise<string | null> {
-  const fromVault = await getUserSecret(userId, "openai");
+async function resolveCampaignOpenAiKey(
+  userId: string,
+  workspaceId: string | null
+): Promise<string | null> {
+  const fromVault = await getUserSecret(userId, "openai", workspaceId);
   if (fromVault && isPlausibleOpenAiApiKey(fromVault)) return fromVault;
   if (allowEnvKeyFallback()) {
     const env = process.env.OPENAI_API_KEY?.trim();
@@ -41,8 +44,11 @@ async function resolveCampaignOpenAiKey(userId: string): Promise<string | null> 
   return null;
 }
 
-async function resolveCampaignFalKey(userId: string): Promise<string | null> {
-  const fromVault = await getUserSecret(userId, "fal");
+async function resolveCampaignFalKey(
+  userId: string,
+  workspaceId: string | null
+): Promise<string | null> {
+  const fromVault = await getUserSecret(userId, "fal", workspaceId);
   if (fromVault && isPlausibleFalApiKey(fromVault)) return fromVault;
   if (allowEnvKeyFallback()) {
     const env =
@@ -52,8 +58,11 @@ async function resolveCampaignFalKey(userId: string): Promise<string | null> {
   return null;
 }
 
-async function resolveCampaignZernioKey(userId: string): Promise<string | null> {
-  const fromVault = await getUserSecret(userId, "zernio");
+async function resolveCampaignZernioKey(
+  userId: string,
+  workspaceId: string | null
+): Promise<string | null> {
+  const fromVault = await getUserSecret(userId, "zernio", workspaceId);
   if (fromVault && isPlausibleZernioKey(fromVault)) return fromVault;
   if (allowEnvKeyFallback()) {
     const env = process.env.LATE_API_KEY?.trim();
@@ -433,9 +442,11 @@ async function processScheduledCampaignSlot(
   }
 
   const userId = acquired.userId;
-  const lateKey = await resolveCampaignZernioKey(userId);
-  const openaiKey = await resolveCampaignOpenAiKey(userId);
-  const falKey = await resolveCampaignFalKey(userId);
+  // Use the campaign's own workspace keys, not whichever workspace is active now.
+  const workspaceId = acquired.workspaceId ?? null;
+  const lateKey = await resolveCampaignZernioKey(userId, workspaceId);
+  const openaiKey = await resolveCampaignOpenAiKey(userId, workspaceId);
+  const falKey = await resolveCampaignFalKey(userId, workspaceId);
 
   if (!lateKey) {
     const message =

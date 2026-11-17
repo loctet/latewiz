@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  listScheduledCampaigns,
+  listActiveWorkspaceCampaigns,
   saveScheduledCampaign,
 } from "@/lib/server/scheduled-campaign-store";
 import type { ScheduledCampaignInput } from "@/lib/scheduled-campaigns";
@@ -13,7 +13,7 @@ import {
 export async function GET(request: NextRequest) {
   try {
     const userId = await requireSessionUserId(request);
-    const campaigns = await listScheduledCampaigns(userId);
+    const campaigns = await listActiveWorkspaceCampaigns(userId);
     return NextResponse.json({ campaigns });
   } catch (error) {
     if (error instanceof SessionRequiredError) {

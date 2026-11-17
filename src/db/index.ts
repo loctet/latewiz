@@ -96,6 +96,7 @@ const INIT_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS "user_secrets" (
   "id" text PRIMARY KEY NOT NULL,
   "user_id" text NOT NULL REFERENCES "user"("id") ON DELETE cascade,
+  "workspace_id" text,
   "kind" text NOT NULL,
   "ciphertext" text NOT NULL,
   "iv" text NOT NULL,
@@ -104,8 +105,18 @@ const INIT_STATEMENTS = [
   "created_at" integer NOT NULL,
   "updated_at" integer NOT NULL
 )`,
-  `CREATE UNIQUE INDEX IF NOT EXISTS "user_secrets_user_kind_idx"
-  ON "user_secrets" ("user_id", "kind")`,
+  `CREATE TABLE IF NOT EXISTS "workspaces" (
+  "id" text PRIMARY KEY NOT NULL,
+  "user_id" text NOT NULL REFERENCES "user"("id") ON DELETE cascade,
+  "name" text NOT NULL,
+  "niche" text NOT NULL,
+  "content_prefs" text,
+  "is_active" integer DEFAULT false NOT NULL,
+  "created_at" integer NOT NULL,
+  "updated_at" integer NOT NULL
+)`,
+  `CREATE INDEX IF NOT EXISTS "workspaces_user_idx"
+  ON "workspaces" ("user_id", "created_at")`,
   `CREATE TABLE IF NOT EXISTS "user_profiles" (
   "user_id" text PRIMARY KEY NOT NULL REFERENCES "user"("id") ON DELETE cascade,
   "niche" text NOT NULL,
@@ -171,23 +182,46 @@ const INIT_STATEMENTS = [
 )`,
 ];
 
+/** Columns added after a table first shipped: [table, column, ALTER statement]. */
+const ADDED_COLUMNS: Array<[string, string, string]> = [
+  [
+    "user_profiles",
+    "content_prefs",
+    `ALTER TABLE user_profiles ADD COLUMN content_prefs text`,
+  ],
+  [
+    "user_secrets",
+    "workspace_id",
+    `ALTER TABLE user_secrets ADD COLUMN workspace_id text`,
+  ],
+];
+
+/** Run after ADDED_COLUMNS so indexes can reference the new columns. */
+const POST_MIGRATION_STATEMENTS = [
+  // One key per kind per user became one key per kind per workspace.
+  `DROP INDEX IF EXISTS "user_secrets_user_kind_idx"`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "user_secrets_ws_kind_idx"
+  ON "user_secrets" ("user_id", "workspace_id", "kind")`,
+];
+
 async function ensureLibsqlSchema(client: Client) {
   for (const sql of INIT_STATEMENTS) {
     await client.execute(sql);
   }
-  try {
-    const cols = await client.execute(`PRAGMA table_info(user_profiles)`);
-    const hasPrefs = cols.rows.some((row) => {
-      const name = (row as Record<string, unknown>).name ?? row[1];
-      return name === "content_prefs";
-    });
-    if (!hasPrefs) {
-      await client.execute(
-        `ALTER TABLE user_profiles ADD COLUMN content_prefs text`
-      );
+  for (const [table, column, alter] of ADDED_COLUMNS) {
+    try {
+      const cols = await client.execute(`PRAGMA table_info(${table})`);
+      const has = cols.rows.some((row) => {
+        const name = (row as Record<string, unknown>).name ?? row[1];
+        return name === column;
+      });
+      if (!has) await client.execute(alter);
+    } catch (error) {
+      console.error(`[latewiz] migration ${table}.${column} failed:`, error);
     }
-  } catch {
-    /* ignore */
+  }
+  for (const sql of POST_MIGRATION_STATEMENTS) {
+    await client.execute(sql);
   }
 }
 
@@ -196,15 +230,18 @@ function ensureSqliteSchema(sqlite: Database.Database) {
   for (const sql of INIT_STATEMENTS) {
     sqlite.exec(sql);
   }
-  try {
-    const cols = sqlite.pragma("table_info(user_profiles)") as Array<{
-      name: string;
-    }>;
-    if (!cols.some((c) => c.name === "content_prefs")) {
-      sqlite.exec(`ALTER TABLE user_profiles ADD COLUMN content_prefs text`);
+  for (const [table, column, alter] of ADDED_COLUMNS) {
+    try {
+      const cols = sqlite.pragma(`table_info(${table})`) as Array<{
+        name: string;
+      }>;
+      if (!cols.some((c) => c.name === column)) sqlite.exec(alter);
+    } catch (error) {
+      console.error(`[latewiz] migration ${table}.${column} failed:`, error);
     }
-  } catch {
-    /* ignore */
+  }
+  for (const sql of POST_MIGRATION_STATEMENTS) {
+    sqlite.exec(sql);
   }
 }
 

@@ -14,6 +14,7 @@ import {
 import { normalizeWatermarkSettings } from "@/lib/image-watermark";
 import { defaultNicheProfile } from "@/lib/openai/types";
 import { normalizeCustomPostPromptStyles } from "@/lib/post-prompt-catalog";
+import { getActiveWorkspaceId } from "@/lib/server/workspaces";
 
 const PROCESSING_LEASE_MS = 10 * 60 * 1000;
 
@@ -64,6 +65,10 @@ function normalizeCampaign(
   return {
     id: campaign.id ?? randomUUID(),
     userId,
+    workspaceId:
+      typeof campaign.workspaceId === "string" && campaign.workspaceId
+        ? campaign.workspaceId
+        : null,
     name: String(campaign.name ?? "Untitled campaign"),
     profileId:
       typeof campaign.profileId === "string" || campaign.profileId === null
@@ -206,6 +211,15 @@ async function persistCampaign(campaign: ScheduledCampaign): Promise<void> {
   });
 }
 
+/** Campaigns of the user's active workspace (what the UI should show). */
+export async function listActiveWorkspaceCampaigns(
+  userId: string
+): Promise<ScheduledCampaign[]> {
+  const workspaceId = await getActiveWorkspaceId(userId);
+  const all = await listScheduledCampaigns(userId);
+  return all.filter((c) => c.workspaceId === workspaceId);
+}
+
 export async function listScheduledCampaigns(
   userId?: string
 ): Promise<ScheduledCampaign[]> {
@@ -277,6 +291,9 @@ export async function saveScheduledCampaign(
     ...existing,
     ...input,
     userId: input.userId,
+    // A campaign stays with the workspace it was created in.
+    workspaceId:
+      existing?.workspaceId ?? (await getActiveWorkspaceId(input.userId)),
     id: existing?.id ?? input.id ?? randomUUID(),
     status:
       input.status ??

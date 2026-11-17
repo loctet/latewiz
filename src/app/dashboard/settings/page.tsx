@@ -13,6 +13,7 @@ import { useOpenAiStatus } from "@/hooks";
 import { toast } from "sonner";
 import { getTimezoneOptions } from "@/lib/timezones";
 import { PageContainer } from "@/components/dashboard";
+import { WorkspacesCard } from "@/components/workspaces";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -256,6 +257,7 @@ export default function SettingsPage() {
 
         {/* —— Keys / Vault —— */}
         <TabsContent value="keys" className="mt-0 space-y-4 animate-in fade-in-0 duration-200">
+          <WorkspacesCard />
           <div className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5">
             <div className="mb-4">
               <h2 className="text-sm font-semibold">Encrypted API vault</h2>

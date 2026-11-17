@@ -21,6 +21,7 @@ import {
 import { cn } from "@/lib/utils";
 import { getAvatarUrl } from "@/lib/avatar";
 import { Logo, ErrorBoundary } from "@/components/shared";
+import { WorkspaceSwitcher } from "@/components/workspaces";
 import {
   LayoutDashboard,
   PenSquare,
@@ -244,7 +245,10 @@ export default function DashboardLayout({
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Profile Selector */}
+            {/* LateWiz workspace (key set + niche) */}
+            <WorkspaceSwitcher />
+
+            {/* Zernio profile selector (within the active workspace's key) */}
             {profiles.length > 1 && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

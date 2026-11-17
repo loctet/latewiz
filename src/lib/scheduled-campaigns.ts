@@ -74,6 +74,8 @@ export type ScheduledCampaign = {
   id: string;
   /** Owning LateWiz user — required for multi-user vault/cron isolation */
   userId: string;
+  /** LateWiz workspace (keys + niche) the campaign runs under. Legacy rows: null = user's first workspace. */
+  workspaceId?: string | null;
   name: string;
   profileId: string | null;
   status: ScheduledCampaignStatus;

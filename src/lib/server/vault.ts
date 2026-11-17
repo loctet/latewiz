@@ -9,6 +9,7 @@ import {
   type SecretKind,
 } from "@/db/schema";
 import { allowEnvKeyFallback } from "@/lib/env-flags";
+import { getActiveWorkspaceId } from "@/lib/server/workspaces";
 
 export { allowEnvKeyFallback };
 
@@ -95,14 +96,24 @@ export type VaultStatus = {
   falHint: string | null;
 };
 
-export async function getVaultStatus(userId: string): Promise<VaultStatus> {
+/** Secrets are scoped per workspace; default to the user's active one. */
+async function scopeFor(userId: string, workspaceId?: string | null) {
+  const ws = workspaceId || (await getActiveWorkspaceId(userId));
+  return and(eq(userSecrets.userId, userId), eq(userSecrets.workspaceId, ws));
+}
+
+export async function getVaultStatus(
+  userId: string,
+  workspaceId?: string | null
+): Promise<VaultStatus> {
+  const scope = await scopeFor(userId, workspaceId);
   const rows = await (await dbReady())
     .select({
       kind: userSecrets.kind,
       keyHint: userSecrets.keyHint,
     })
     .from(userSecrets)
-    .where(eq(userSecrets.userId, userId));
+    .where(scope);
 
   const byKind = Object.fromEntries(rows.map((r) => [r.kind, r.keyHint])) as Partial<
     Record<SecretKind, string>
@@ -120,12 +131,14 @@ export async function getVaultStatus(userId: string): Promise<VaultStatus> {
 
 export async function getUserSecret(
   userId: string,
-  kind: SecretKind
+  kind: SecretKind,
+  workspaceId?: string | null
 ): Promise<string | null> {
+  const scope = await scopeFor(userId, workspaceId);
   const [row] = await (await dbReady())
     .select()
     .from(userSecrets)
-    .where(and(eq(userSecrets.userId, userId), eq(userSecrets.kind, kind)))
+    .where(and(scope, eq(userSecrets.kind, kind)))
     .limit(1);
 
   if (!row) return null;
@@ -139,8 +152,10 @@ export async function getUserSecret(
 export async function upsertUserSecret(
   userId: string,
   kind: SecretKind,
-  plaintext: string
+  plaintext: string,
+  workspaceId?: string | null
 ): Promise<void> {
+  const ws = workspaceId || (await getActiveWorkspaceId(userId));
   const trimmed = plaintext.trim();
   if (!trimmed) {
     throw new Error("Secret cannot be empty");
@@ -150,7 +165,13 @@ export async function upsertUserSecret(
   const existing = await (await dbReady())
     .select({ id: userSecrets.id })
     .from(userSecrets)
-    .where(and(eq(userSecrets.userId, userId), eq(userSecrets.kind, kind)))
+    .where(
+      and(
+        eq(userSecrets.userId, userId),
+        eq(userSecrets.workspaceId, ws),
+        eq(userSecrets.kind, kind)
+      )
+    )
     .limit(1);
 
   if (existing[0]) {
@@ -170,6 +191,7 @@ export async function upsertUserSecret(
   await (await dbReady()).insert(userSecrets).values({
     id: randomUUID(),
     userId,
+    workspaceId: ws,
     kind,
     ciphertext: encrypted.ciphertext,
     iv: encrypted.iv,
@@ -182,11 +204,13 @@ export async function upsertUserSecret(
 
 export async function deleteUserSecret(
   userId: string,
-  kind: SecretKind
+  kind: SecretKind,
+  workspaceId?: string | null
 ): Promise<boolean> {
+  const scope = await scopeFor(userId, workspaceId);
   const result = await (await dbReady())
     .delete(userSecrets)
-    .where(and(eq(userSecrets.userId, userId), eq(userSecrets.kind, kind)))
+    .where(and(scope, eq(userSecrets.kind, kind)))
     .returning({ id: userSecrets.id });
   return result.length > 0;
 }
