@@ -26,10 +26,15 @@ export function useProfiles() {
     enabled: !!late,
   });
 
-  // Auto-set default profile if not set
+  // Auto-set default profile if not set, or if the persisted one no longer
+  // exists for this API key (stale localStorage from an old key or a deleted
+  // profile would otherwise silently scope every query to an empty profile).
   useEffect(() => {
-    if (query.data?.profiles?.length && !defaultProfileId) {
-      setDefaultProfileId(query.data.profiles[0]._id);
+    const profiles = query.data?.profiles;
+    if (!profiles?.length) return;
+    const valid = profiles.some((p: any) => p._id === defaultProfileId);
+    if (!defaultProfileId || !valid) {
+      setDefaultProfileId(profiles[0]._id);
     }
   }, [query.data, defaultProfileId, setDefaultProfileId]);
 
@@ -37,12 +42,16 @@ export function useProfiles() {
 }
 
 /**
- * Hook to get the current profile ID (from store or first profile)
+ * Hook to get the current profile ID (from store or first profile).
+ * Ignores a persisted ID that is not among the fetched profiles.
  */
 export function useCurrentProfileId(): string | undefined {
   const { defaultProfileId } = useAppStore();
   const { data } = useProfiles();
-  return defaultProfileId || data?.profiles?.[0]?._id;
+  const profiles = data?.profiles;
+  if (!profiles) return undefined;
+  const valid = profiles.some((p: any) => p._id === defaultProfileId);
+  return (valid ? defaultProfileId : profiles[0]?._id) || undefined;
 }
 
 /**
