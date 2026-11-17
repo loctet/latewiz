@@ -114,6 +114,19 @@ Immediate campaigns can render every explainer first (campaign page → Render e
 then send all posts with finished videos to Zernio. Give deferred campaigns enough
 `generationLeadMinutes` for a render (about 2–3 minutes per minute of video).
 
+Two video styles (brand kit → Video style):
+
+- **Whiteboard** (default): a hand-drawn board in marker, written stroke by stroke; each scene gets its own region,
+  the pen leads the camera between them, and the board is revealed whole before the outro. Icons, diagrams and
+  charts are drawn as marker strokes. Template: `video-templates/whiteboard/` (`planner.js` lays out the board
+  and is run by the worker too, so every stroke gets its own marker sound). Drawing engine adapted from the
+  Lemo-Opuscar Whiteboard Explainer (MIT).
+- **Motion graphics**: animated icons, diagrams and charts (`video-templates/explainer/`).
+
+Voice (brand kit → Voice engine): **Kokoro** by default, free and generated on the worker with `kokoro-js`
+(the ~300 MB model downloads once on first use), or OpenAI text-to-speech. Neither style generates images
+unless AI background images are turned on (motion graphics only). The only OpenAI call with Kokoro is the script.
+
 What an explainer is made of:
 
 - **Script**: OpenAI writes a beginner-first teaching arc (hook, why it matters, simple

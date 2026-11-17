@@ -35,7 +35,7 @@ export type TimedScene = ExplainerScene & {
  */
 export function layoutExplainerTimeline(
   scenes: ExplainerScene[],
-  options: { outro: boolean; targetSeconds?: number }
+  options: { outro: boolean; targetSeconds?: number; outroSeconds?: number }
 ): { scenes: TimedScene[]; total: number; outroStart: number } {
   const target = clampExplainerSeconds(options.targetSeconds ?? DEFAULT_EXPLAINER_SECONDS);
   const base = scenes.map((scene) => {
@@ -49,7 +49,7 @@ export function layoutExplainerTimeline(
     };
   });
 
-  const outroLength = options.outro ? OUTRO_SECONDS : 0;
+  const outroLength = options.outro ? options.outroSeconds ?? OUTRO_SECONDS : 0;
   const naturalTotal =
     base.reduce((sum, s) => sum + s.duration - SCENE_OVERLAP, 0) + SCENE_OVERLAP + outroLength;
   // Hold visuals a little longer when the narration came out short, so the

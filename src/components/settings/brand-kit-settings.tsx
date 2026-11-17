@@ -17,6 +17,9 @@ import {
   BRAND_FONT_OPTIONS,
   BRAND_ILLUSTRATION_STYLES,
   BRAND_VOICES,
+  KOKORO_VOICES,
+  VIDEO_STYLES,
+  VOICE_ENGINES,
   BRAND_LOGO_CONTENT_TYPES,
   BRAND_LOGO_MAX_BYTES,
   BRAND_LOGO_POSITIONS,
@@ -422,30 +425,88 @@ export function BrandKitSettings() {
             </Select>
           </div>
           <div className="space-y-2">
-            <Label>Narrator voice</Label>
+            <Label>Video style</Label>
             <Select
-              value={kit.voice}
-              disabled={!kit.voiceoverEnabled}
-              onValueChange={(v) => update("voice", v as BrandKit["voice"])}
+              value={kit.videoStyle}
+              onValueChange={(v) => update("videoStyle", v as BrandKit["videoStyle"])}
             >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {BRAND_VOICES.map((v) => (
-                  <SelectItem key={v.value} value={v.value}>
-                    {v.label}
+                {VIDEO_STYLES.map((s) => (
+                  <SelectItem key={s.value} value={s.value}>
+                    {s.label}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
+          <div className="space-y-2">
+            <Label>Voice engine</Label>
+            <Select
+              value={kit.voiceEngine}
+              disabled={!kit.voiceoverEnabled}
+              onValueChange={(v) => update("voiceEngine", v as BrandKit["voiceEngine"])}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {VOICE_ENGINES.map((s) => (
+                  <SelectItem key={s.value} value={s.value}>
+                    {s.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Narrator voice</Label>
+            {kit.voiceEngine === "kokoro" ? (
+              <Select
+                value={kit.kokoroVoice}
+                disabled={!kit.voiceoverEnabled}
+                onValueChange={(v) => update("kokoroVoice", v as BrandKit["kokoroVoice"])}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {KOKORO_VOICES.map((v) => (
+                    <SelectItem key={v.value} value={v.value}>
+                      {v.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <Select
+                value={kit.voice}
+                disabled={!kit.voiceoverEnabled}
+                onValueChange={(v) => update("voice", v as BrandKit["voice"])}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {BRAND_VOICES.map((v) => (
+                    <SelectItem key={v.value} value={v.value}>
+                      {v.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
         </div>
         <p className="-mt-3 text-xs text-muted-foreground">
-          Explainers are built from animated icons, diagrams, charts and app
-          mockups in your brand colors. The script and voiceover use your
-          OpenAI key. AI background images are optional and add one image
-          generation per scene.
+          {kit.videoStyle === "whiteboard"
+            ? "Whiteboard explainers are drawn stroke by stroke in marker, with icons, diagrams and charts, plus marker sounds and a kalimba score. No image generation."
+            : "Motion-graphics explainers use animated icons, diagrams, charts and app mockups in your brand colors. AI background images are optional (one image generation per scene)."}{" "}
+          {kit.voiceEngine === "kokoro"
+            ? "The voice is Kokoro, generated for free on the render worker; only the script uses your OpenAI key."
+            : "The script and voice use your OpenAI key."}
         </p>
 
         <div className="grid gap-3 sm:grid-cols-2">

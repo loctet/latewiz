@@ -35,7 +35,9 @@ import { updateScheduledCampaign } from "@/lib/server/scheduled-campaign-store";
 import type { ScheduledCampaignSlot } from "@/lib/scheduled-campaigns";
 import { STANDALONE_RENDER_CAMPAIGN_ID } from "@/lib/render-jobs";
 import { normalizeExplainerScript } from "@/lib/explainer-script";
-import { layoutExplainerTimeline } from "@/lib/explainer-timing";
+import { layoutExplainerTimeline, NARRATION_LEAD } from "@/lib/explainer-timing";
+import { pathToFileURL } from "url";
+import { buildWhiteboardSoundtrack, kokoroVoiceover, writeMonoWav } from "./whiteboard-audio";
 import { getUserSecret, allowEnvKeyFallback } from "@/lib/server/vault";
 import { isPlausibleOpenAiApiKey } from "@/lib/openai/resolve-key";
 import {
@@ -48,6 +50,7 @@ import {
 } from "./explainer-assets";
 
 const TEMPLATE_DIR = path.join(process.cwd(), "video-templates", "explainer");
+const WHITEBOARD_DIR = path.join(process.cwd(), "video-templates", "whiteboard");
 const HYPERFRAMES = process.env.HYPERFRAMES_PACKAGE?.trim() || "hyperframes@0.9.41";
 // In containers the CLI is installed in the image; call it directly instead of npx.
 const HYPERFRAMES_BIN = process.env.HYPERFRAMES_BIN?.trim() || "";
@@ -144,12 +147,13 @@ async function resolveOpenAiKey(
  * Returns the video length in seconds.
  */
 async function prepareProject(job: RenderJob, dir: string): Promise<number> {
-  fs.cpSync(TEMPLATE_DIR, dir, {
+  const kit = await getBrandKit(job.userId);
+  const whiteboard = kit.videoStyle === "whiteboard";
+  fs.cpSync(whiteboard ? WHITEBOARD_DIR : TEMPLATE_DIR, dir, {
     recursive: true,
     filter: (src) => !src.includes(`${path.sep}.hyperframes`),
   });
 
-  const kit = await getBrandKit(job.userId);
   let logoFile = "";
   if (kit.hasLogo) {
     const logo = await getBrandLogo(job.userId);
@@ -163,46 +167,68 @@ async function prepareProject(job: RenderJob, dir: string): Promise<number> {
   let scenes = script.scenes;
   const apiKey = await resolveOpenAiKey(job.userId, job.payload.workspaceId);
   let voiceFiles: string[] | null = null;
+  let voiceClips: Float32Array[] | null = null;
+  const t0 = Date.now();
 
-  if (apiKey) {
-    const t0 = Date.now();
-    const [withImages, voice] = await Promise.all([
-      kit.aiBackgroundImages
-        ? generateSceneImages({ apiKey, scenes, kit, dir, log })
-        : Promise.resolve(scenes),
-      kit.voiceoverEnabled
-        ? generateSceneVoiceover({ apiKey, scenes, voice: kit.voice, dir, log })
-        : Promise.resolve(null),
-    ]);
-    scenes = withImages.map((scene, i) => ({
-      ...scene,
-      audioDuration: voice?.scenes[i]?.audioDuration,
-    }));
-    voiceFiles = voice?.files ?? null;
-    log(
-      `Assets ready in ${Math.round((Date.now() - t0) / 1000)}s: voiceover ${voiceFiles ? "on" : "off"}, AI backgrounds ${scenes.filter((s) => s.image).length}/${scenes.length}`
-    );
-  } else {
-    log("No OpenAI key for this workspace: rendering without voiceover");
+  // Voiceover: Kokoro (free, local) by default; OpenAI TTS when chosen and a key exists.
+  if (kit.voiceoverEnabled && kit.voiceEngine === "kokoro") {
+    try {
+      const vo = await kokoroVoiceover(scenes.map((s) => s.narration), kit.kokoroVoice);
+      voiceClips = vo.clips;
+      scenes = scenes.map((s, i) => ({ ...s, audioDuration: vo.durations[i] }));
+      voiceFiles = vo.clips.map((clip, i) => { const f = path.join(dir, `vo-${i}.wav`); writeMonoWav(f, clip); return f; });
+    } catch (error) {
+      log("Kokoro voiceover failed, rendering without it", (error as Error).message);
+    }
+  } else if (kit.voiceoverEnabled && apiKey) {
+    const voice = await generateSceneVoiceover({ apiKey, scenes, voice: kit.voice, dir, log });
+    if (voice) { scenes = voice.scenes; voiceFiles = voice.files; }
   }
+  // Optional AI background images (motion-graphics style only).
+  if (!whiteboard && apiKey && kit.aiBackgroundImages) scenes = await generateSceneImages({ apiKey, scenes, kit, dir, log });
+  log(`Assets ready in ${Math.round((Date.now() - t0) / 1000)}s: style ${kit.videoStyle}, voice ${voiceFiles ? kit.voiceEngine : "off"}`);
 
   const layout = layoutExplainerTimeline(scenes, {
     outro: kit.showOutro,
     targetSeconds: script.targetSeconds ?? kit.explainerSeconds,
+    outroSeconds: whiteboard ? 5.5 : undefined,
   });
 
-  const cues: AudioCue[] = voiceFiles ? narrationCues(voiceFiles, layout.scenes) : [];
-  if (kit.soundEffects) {
-    const sfx = await synthesizeSfx(dir);
-    layout.scenes.forEach((scene, i) => {
-      if (i > 0) cues.push({ file: sfx.whoosh, at: Math.max(0, scene.start - 0.12), volume: 0.22 });
-      cues.push({ file: sfx.pop, at: scene.start + 0.75, volume: 0.18 });
+  const audioFile = whiteboard ? "narration.wav" : "narration.mp3";
+  let hasAudio = false;
+  if (whiteboard) {
+    // Plan the board in Node (same code the page runs) so every stroke gets its sound on the right frame.
+    const wb = WHITEBOARD_DIR;
+    const { plan } = await import(pathToFileURL(path.join(wb, "planner.js")).href);
+    const icons = (await import(pathToFileURL(path.join(wb, "icons.js")).href)).default;
+    const glyphs = JSON.parse(fs.readFileSync(path.join(wb, "fonts", "EMSTech.json"), "utf8")).glyphs;
+    plan.icons = icons;
+    const board = plan({
+      scenes: layout.scenes, total: layout.total, outroStart: layout.outroStart, glyphs,
+      brand: { primaryColor: kit.primaryColor, accentColor: kit.accentColor, ctaText: kit.ctaText, handle: kit.handle, signature: kit.signature, brandName: kit.brandName, logo: logoFile },
     });
-    if (kit.showOutro) cues.push({ file: sfx.chime, at: layout.outroStart + 0.35, volume: 0.25 });
+    buildWhiteboardSoundtrack({
+      total: layout.total, events: board.ev, scenes: layout.scenes, voice: voiceClips,
+      lead: NARRATION_LEAD, outroStart: layout.outroStart, output: path.join(dir, audioFile),
+    });
+    hasAudio = true;
+  } else {
+    const cues: AudioCue[] = voiceFiles ? narrationCues(voiceFiles, layout.scenes) : [];
+    if (kit.soundEffects) {
+      const sfx = await synthesizeSfx(dir);
+      layout.scenes.forEach((scene, i) => {
+        if (i > 0) cues.push({ file: sfx.whoosh, at: Math.max(0, scene.start - 0.12), volume: 0.22 });
+        cues.push({ file: sfx.pop, at: scene.start + 0.75, volume: 0.18 });
+      });
+      if (kit.showOutro) cues.push({ file: sfx.chime, at: layout.outroStart + 0.35, volume: 0.25 });
+    }
+    if (cues.length > 0) {
+      await buildAudioTrack({ cues, total: layout.total, output: path.join(dir, audioFile) });
+      hasAudio = true;
+    }
   }
 
-  if (cues.length > 0) {
-    await buildAudioTrack({ cues, total: layout.total, output: path.join(dir, "narration.mp3") });
+  if (hasAudio) {
     const html = path.join(dir, "index.html");
     const marker = "<!-- narration-audio -->";
     const source = fs.readFileSync(html, "utf8");
@@ -211,7 +237,7 @@ async function prepareProject(job: RenderJob, dir: string): Promise<number> {
       html,
       source.replace(
         marker,
-        `<audio id="narration" src="narration.mp3" data-start="0" data-duration="${layout.total.toFixed(2)}" data-track-index="9"></audio>`
+        `<audio id="narration" src="${audioFile}" data-start="0" data-duration="${layout.total.toFixed(2)}" data-track-index="9"></audio>`
       )
     );
   }

@@ -53,6 +53,31 @@ export const BRAND_VOICES = [
 
 export type BrandVoice = (typeof BRAND_VOICES)[number]["value"];
 
+/** Kokoro voices (offline, free) used when the voice engine is Kokoro. */
+export const KOKORO_VOICES = [
+  { value: "af_heart", label: "Heart (warm, US)" },
+  { value: "af_bella", label: "Bella (bright, US)" },
+  { value: "af_nicole", label: "Nicole (soft, US)" },
+  { value: "am_michael", label: "Michael (calm, US)" },
+  { value: "am_fenrir", label: "Fenrir (deep, US)" },
+  { value: "bf_emma", label: "Emma (clear, UK)" },
+  { value: "bm_george", label: "George (classic, UK)" },
+  { value: "bm_fable", label: "Fable (storyteller, UK)" },
+] as const;
+export type KokoroVoice = (typeof KOKORO_VOICES)[number]["value"];
+
+export const VIDEO_STYLES = [
+  { value: "whiteboard", label: "Whiteboard (hand-drawn, marker)" },
+  { value: "motion", label: "Motion graphics (icons and charts)" },
+] as const;
+export type VideoStyle = (typeof VIDEO_STYLES)[number]["value"];
+
+export const VOICE_ENGINES = [
+  { value: "kokoro", label: "Kokoro (free, runs on the worker)" },
+  { value: "openai", label: "OpenAI text-to-speech (paid)" },
+] as const;
+export type VoiceEngine = (typeof VOICE_ENGINES)[number]["value"];
+
 /** Look of the AI illustrations (b-roll) in explainer videos. */
 export const BRAND_ILLUSTRATION_STYLES = [
   { value: "flat-vector", label: "Flat vector illustration", prompt: "modern flat vector illustration, clean shapes, subtle grain texture, soft shadows, editorial explainer style" },
@@ -95,6 +120,11 @@ export type BrandKit = {
   soundEffects: boolean;
   /** Default explainer length in seconds */
   explainerSeconds: number;
+  /** Look of explainer videos */
+  videoStyle: VideoStyle;
+  /** Who speaks the voiceover */
+  voiceEngine: VoiceEngine;
+  kokoroVoice: KokoroVoice;
 };
 
 /** Brand kit as returned by the API: JSON fields plus logo metadata. */
@@ -136,6 +166,9 @@ export function defaultBrandKit(): BrandKit {
     aiBackgroundImages: false,
     soundEffects: true,
     explainerSeconds: DEFAULT_EXPLAINER_SECONDS,
+    videoStyle: "whiteboard",
+    voiceEngine: "kokoro",
+    kokoroVoice: "af_heart",
   };
 }
 
@@ -208,6 +241,9 @@ export function normalizeBrandKit(partial?: Partial<BrandKit> | null): BrandKit 
     soundEffects:
       typeof partial.soundEffects === "boolean" ? partial.soundEffects : d.soundEffects,
     explainerSeconds: clampExplainerSeconds(partial.explainerSeconds ?? d.explainerSeconds),
+    videoStyle: oneOf(partial.videoStyle, VIDEO_STYLES, d.videoStyle),
+    voiceEngine: oneOf(partial.voiceEngine, VOICE_ENGINES, d.voiceEngine),
+    kokoroVoice: oneOf(partial.kokoroVoice, KOKORO_VOICES, d.kokoroVoice),
   };
 }
 
