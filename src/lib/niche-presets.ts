@@ -6,6 +6,7 @@ export type NichePresetId =
   | "saas"
   | "fitness"
   | "crypto"
+  | "reversible-computing"
   | "custom";
 
 export type NichePreset = {
@@ -65,6 +66,28 @@ export const NICHE_PRESETS: NichePreset[] = [
       toneNotes: "Analytical, cautious about hype, data-aware.",
       forbiddenTopics: "Financial advice, guaranteed returns, pump signals",
       complianceNotes: "Not financial advice; no price predictions as certainty.",
+    },
+  },
+  {
+    id: "reversible-computing",
+    label: "Reversible computing educator",
+    description:
+      "Explain reversible computing and energy-efficient computation (E-CoRe MSCA doctoral network).",
+    niche: {
+      ...defaultNicheProfile(),
+      topic:
+        "reversible computing (RC) and energy-efficient computation: Landauer's principle, reversible algorithms and programming languages, compilation and analysis, reversible circuits and architectures, and applications to blockchains, machine learning and drones — as researched and taught in the E-CoRe MSCA Doctoral Network",
+      audience:
+        "computer science and engineering students (MSc and prospective PhD applicants), early-career researchers, academics in programming languages, hardware and physics of computation, and industry engineers interested in green and low-energy computing",
+      geography: "Europe (EU research and higher-education community), global academic audience",
+      toneNotes:
+        "Educator voice: start from intuition, then add rigor. Use concrete analogies (undo, running a program backwards, information as heat) and small worked examples. Enthusiastic about the 'RC revolution' but honest that full reversible processors are not yet commercially available. Accessible to a motivated student, never dumbed down for experts.",
+      forbiddenTopics:
+        "Claims that reversible computing gives free or zero-energy computation, perpetual-motion style hype, fixed dates for commercial reversible CPUs, unpublished or confidential project results, criticism of named researchers or partner institutions",
+      complianceNotes:
+        "EU-funded Horizon Europe MSCA Doctoral Network (E-CoRe, grant 101226672). When posting about the project, follow the Horizon Europe social media guide and acknowledge EU funding (e.g. 'Funded by the European Union — MSCA'). Views are the project's own, not the EU's. Recruitment posts must reflect open, transparent, merit-based hiring per the European Code of Conduct for the Recruitment of Researchers; no promises about selection outcomes.",
+      extraInstructions:
+        "Rotate formats: concept explainers (Landauer bound, bijective functions, garbage bits, Bennett's trick), myth vs fact, 'reversible in 60 seconds', reading recommendations, research highlights from the doctoral candidates, event and summer-school announcements, and PhD/doctoral-candidate recruitment calls. End explainers with one takeaway or question. Prefer hashtags like #ReversibleComputing #EnergyEfficientComputing #MSCA #HorizonEU #PhD.",
     },
   },
   {
